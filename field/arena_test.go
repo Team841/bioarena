@@ -60,16 +60,16 @@ func TestArenaCheckCanStartMatch(t *testing.T) {
 	if assert.NotNil(t, err) {
 		assert.Contains(t, err.Error(), "cannot start match until all robots are connected or bypassed")
 	}
-	arena.AllianceStations["R1"].Bypass = true
-	arena.AllianceStations["R2"].Bypass = true
-	arena.AllianceStations["R3"].Bypass = true
-	arena.AllianceStations["B1"].Bypass = true
-	arena.AllianceStations["B2"].Bypass = true
+	arena.AllianceStations["R1"].Bypass.Store(true)
+	arena.AllianceStations["R2"].Bypass.Store(true)
+	arena.AllianceStations["R3"].Bypass.Store(true)
+	arena.AllianceStations["B1"].Bypass.Store(true)
+	arena.AllianceStations["B2"].Bypass.Store(true)
 	err = arena.checkCanStartMatch()
 	if assert.NotNil(t, err) {
 		assert.Contains(t, err.Error(), "cannot start match until all robots are connected or bypassed")
 	}
-	arena.AllianceStations["B3"].Bypass = true
+	arena.AllianceStations["B3"].Bypass.Store(true)
 	assert.Nil(t, arena.checkCanStartMatch())
 
 	// PLC constraints are skipped in the practice build because FakePlc is always disabled.
@@ -106,11 +106,11 @@ func TestArenaMatchFlow(t *testing.T) {
 	assert.Equal(t, lastPacketCount+1, arena.AllianceStations["B3"].DsConn.packetCount)
 
 	// Check match start, autonomous and transition to teleop.
-	arena.AllianceStations["R1"].Bypass = true
+	arena.AllianceStations["R1"].Bypass.Store(true)
 	arena.AllianceStations["R2"].DsConn.RobotLinked = true
-	arena.AllianceStations["R3"].Bypass = true
-	arena.AllianceStations["B1"].Bypass = true
-	arena.AllianceStations["B2"].Bypass = true
+	arena.AllianceStations["R3"].Bypass.Store(true)
+	arena.AllianceStations["B1"].Bypass.Store(true)
+	arena.AllianceStations["B2"].Bypass.Store(true)
 	arena.AllianceStations["B3"].DsConn.RobotLinked = true
 	assert.Nil(t, arena.StartMatch())
 	arena.Update()
@@ -156,25 +156,25 @@ func TestArenaMatchFlow(t *testing.T) {
 	assert.Equal(t, true, arena.AllianceStations["B3"].DsConn.Enabled)
 
 	// Check E-stop and bypass.
-	arena.AllianceStations["B3"].EStop = true
+	arena.AllianceStations["B3"].EStop.Store(true)
 	arena.lastDsPacketTime = arena.lastDsPacketTime.Add(-550 * time.Millisecond)
 	arena.Update()
 	assert.Equal(t, TeleopPeriod, arena.MatchState)
 	assert.Equal(t, false, arena.AllianceStations["B3"].DsConn.Auto)
 	assert.Equal(t, false, arena.AllianceStations["B3"].DsConn.Enabled)
-	arena.AllianceStations["B3"].Bypass = true
+	arena.AllianceStations["B3"].Bypass.Store(true)
 	arena.lastDsPacketTime = arena.lastDsPacketTime.Add(-550 * time.Millisecond)
 	arena.Update()
 	assert.Equal(t, TeleopPeriod, arena.MatchState)
 	assert.Equal(t, false, arena.AllianceStations["B3"].DsConn.Auto)
 	assert.Equal(t, false, arena.AllianceStations["B3"].DsConn.Enabled)
-	arena.AllianceStations["B3"].EStop = false
+	arena.AllianceStations["B3"].EStop.Store(false)
 	arena.lastDsPacketTime = arena.lastDsPacketTime.Add(-550 * time.Millisecond)
 	arena.Update()
 	assert.Equal(t, TeleopPeriod, arena.MatchState)
 	assert.Equal(t, false, arena.AllianceStations["B3"].DsConn.Auto)
 	assert.Equal(t, false, arena.AllianceStations["B3"].DsConn.Enabled)
-	arena.AllianceStations["B3"].Bypass = false
+	arena.AllianceStations["B3"].Bypass.Store(false)
 	arena.lastDsPacketTime = arena.lastDsPacketTime.Add(-550 * time.Millisecond)
 	arena.Update()
 	assert.Equal(t, TeleopPeriod, arena.MatchState)
@@ -197,25 +197,25 @@ func TestArenaMatchFlow(t *testing.T) {
 	assert.Equal(t, false, arena.AllianceStations["B3"].DsConn.Auto)
 	assert.Equal(t, false, arena.AllianceStations["B3"].DsConn.Enabled)
 
-	arena.AllianceStations["R1"].Bypass = true
+	arena.AllianceStations["R1"].Bypass.Store(true)
 	arena.ResetMatch()
 	arena.lastDsPacketTime = arena.lastDsPacketTime.Add(-550 * time.Millisecond)
 	arena.Update()
 	assert.Equal(t, PreMatch, arena.MatchState)
 	assert.Equal(t, true, arena.AllianceStations["B3"].DsConn.Auto)
 	assert.Equal(t, false, arena.AllianceStations["B3"].DsConn.Enabled)
-	assert.Equal(t, false, arena.AllianceStations["R1"].Bypass)
+	assert.Equal(t, false, arena.AllianceStations["R1"].Bypass.Load())
 }
 
 func TestArenaStateEnforcement(t *testing.T) {
 	arena := setupTestArena(t)
 
-	arena.AllianceStations["R1"].Bypass = true
-	arena.AllianceStations["R2"].Bypass = true
-	arena.AllianceStations["R3"].Bypass = true
-	arena.AllianceStations["B1"].Bypass = true
-	arena.AllianceStations["B2"].Bypass = true
-	arena.AllianceStations["B3"].Bypass = true
+	arena.AllianceStations["R1"].Bypass.Store(true)
+	arena.AllianceStations["R2"].Bypass.Store(true)
+	arena.AllianceStations["R3"].Bypass.Store(true)
+	arena.AllianceStations["B1"].Bypass.Store(true)
+	arena.AllianceStations["B2"].Bypass.Store(true)
+	arena.AllianceStations["B3"].Bypass.Store(true)
 
 	err := arena.LoadMatch(new(model.Match))
 	assert.Nil(t, err)
@@ -327,14 +327,14 @@ func TestMatchStartRobotLinkEnforcement(t *testing.T) {
 	arena.MatchState = PreMatch
 
 	// Check with a single team E-stopped, A-stopped, not linked, and bypassed.
-	arena.AllianceStations["R1"].EStop = true
+	arena.AllianceStations["R1"].EStop.Store(true)
 	err = arena.StartMatch()
 	if assert.NotNil(t, err) {
 		assert.Contains(t, err.Error(), "while an emergency stop is active")
 	}
-	arena.AllianceStations["R1"].EStop = false
+	arena.AllianceStations["R1"].EStop.Store(false)
 	arena.AllianceStations["R1"].aStopReset = false
-	arena.AllianceStations["R1"].AStop = true
+	arena.AllianceStations["R1"].AStop.Store(true)
 	err = arena.StartMatch()
 	if assert.NotNil(t, err) {
 		assert.Contains(t, err.Error(), "if an autonomous stop has not been reset since the previous match")
@@ -345,10 +345,10 @@ func TestMatchStartRobotLinkEnforcement(t *testing.T) {
 	if assert.NotNil(t, err) {
 		assert.Contains(t, err.Error(), "until all robots are connected or bypassed")
 	}
-	arena.AllianceStations["R1"].Bypass = true
+	arena.AllianceStations["R1"].Bypass.Store(true)
 	err = arena.StartMatch()
 	assert.Nil(t, err)
-	arena.AllianceStations["R1"].Bypass = false
+	arena.AllianceStations["R1"].Bypass.Store(false)
 	arena.MatchState = PreMatch
 
 	// Check with a team missing.
@@ -358,7 +358,7 @@ func TestMatchStartRobotLinkEnforcement(t *testing.T) {
 	if assert.NotNil(t, err) {
 		assert.Contains(t, err.Error(), "until all robots are connected or bypassed")
 	}
-	arena.AllianceStations["R1"].Bypass = true
+	arena.AllianceStations["R1"].Bypass.Store(true)
 	err = arena.StartMatch()
 	assert.Nil(t, err)
 	arena.MatchState = PreMatch
@@ -369,18 +369,18 @@ func TestMatchStartRobotLinkEnforcement(t *testing.T) {
 	if assert.NotNil(t, err) {
 		assert.Contains(t, err.Error(), "until all robots are connected or bypassed")
 	}
-	arena.AllianceStations["R1"].Bypass = true
-	arena.AllianceStations["R2"].Bypass = true
-	arena.AllianceStations["R3"].Bypass = true
-	arena.AllianceStations["B1"].Bypass = true
-	arena.AllianceStations["B2"].Bypass = true
-	arena.AllianceStations["B3"].Bypass = true
-	arena.AllianceStations["B3"].EStop = true
+	arena.AllianceStations["R1"].Bypass.Store(true)
+	arena.AllianceStations["R2"].Bypass.Store(true)
+	arena.AllianceStations["R3"].Bypass.Store(true)
+	arena.AllianceStations["B1"].Bypass.Store(true)
+	arena.AllianceStations["B2"].Bypass.Store(true)
+	arena.AllianceStations["B3"].Bypass.Store(true)
+	arena.AllianceStations["B3"].EStop.Store(true)
 	err = arena.StartMatch()
 	if assert.NotNil(t, err) {
 		assert.Contains(t, err.Error(), "while an emergency stop is active")
 	}
-	arena.AllianceStations["B3"].EStop = false
+	arena.AllianceStations["B3"].EStop.Store(false)
 	err = arena.StartMatch()
 	assert.Nil(t, err)
 }
@@ -499,12 +499,12 @@ func TestSaveTeamHasConnected(t *testing.T) {
 	arena.Database.CreateMatch(&match)
 	arena.LoadMatch(&match)
 	arena.AllianceStations["R1"].DsConn = &DriverStationConnection{TeamId: 101}
-	arena.AllianceStations["R1"].Bypass = true
+	arena.AllianceStations["R1"].Bypass.Store(true)
 	arena.AllianceStations["R2"].DsConn = &DriverStationConnection{TeamId: 102, RobotLinked: true}
 	arena.AllianceStations["R3"].DsConn = &DriverStationConnection{TeamId: 103}
-	arena.AllianceStations["R3"].Bypass = true
+	arena.AllianceStations["R3"].Bypass.Store(true)
 	arena.AllianceStations["B1"].DsConn = &DriverStationConnection{TeamId: 104}
-	arena.AllianceStations["B1"].Bypass = true
+	arena.AllianceStations["B1"].Bypass.Store(true)
 	arena.AllianceStations["B2"].DsConn = &DriverStationConnection{TeamId: 105, RobotLinked: true}
 	arena.AllianceStations["B3"].DsConn = &DriverStationConnection{TeamId: 106, RobotLinked: true}
 	arena.AllianceStations["B3"].Team.City = "Sand Hosay" // Change some other field to verify that it isn't saved.
@@ -544,13 +544,13 @@ func TestPlcEStopAStop(t *testing.T) {
 	arena.AllianceStations["R1"].aStopReset = true
 	arena.AllianceStations["R2"].DsConn.RobotLinked = true
 	arena.AllianceStations["R2"].aStopReset = true
-	arena.AllianceStations["R3"].Bypass = true
+	arena.AllianceStations["R3"].Bypass.Store(true)
 	arena.AllianceStations["R3"].aStopReset = true
-	arena.AllianceStations["B1"].Bypass = true
+	arena.AllianceStations["B1"].Bypass.Store(true)
 	arena.AllianceStations["B1"].aStopReset = true
-	arena.AllianceStations["B2"].Bypass = true
+	arena.AllianceStations["B2"].Bypass.Store(true)
 	arena.AllianceStations["B2"].aStopReset = true
-	arena.AllianceStations["B3"].Bypass = true
+	arena.AllianceStations["B3"].Bypass.Store(true)
 	arena.AllianceStations["B3"].aStopReset = true
 	err = arena.StartMatch()
 	assert.Nil(t, err)
@@ -566,10 +566,10 @@ func TestPlcEStopAStop(t *testing.T) {
 	plc.redAStops[1] = false
 	plc.redEStops[1] = false
 	arena.Update()
-	assert.Equal(t, true, arena.AllianceStations["R1"].AStop)
-	assert.Equal(t, false, arena.AllianceStations["R1"].EStop)
-	assert.Equal(t, false, arena.AllianceStations["R2"].AStop)
-	assert.Equal(t, false, arena.AllianceStations["R2"].EStop)
+	assert.Equal(t, true, arena.AllianceStations["R1"].AStop.Load())
+	assert.Equal(t, false, arena.AllianceStations["R1"].EStop.Load())
+	assert.Equal(t, false, arena.AllianceStations["R2"].AStop.Load())
+	assert.Equal(t, false, arena.AllianceStations["R2"].EStop.Load())
 	arena.lastDsPacketTime = time.Unix(0, 0) // Force a DS packet.
 	arena.Update()
 	assert.Equal(t, false, arena.AllianceStations["R1"].DsConn.Enabled)
@@ -583,10 +583,10 @@ func TestPlcEStopAStop(t *testing.T) {
 	plc.redAStops[1] = false
 	plc.redEStops[1] = true
 	arena.Update()
-	assert.Equal(t, true, arena.AllianceStations["R1"].AStop)
-	assert.Equal(t, false, arena.AllianceStations["R1"].EStop)
-	assert.Equal(t, false, arena.AllianceStations["R2"].AStop)
-	assert.Equal(t, true, arena.AllianceStations["R2"].EStop)
+	assert.Equal(t, true, arena.AllianceStations["R1"].AStop.Load())
+	assert.Equal(t, false, arena.AllianceStations["R1"].EStop.Load())
+	assert.Equal(t, false, arena.AllianceStations["R2"].AStop.Load())
+	assert.Equal(t, true, arena.AllianceStations["R2"].EStop.Load())
 	arena.lastDsPacketTime = time.Unix(0, 0) // Force a DS packet.
 	arena.Update()
 	assert.Equal(t, false, arena.AllianceStations["R1"].DsConn.Enabled)
@@ -602,10 +602,10 @@ func TestPlcEStopAStop(t *testing.T) {
 	plc.redAStops[1] = false
 	plc.redEStops[1] = false
 	arena.Update()
-	assert.Equal(t, true, arena.AllianceStations["R1"].AStop)
-	assert.Equal(t, false, arena.AllianceStations["R1"].EStop)
-	assert.Equal(t, false, arena.AllianceStations["R2"].AStop)
-	assert.Equal(t, true, arena.AllianceStations["R2"].EStop)
+	assert.Equal(t, true, arena.AllianceStations["R1"].AStop.Load())
+	assert.Equal(t, false, arena.AllianceStations["R1"].EStop.Load())
+	assert.Equal(t, false, arena.AllianceStations["R2"].AStop.Load())
+	assert.Equal(t, true, arena.AllianceStations["R2"].EStop.Load())
 	arena.lastDsPacketTime = time.Unix(0, 0) // Force a DS packet.
 	arena.Update()
 	assert.Equal(t, false, arena.AllianceStations["R1"].DsConn.Enabled)
@@ -623,10 +623,10 @@ func TestPlcEStopAStop(t *testing.T) {
 		) * time.Second,
 	)
 	arena.Update()
-	assert.Equal(t, false, arena.AllianceStations["R1"].AStop)
-	assert.Equal(t, false, arena.AllianceStations["R1"].EStop)
-	assert.Equal(t, false, arena.AllianceStations["R2"].AStop)
-	assert.Equal(t, true, arena.AllianceStations["R2"].EStop)
+	assert.Equal(t, false, arena.AllianceStations["R1"].AStop.Load())
+	assert.Equal(t, false, arena.AllianceStations["R1"].EStop.Load())
+	assert.Equal(t, false, arena.AllianceStations["R2"].AStop.Load())
+	assert.Equal(t, true, arena.AllianceStations["R2"].EStop.Load())
 	arena.lastDsPacketTime = time.Unix(0, 0) // Force a DS packet.
 	arena.Update()
 	assert.Equal(t, TeleopPeriod, arena.MatchState)
@@ -639,10 +639,10 @@ func TestPlcEStopAStop(t *testing.T) {
 	plc.redAStops[1] = true
 	plc.redEStops[1] = false
 	arena.Update()
-	assert.Equal(t, false, arena.AllianceStations["R1"].AStop)
-	assert.Equal(t, true, arena.AllianceStations["R1"].EStop)
-	assert.Equal(t, true, arena.AllianceStations["R2"].AStop)
-	assert.Equal(t, true, arena.AllianceStations["R2"].EStop)
+	assert.Equal(t, false, arena.AllianceStations["R1"].AStop.Load())
+	assert.Equal(t, true, arena.AllianceStations["R1"].EStop.Load())
+	assert.Equal(t, true, arena.AllianceStations["R2"].AStop.Load())
+	assert.Equal(t, true, arena.AllianceStations["R2"].EStop.Load())
 	arena.lastDsPacketTime = time.Unix(0, 0) // Force a DS packet.
 	arena.Update()
 	assert.Equal(t, false, arena.AllianceStations["R1"].DsConn.Enabled)
@@ -658,14 +658,14 @@ func TestPlcEStopAStop(t *testing.T) {
 	plc.blueAStops[2] = true
 	plc.blueEStops[2] = false
 	arena.Update()
-	assert.Equal(t, true, arena.AllianceStations["R3"].AStop)
-	assert.Equal(t, false, arena.AllianceStations["R3"].EStop)
-	assert.Equal(t, true, arena.AllianceStations["B1"].AStop)
-	assert.Equal(t, false, arena.AllianceStations["B1"].EStop)
-	assert.Equal(t, true, arena.AllianceStations["B2"].AStop)
-	assert.Equal(t, false, arena.AllianceStations["B2"].EStop)
-	assert.Equal(t, true, arena.AllianceStations["B3"].AStop)
-	assert.Equal(t, false, arena.AllianceStations["B3"].EStop)
+	assert.Equal(t, true, arena.AllianceStations["R3"].AStop.Load())
+	assert.Equal(t, false, arena.AllianceStations["R3"].EStop.Load())
+	assert.Equal(t, true, arena.AllianceStations["B1"].AStop.Load())
+	assert.Equal(t, false, arena.AllianceStations["B1"].EStop.Load())
+	assert.Equal(t, true, arena.AllianceStations["B2"].AStop.Load())
+	assert.Equal(t, false, arena.AllianceStations["B2"].EStop.Load())
+	assert.Equal(t, true, arena.AllianceStations["B3"].AStop.Load())
+	assert.Equal(t, false, arena.AllianceStations["B3"].EStop.Load())
 
 	// Ensure the other stations E-stops are working as well.
 	plc.redAStops[2] = false
@@ -677,14 +677,14 @@ func TestPlcEStopAStop(t *testing.T) {
 	plc.blueAStops[2] = false
 	plc.blueEStops[2] = true
 	arena.Update()
-	assert.Equal(t, false, arena.AllianceStations["R3"].AStop)
-	assert.Equal(t, true, arena.AllianceStations["R3"].EStop)
-	assert.Equal(t, false, arena.AllianceStations["B1"].AStop)
-	assert.Equal(t, true, arena.AllianceStations["B1"].EStop)
-	assert.Equal(t, false, arena.AllianceStations["B2"].AStop)
-	assert.Equal(t, true, arena.AllianceStations["B2"].EStop)
-	assert.Equal(t, false, arena.AllianceStations["B3"].AStop)
-	assert.Equal(t, true, arena.AllianceStations["B3"].EStop)
+	assert.Equal(t, false, arena.AllianceStations["R3"].AStop.Load())
+	assert.Equal(t, true, arena.AllianceStations["R3"].EStop.Load())
+	assert.Equal(t, false, arena.AllianceStations["B1"].AStop.Load())
+	assert.Equal(t, true, arena.AllianceStations["B1"].EStop.Load())
+	assert.Equal(t, false, arena.AllianceStations["B2"].AStop.Load())
+	assert.Equal(t, true, arena.AllianceStations["B2"].EStop.Load())
+	assert.Equal(t, false, arena.AllianceStations["B3"].AStop.Load())
+	assert.Equal(t, true, arena.AllianceStations["B3"].EStop.Load())
 
 	// Ensure unpressed E-stops are cleared at the end of the match.
 	arena.MatchStartTime = time.Now().Add(
@@ -696,12 +696,12 @@ func TestPlcEStopAStop(t *testing.T) {
 	arena.Update()
 	plc.blueEStops[2] = false
 	arena.Update()
-	assert.Equal(t, true, arena.AllianceStations["R1"].EStop)
-	assert.Equal(t, false, arena.AllianceStations["R2"].EStop)
-	assert.Equal(t, true, arena.AllianceStations["R3"].EStop)
-	assert.Equal(t, true, arena.AllianceStations["B1"].EStop)
-	assert.Equal(t, true, arena.AllianceStations["B2"].EStop)
-	assert.Equal(t, false, arena.AllianceStations["B3"].EStop)
+	assert.Equal(t, true, arena.AllianceStations["R1"].EStop.Load())
+	assert.Equal(t, false, arena.AllianceStations["R2"].EStop.Load())
+	assert.Equal(t, true, arena.AllianceStations["R3"].EStop.Load())
+	assert.Equal(t, true, arena.AllianceStations["B1"].EStop.Load())
+	assert.Equal(t, true, arena.AllianceStations["B2"].EStop.Load())
+	assert.Equal(t, false, arena.AllianceStations["B3"].EStop.Load())
 }
 
 func TestPlcEStopAStopWithPlcDisabled(t *testing.T) {
@@ -718,10 +718,10 @@ func TestPlcEStopAStopWithPlcDisabled(t *testing.T) {
 
 	arena.AllianceStations["R1"].DsConn.RobotLinked = true
 	arena.AllianceStations["R2"].DsConn.RobotLinked = true
-	arena.AllianceStations["R3"].Bypass = true
-	arena.AllianceStations["B1"].Bypass = true
-	arena.AllianceStations["B2"].Bypass = true
-	arena.AllianceStations["B3"].Bypass = true
+	arena.AllianceStations["R3"].Bypass.Store(true)
+	arena.AllianceStations["B1"].Bypass.Store(true)
+	arena.AllianceStations["B2"].Bypass.Store(true)
+	arena.AllianceStations["B3"].Bypass.Store(true)
 	assert.Nil(t, arena.StartMatch())
 	arena.Update()
 	arena.MatchStartTime = time.Now().Add(-time.Duration(game.MatchTiming.WarmupDurationSec) * time.Second)
@@ -732,11 +732,11 @@ func TestPlcEStopAStopWithPlcDisabled(t *testing.T) {
 	plc.redEStops[0] = true
 	plc.redAStops[1] = true
 	arena.Update()
-	assert.Equal(t, false, arena.AllianceStations["R1"].AStop)
-	assert.Equal(t, false, arena.AllianceStations["R1"].EStop)
+	assert.Equal(t, false, arena.AllianceStations["R1"].AStop.Load())
+	assert.Equal(t, false, arena.AllianceStations["R1"].EStop.Load())
 	assert.Equal(t, true, arena.AllianceStations["R1"].DsConn.Enabled)
-	assert.Equal(t, false, arena.AllianceStations["R2"].AStop)
-	assert.Equal(t, false, arena.AllianceStations["R2"].EStop)
+	assert.Equal(t, false, arena.AllianceStations["R2"].AStop.Load())
+	assert.Equal(t, false, arena.AllianceStations["R2"].EStop.Load())
 	assert.Equal(t, true, arena.AllianceStations["R2"].DsConn.Enabled)
 }
 
@@ -746,12 +746,12 @@ func TestPlcFieldEStop(t *testing.T) {
 	plc.isEnabled = true
 	arena.Plc = &plc
 
-	arena.AllianceStations["R1"].Bypass = true
-	arena.AllianceStations["R2"].Bypass = true
-	arena.AllianceStations["R3"].Bypass = true
-	arena.AllianceStations["B1"].Bypass = true
-	arena.AllianceStations["B2"].Bypass = true
-	arena.AllianceStations["B3"].Bypass = true
+	arena.AllianceStations["R1"].Bypass.Store(true)
+	arena.AllianceStations["R2"].Bypass.Store(true)
+	arena.AllianceStations["R3"].Bypass.Store(true)
+	arena.AllianceStations["B1"].Bypass.Store(true)
+	arena.AllianceStations["B2"].Bypass.Store(true)
+	arena.AllianceStations["B3"].Bypass.Store(true)
 	assert.Nil(t, arena.StartMatch())
 	arena.Update()
 	arena.MatchStartTime = time.Now().Add(-time.Duration(game.MatchTiming.WarmupDurationSec) * time.Second)
@@ -770,12 +770,12 @@ func TestPlcFieldEStopWithPlcDisabled(t *testing.T) {
 	plc.isEnabled = false
 	arena.Plc = &plc
 
-	arena.AllianceStations["R1"].Bypass = true
-	arena.AllianceStations["R2"].Bypass = true
-	arena.AllianceStations["R3"].Bypass = true
-	arena.AllianceStations["B1"].Bypass = true
-	arena.AllianceStations["B2"].Bypass = true
-	arena.AllianceStations["B3"].Bypass = true
+	arena.AllianceStations["R1"].Bypass.Store(true)
+	arena.AllianceStations["R2"].Bypass.Store(true)
+	arena.AllianceStations["R3"].Bypass.Store(true)
+	arena.AllianceStations["B1"].Bypass.Store(true)
+	arena.AllianceStations["B2"].Bypass.Store(true)
+	arena.AllianceStations["B3"].Bypass.Store(true)
 	assert.Nil(t, arena.StartMatch())
 	arena.Update()
 	arena.MatchStartTime = time.Now().Add(-time.Duration(game.MatchTiming.WarmupDurationSec) * time.Second)
@@ -797,20 +797,20 @@ func TestPlcMatchCycleEvergreen(t *testing.T) {
 	arena.Update()
 	assert.Equal(t, [4]bool{true, true, false, false}, plc.stackLights)
 
-	arena.AllianceStations["R1"].Bypass = true
-	arena.AllianceStations["R2"].Bypass = true
-	arena.AllianceStations["B1"].Bypass = true
-	arena.AllianceStations["B2"].Bypass = true
+	arena.AllianceStations["R1"].Bypass.Store(true)
+	arena.AllianceStations["R2"].Bypass.Store(true)
+	arena.AllianceStations["B1"].Bypass.Store(true)
+	arena.AllianceStations["B2"].Bypass.Store(true)
 	arena.Update()
 	assert.Equal(t, [4]bool{true, true, false, false}, plc.stackLights)
 
-	arena.AllianceStations["R3"].Bypass = true
+	arena.AllianceStations["R3"].Bypass.Store(true)
 	arena.Update()
 	assert.Equal(t, [4]bool{false, true, false, false}, plc.stackLights)
 	assert.Equal(t, false, plc.stackLightBuzzer)
 
 	// All teams are ready.
-	arena.AllianceStations["B3"].Bypass = true
+	arena.AllianceStations["B3"].Bypass.Store(true)
 	plc.cycleState = true
 	arena.Update()
 	assert.Equal(t, [4]bool{false, false, false, true}, plc.stackLights)

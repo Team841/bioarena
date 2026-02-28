@@ -10,6 +10,7 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Team254/cheesy-arena/game"
@@ -73,9 +74,9 @@ type Arena struct {
 type AllianceStation struct {
 	DsConn     *DriverStationConnection
 	Ethernet   bool
-	AStop      bool
-	EStop      bool
-	Bypass     bool
+	AStop      atomic.Bool
+	EStop      atomic.Bool
+	Bypass     atomic.Bool
 	Team       *model.Team
 	WifiStatus network.TeamWifiStatus
 	aStopReset bool
@@ -86,6 +87,7 @@ func NewArena(dbPath string) (*Arena, error) {
 	arena := new(Arena)
 	arena.configureNotifiers()
 	arena.Plc = new(plc.FakePlc)
+	log.Println("WARNING: FakePlc active — physical e-stop hardware is not monitored.")
 
 	arena.AllianceStations = make(map[string]*AllianceStation)
 	arena.AllianceStations["R1"] = new(AllianceStation)
@@ -360,12 +362,12 @@ func (arena *Arena) ResetMatch() error {
 		arena.MatchState = PreMatch
 	}
 	arena.matchAborted = false
-	arena.AllianceStations["R1"].Bypass = false
-	arena.AllianceStations["R2"].Bypass = false
-	arena.AllianceStations["R3"].Bypass = false
-	arena.AllianceStations["B1"].Bypass = false
-	arena.AllianceStations["B2"].Bypass = false
-	arena.AllianceStations["B3"].Bypass = false
+	arena.AllianceStations["R1"].Bypass.Store(false)
+	arena.AllianceStations["R2"].Bypass.Store(false)
+	arena.AllianceStations["R3"].Bypass.Store(false)
+	arena.AllianceStations["B1"].Bypass.Store(false)
+	arena.AllianceStations["B2"].Bypass.Store(false)
+	arena.AllianceStations["B3"].Bypass.Store(false)
 	arena.MuteMatchSounds = false
 	return nil
 }
@@ -493,7 +495,9 @@ func (arena *Arena) Run() {
 	go arena.accessPoint.Run()
 	go arena.Plc.Run()
 
-	for {
+	ticker := time.NewTicker(time.Millisecond * arenaLoopPeriodMs)
+	defer ticker.Stop()
+	for range ticker.C {
 		loopStartTime := time.Now()
 		arena.Update()
 		if time.Since(loopStartTime).Milliseconds() > arenaLoopWarningMs {
@@ -503,8 +507,6 @@ func (arena *Arena) Run() {
 			arena.lastPeriodicTaskTime = time.Now()
 			go arena.runPeriodicTasks()
 		}
-
-		time.Sleep(time.Millisecond * arenaLoopPeriodMs)
 	}
 }
 
@@ -680,13 +682,13 @@ func (arena *Arena) checkCanStartMatch() error {
 func (arena *Arena) checkAllianceStationsReady(stations ...string) error {
 	for _, station := range stations {
 		allianceStation := arena.AllianceStations[station]
-		if allianceStation.EStop {
+		if allianceStation.EStop.Load() {
 			return fmt.Errorf("cannot start match while an emergency stop is active")
 		}
 		if !allianceStation.aStopReset {
 			return fmt.Errorf("cannot start match if an autonomous stop has not been reset since the previous match")
 		}
-		if !allianceStation.Bypass {
+		if !allianceStation.Bypass.Load() {
 			if allianceStation.DsConn == nil || !allianceStation.DsConn.RobotLinked {
 				return fmt.Errorf("cannot start match until all robots are connected or bypassed")
 			}
@@ -701,10 +703,10 @@ func (arena *Arena) sendDsPacket(auto bool, enabled bool) {
 		dsConn := allianceStation.DsConn
 		if dsConn != nil {
 			dsConn.Auto = auto
-			dsConn.Enabled = enabled && !allianceStation.EStop && !(auto && allianceStation.AStop) &&
-				!allianceStation.Bypass
-			dsConn.EStop = allianceStation.EStop
-			dsConn.AStop = allianceStation.AStop
+			dsConn.Enabled = enabled && !allianceStation.EStop.Load() && !(auto && allianceStation.AStop.Load()) &&
+				!allianceStation.Bypass.Load()
+			dsConn.EStop = allianceStation.EStop.Load()
+			dsConn.AStop = allianceStation.AStop.Load()
 			err := dsConn.update(arena)
 			if err != nil {
 				log.Printf("Unable to send driver station packet for team %d.", allianceStation.Team.Id)
@@ -807,16 +809,16 @@ func (arena *Arena) handlePlcInputOutput() {
 func (arena *Arena) handleTeamStop(station string, eStopState, aStopState bool) {
 	allianceStation := arena.AllianceStations[station]
 	if eStopState {
-		allianceStation.EStop = true
+		allianceStation.EStop.Store(true)
 	} else if arena.MatchTimeSec() == 0 {
 		// Keep the E-stop latched until the match is over.
-		allianceStation.EStop = false
+		allianceStation.EStop.Store(false)
 	}
 	if aStopState {
-		allianceStation.AStop = true
+		allianceStation.AStop.Store(true)
 	} else if arena.MatchState != AutoPeriod {
 		// Keep the A-stop latched until the autonomous period is over.
-		allianceStation.AStop = false
+		allianceStation.AStop.Store(false)
 		allianceStation.aStopReset = true
 	}
 }

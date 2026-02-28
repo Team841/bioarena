@@ -202,7 +202,8 @@ func (web *Web) matchPlayWebsocketHandler(w http.ResponseWriter, r *http.Request
 				ws.WriteError(fmt.Sprintf("Invalid alliance station '%s'.", station))
 				continue
 			}
-			web.arena.AllianceStations[station].Bypass = !web.arena.AllianceStations[station].Bypass
+			as := web.arena.AllianceStations[station]
+		as.Bypass.Store(!as.Bypass.Load())
 			if err = ws.WriteNotifier(web.arena.ArenaStatusNotifier); err != nil {
 				log.Println(err)
 			}

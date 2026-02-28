@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Team254/cheesy-arena/field"
 	"github.com/Team254/cheesy-arena/model"
 )
 
@@ -30,6 +31,12 @@ func (web *Web) settingsGetHandler(w http.ResponseWriter, r *http.Request) {
 // Saves the event settings.
 func (web *Web) settingsPostHandler(w http.ResponseWriter, r *http.Request) {
 	if !web.userIsAdmin(w, r) {
+		return
+	}
+
+	switch web.arena.MatchState {
+	case field.StartMatch, field.WarmupPeriod, field.AutoPeriod, field.PausePeriod, field.TeleopPeriod:
+		web.renderSettings(w, r, "Cannot change settings while a match is in progress.")
 		return
 	}
 

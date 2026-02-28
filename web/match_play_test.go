@@ -82,22 +82,22 @@ func TestMatchPlayWebsocketCommands(t *testing.T) {
 	assert.Contains(t, readWebsocketError(t, ws), "Invalid alliance station")
 	ws.Write("toggleBypass", "R3")
 	readWebsocketType(t, ws, "arenaStatus")
-	assert.Equal(t, true, web.arena.AllianceStations["R3"].Bypass)
+	assert.Equal(t, true, web.arena.AllianceStations["R3"].Bypass.Load())
 	ws.Write("toggleBypass", "R3")
 	readWebsocketType(t, ws, "arenaStatus")
-	assert.Equal(t, false, web.arena.AllianceStations["R3"].Bypass)
+	assert.Equal(t, false, web.arena.AllianceStations["R3"].Bypass.Load())
 
 	// Go through match flow.
 	ws.Write("abortMatch", nil)
 	assert.Contains(t, readWebsocketError(t, ws), "cannot abort match")
 	ws.Write("startMatch", nil)
 	assert.Contains(t, readWebsocketError(t, ws), "cannot start match")
-	web.arena.AllianceStations["R1"].Bypass = true
-	web.arena.AllianceStations["R2"].Bypass = true
-	web.arena.AllianceStations["R3"].Bypass = true
-	web.arena.AllianceStations["B1"].Bypass = true
-	web.arena.AllianceStations["B2"].Bypass = true
-	web.arena.AllianceStations["B3"].Bypass = true
+	web.arena.AllianceStations["R1"].Bypass.Store(true)
+	web.arena.AllianceStations["R2"].Bypass.Store(true)
+	web.arena.AllianceStations["R3"].Bypass.Store(true)
+	web.arena.AllianceStations["B1"].Bypass.Store(true)
+	web.arena.AllianceStations["B2"].Bypass.Store(true)
+	web.arena.AllianceStations["B3"].Bypass.Store(true)
 	ws.Write("startMatch", nil)
 	readWebsocketType(t, ws, "arenaStatus")
 	assert.Equal(t, field.StartMatch, web.arena.MatchState)
