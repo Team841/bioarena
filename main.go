@@ -11,6 +11,9 @@ import (
 	"errors"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/Team254/cheesy-arena/field"
 	"github.com/Team254/cheesy-arena/hardware"
@@ -123,6 +126,16 @@ func main() {
 		log.Fatalln("Error during startup:", err)
 	}
 
+	// Set a default admin password on the very first run so the field is not
+	// open to anyone on the network. Can be changed later via the Settings page.
+	if arena.EventSettings.AdminPassword == "" {
+		arena.EventSettings.AdminPassword = "bioarena"
+		if err = arena.Database.UpdateEventSettings(arena.EventSettings); err != nil {
+			log.Fatalln("Error saving default admin password:", err)
+		}
+		log.Println("Admin password set to default: bioarena  (change via Settings page)")
+	}
+
 	// Apply timing and network config from config.yaml, seeding the DB on every
 	// startup so that config.yaml is the authoritative source for these values.
 	arena.EventSettings.AutoDurationSec = cfg.AutoDurationSec
@@ -141,6 +154,18 @@ func main() {
 		buildEStopPanel(cfg.RedEStopPanel, []string{"R1", "R2", "R3"}),
 		buildEStopPanel(cfg.BlueEStopPanel, []string{"B1", "B2", "B3"}),
 	}
+
+	// On SIGTERM/SIGINT: disable all robots and wait one DS packet cycle before exiting
+	// so connected driver stations receive a clean disabled packet.
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		log.Println("Shutting down — disabling all robots")
+		arena.DisableAll()
+		time.Sleep(600 * time.Millisecond)
+		os.Exit(0)
+	}()
 
 	// Start the web server in a separate goroutine.
 	webServer := web.NewWeb(arena)

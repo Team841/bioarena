@@ -97,7 +97,11 @@ func (web *Web) settingsPostHandler(w http.ResponseWriter, r *http.Request) {
 	eventSettings.SCCUpCommands = r.PostFormValue("sccUpCommands")
 	eventSettings.SCCDownCommands = r.PostFormValue("sccDownCommands")
 	eventSettings.PlcAddress = r.PostFormValue("plcAddress")
-	eventSettings.AdminPassword = r.PostFormValue("adminPassword")
+	// Only update the admin password if a non-empty value was submitted.
+	// This prevents the settings form from inadvertently clearing the password.
+	if newPass := r.PostFormValue("adminPassword"); newPass != "" {
+		eventSettings.AdminPassword = newPass
+	}
 	eventSettings.UseLiteUdpPort = r.PostFormValue("useLiteUdpPort") == "on"
 	eventSettings.WarmupDurationSec, _ = strconv.Atoi(r.PostFormValue("warmupDurationSec"))
 	eventSettings.AutoDurationSec, _ = strconv.Atoi(r.PostFormValue("autoDurationSec"))

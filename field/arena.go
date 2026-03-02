@@ -373,6 +373,15 @@ func (arena *Arena) ResetMatch() error {
 	return nil
 }
 
+// DisableAll sets Bypass on every alliance station so the next DS packet disables
+// all robots. Safe to call from any goroutine (atomic write). Intended for use
+// during graceful shutdown (SIGTERM).
+func (arena *Arena) DisableAll() {
+	for _, as := range arena.AllianceStations {
+		as.Bypass.Store(true)
+	}
+}
+
 // Returns the fractional number of seconds since the start of the match.
 func (arena *Arena) MatchTimeSec() float64 {
 	switch arena.MatchState {
