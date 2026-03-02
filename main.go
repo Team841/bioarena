@@ -13,6 +13,7 @@ import (
 	"os"
 
 	"github.com/Team254/cheesy-arena/field"
+	"github.com/Team254/cheesy-arena/hardware"
 	"github.com/Team254/cheesy-arena/web"
 	"gopkg.in/yaml.v3"
 )
@@ -72,6 +73,44 @@ func loadConfig(path string) (*Config, error) {
 	return cfg, nil
 }
 
+// buildFieldLights constructs the FieldLights driver from config.
+// An empty driver string returns a no-op implementation.
+func buildFieldLights(cfg *Config) hardware.FieldLights {
+	switch cfg.FieldLightsDriver {
+	case "":
+		return &hardware.NoopFieldLights{}
+	case "serial":
+		baud := cfg.FieldLightsBaud
+		if baud == 0 {
+			baud = 9600
+		}
+		cmd := cfg.FieldLightsCommand
+		if cmd == "" {
+			cmd = "START\n"
+		}
+		sl, err := hardware.NewSerialFieldLights(cfg.FieldLightsPort, baud, cmd)
+		if err != nil {
+			log.Fatalf("serial field lights: %v", err)
+		}
+		return sl
+	default:
+		log.Fatalf("unknown field_lights_driver: %q", cfg.FieldLightsDriver)
+		return nil
+	}
+}
+
+// buildEStopPanel constructs an EStopPanel driver from config.
+// An empty driver string returns a no-op implementation.
+func buildEStopPanel(cfg EStopPanelConfig, _ []string) hardware.EStopPanel {
+	switch cfg.Driver {
+	case "":
+		return &hardware.NoopEStopPanel{}
+	default:
+		log.Fatalf("unknown estop_panel driver: %q", cfg.Driver)
+		return nil
+	}
+}
+
 // Main entry point for the application.
 func main() {
 	cfg, err := loadConfig(configPath)
@@ -95,6 +134,12 @@ func main() {
 	}
 	if err = arena.LoadSettings(); err != nil {
 		log.Fatalln("Error reloading settings:", err)
+	}
+
+	arena.FieldLights = buildFieldLights(cfg)
+	arena.EStopPanels = []hardware.EStopPanel{
+		buildEStopPanel(cfg.RedEStopPanel, []string{"R1", "R2", "R3"}),
+		buildEStopPanel(cfg.BlueEStopPanel, []string{"B1", "B2", "B3"}),
 	}
 
 	// Start the web server in a separate goroutine.

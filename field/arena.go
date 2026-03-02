@@ -8,12 +8,14 @@ package field
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/Team254/cheesy-arena/game"
+	"github.com/Team254/cheesy-arena/hardware"
 	"github.com/Team254/cheesy-arena/model"
 	"github.com/Team254/cheesy-arena/network"
 	"github.com/Team254/cheesy-arena/plc"
@@ -56,10 +58,14 @@ type Arena struct {
 	redSCC               *network.SCCSwitch
 	blueSCC              *network.SCCSwitch
 	Plc                  plc.Plc
+	FieldLights          hardware.FieldLights
+	EStopPanels          []hardware.EStopPanel
+	AutoWinner           hardware.Alliance
 	AllianceStations     map[string]*AllianceStation
 	ArenaNotifiers
 	MatchState
 	lastMatchState       MatchState
+	lastLightingState    hardware.LightingState
 	CurrentMatch         *model.Match
 	MatchStartTime       time.Time
 	LastMatchTimeSec     float64
@@ -88,6 +94,8 @@ func NewArena(dbPath string) (*Arena, error) {
 	arena.configureNotifiers()
 	arena.Plc = new(plc.FakePlc)
 	log.Println("WARNING: FakePlc active — physical e-stop hardware is not monitored.")
+	arena.FieldLights = &hardware.NoopFieldLights{}
+	arena.EStopPanels = []hardware.EStopPanel{}
 
 	arena.AllianceStations = make(map[string]*AllianceStation)
 	arena.AllianceStations["R1"] = new(AllianceStation)
@@ -403,6 +411,7 @@ func (arena *Arena) Update() {
 			sendDsPacket = false
 		} else {
 			arena.MatchState = AutoPeriod
+			arena.assignAutoWinner()
 			enabled = true
 			sendDsPacket = true
 		}
@@ -412,6 +421,7 @@ func (arena *Arena) Update() {
 		enabled = false
 		if matchTimeSec >= float64(game.MatchTiming.WarmupDurationSec) {
 			arena.MatchState = AutoPeriod
+			arena.assignAutoWinner()
 			auto = true
 			enabled = true
 			sendDsPacket = true
@@ -479,6 +489,27 @@ func (arena *Arena) Update() {
 	}
 
 	arena.handleSounds(matchTimeSec)
+
+	// Poll hardware e-stop panels (runs on arena goroutine — no locking needed).
+	for _, panel := range arena.EStopPanels {
+		for _, event := range panel.Poll() {
+			if event.Station == "all" {
+				for _, s := range []string{"R1", "R2", "R3", "B1", "B2", "B3"} {
+					arena.handleTeamStop(s, !event.IsAStop, event.IsAStop)
+				}
+			} else {
+				arena.handleTeamStop(event.Station, !event.IsAStop, event.IsAStop)
+			}
+		}
+	}
+
+	// Notify FieldLights driver on any state or sub-phase change.
+	if ls := arena.computeLightingState(matchTimeSec); ls != arena.lastLightingState {
+		if err := arena.FieldLights.SetState(ls); err != nil {
+			log.Printf("FieldLights.SetState: %v", err)
+		}
+		arena.lastLightingState = ls
+	}
 
 	// Handle field sensors/lights/actuators.
 	arena.handlePlcInputOutput()
@@ -875,5 +906,73 @@ func trussLightWarningSequence(matchTimeSec float64) (bool, [3]bool) {
 		lights[sequence[step]-1] = true
 	}
 	return step < len(sequence), lights
+}
+
+// assignAutoWinner randomly picks which alliance's HUB goes inactive first in Shift1.
+func (arena *Arena) assignAutoWinner() {
+	if rand.Intn(2) == 0 {
+		arena.AutoWinner = hardware.AllianceRed
+	} else {
+		arena.AutoWinner = hardware.AllianceBlue
+	}
+}
+
+// computeLightingState derives the current LightingState from arena state and match time.
+func (arena *Arena) computeLightingState(matchTimeSec float64) hardware.LightingState {
+	var phase hardware.MatchPhase
+	switch arena.MatchState {
+	case AutoPeriod:
+		phase = hardware.PhaseAuto
+	case PausePeriod:
+		phase = hardware.PhasePause
+	case TeleopPeriod:
+		phase = hardware.PhaseTeleop
+	case PostMatch:
+		phase = hardware.PhaseFinished
+	default:
+		phase = hardware.PhaseIdle
+	}
+
+	var subPhase hardware.TeleopSubPhase
+	var warning bool
+	if arena.MatchState == TeleopPeriod {
+		teleopStart := game.GetDurationToTeleopStart().Seconds()
+		remaining := int(float64(game.MatchTiming.TeleopDurationSec) - (matchTimeSec - teleopStart))
+		subPhase = teleopSubPhase(remaining)
+		warning = shiftWarning(remaining)
+	}
+
+	return hardware.LightingState{
+		Phase:          phase,
+		TeleopSubPhase: subPhase,
+		AutoWinner:     arena.AutoWinner,
+		ShiftWarning:   warning,
+	}
+}
+
+// teleopSubPhase returns the REBUILT 2026 sub-phase for the given remaining teleop seconds.
+func teleopSubPhase(remaining int) hardware.TeleopSubPhase {
+	switch {
+	case remaining > 130:
+		return hardware.SubPhaseTransition // T=2:20–2:10
+	case remaining > 105:
+		return hardware.SubPhaseShift1 // T=2:10–1:45
+	case remaining > 80:
+		return hardware.SubPhaseShift2 // T=1:45–1:20
+	case remaining > 55:
+		return hardware.SubPhaseShift3 // T=1:20–0:55
+	case remaining > 30:
+		return hardware.SubPhaseShift4 // T=0:55–0:30
+	default:
+		return hardware.SubPhaseEndGame // T=0:30–0:00
+	}
+}
+
+// shiftWarning returns true during the 3s window before each HUB deactivation boundary.
+func shiftWarning(remaining int) bool {
+	return (remaining >= 130 && remaining < 133) || // 3s before Shift1
+		(remaining >= 105 && remaining < 108) || // 3s before Shift2
+		(remaining >= 80 && remaining < 83) || // 3s before Shift3
+		(remaining >= 55 && remaining < 58) // 3s before Shift4
 }
 
