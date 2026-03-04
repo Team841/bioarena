@@ -51,6 +51,12 @@ const toggleBypass = function (station) {
   websocket.send("toggleBypass", station);
 };
 
+// --- Field E-Stop overlay ---
+
+const clearFieldEStop = function () {
+  websocket.send("clearFieldEStop", null);
+};
+
 const startMatch = function () {
   const mute = document.getElementById("muteMatchSounds").checked;
   websocket.send("startMatch", {muteMatchSounds: mute});
@@ -110,6 +116,10 @@ const handleArenaStatus = function (data) {
     // Bypass checkbox.
     bypassChk.checked = st.Bypass;
   }
+
+  // Field e-stop overlay — blocks all controls when hardware e-stop is active.
+  document.getElementById("fieldEstopOverlay").style.display =
+    data.GpioFieldEStopActive ? "flex" : "none";
 
   // Update control button states.
   const btnStart = document.getElementById("btnStart");

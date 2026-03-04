@@ -6,12 +6,31 @@ package web
 import (
 	"github.com/Team254/cheesy-arena/field"
 	"github.com/Team254/cheesy-arena/game"
+	"github.com/Team254/cheesy-arena/hardware"
 	"github.com/Team254/cheesy-arena/model"
 	"github.com/Team254/cheesy-arena/websocket"
 	gorillawebsocket "github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
+
+// mockWebFieldEStop is a controllable FieldEStopPanel for web handler tests.
+type mockWebFieldEStop struct {
+	pinHeld   bool
+	triggered bool
+}
+
+func (m *mockWebFieldEStop) Triggered() bool {
+	if m.pinHeld {
+		m.triggered = true
+	}
+	return m.triggered
+}
+func (m *mockWebFieldEStop) Clear() {
+	if !m.pinHeld {
+		m.triggered = false
+	}
+}
 
 func TestMatchPlay(t *testing.T) {
 	web := setupTestWeb(t)
@@ -173,4 +192,70 @@ func TestMatchPlayWebsocketLoadMatch(t *testing.T) {
 	matchIdMessage.MatchId = 254
 	ws.Write("loadMatch", matchIdMessage)
 	assert.Contains(t, readWebsocketError(t, ws), "invalid match ID 254")
+}
+
+func TestMatchPlayClearFieldEStop(t *testing.T) {
+	web := setupTestWeb(t)
+	mock := &mockWebFieldEStop{}
+	web.arena.FieldEStop = mock
+
+	server, wsUrl := web.startTestServer()
+	defer server.Close()
+	conn, _, err := gorillawebsocket.DefaultDialer.Dial(wsUrl+"/match_play/websocket", nil)
+	assert.Nil(t, err)
+	defer conn.Close()
+	ws := websocket.NewTestWebsocket(conn)
+
+	// Drain initial messages.
+	readWebsocketType(t, ws, "matchTiming")
+	readWebsocketType(t, ws, "arenaStatus")
+	readWebsocketType(t, ws, "matchLoad")
+	readWebsocketType(t, ws, "matchTime")
+
+	// Simulate a field e-stop: latch all stations.
+	mock.pinHeld = true
+	web.arena.FieldEStop.Triggered()
+	web.arena.AllianceStations["R1"].EStop.Store(true)
+	web.arena.AllianceStations["B1"].EStop.Store(true)
+
+	// clearFieldEStop while button still held — latch must stay active.
+	ws.Write("clearFieldEStop", nil)
+	readWebsocketType(t, ws, "arenaStatus")
+	assert.True(t, mock.triggered, "latch should persist while button held")
+
+	// Release button, then clear — stations should be cleared.
+	mock.pinHeld = false
+	ws.Write("clearFieldEStop", nil)
+	readWebsocketType(t, ws, "arenaStatus")
+	assert.False(t, mock.triggered, "latch should clear after button release")
+	assert.False(t, web.arena.AllianceStations["R1"].EStop.Load())
+	assert.False(t, web.arena.AllianceStations["B1"].EStop.Load())
+}
+
+func TestMatchPlayArenaStatusIncludesGpioFieldEStop(t *testing.T) {
+	// Verify that the arenaStatus WebSocket message includes the GpioFieldEStopActive field.
+	web := setupTestWeb(t)
+	web.arena.FieldEStop = &hardware.NoopFieldEStopPanel{}
+
+	server, wsUrl := web.startTestServer()
+	defer server.Close()
+	conn, _, err := gorillawebsocket.DefaultDialer.Dial(wsUrl+"/match_play/websocket", nil)
+	assert.Nil(t, err)
+	defer conn.Close()
+	ws := websocket.NewTestWebsocket(conn)
+
+	// Read all four initial messages and extract arenaStatus.
+	messages := readWebsocketMultiple(t, ws, 4)
+	arenaStatus, ok := messages["arenaStatus"]
+	if !assert.True(t, ok, "arenaStatus not found in initial messages") {
+		return
+	}
+	statusMap, ok := arenaStatus.(map[string]interface{})
+	if !assert.True(t, ok, "arenaStatus data is not a map") {
+		return
+	}
+	_, exists := statusMap["GpioFieldEStopActive"]
+	assert.True(t, exists, "arenaStatus payload must include GpioFieldEStopActive field")
+	assert.Equal(t, false, statusMap["GpioFieldEStopActive"],
+		"GpioFieldEStopActive must be false when noop panel is installed")
 }

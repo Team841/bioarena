@@ -249,6 +249,11 @@ func (web *Web) matchPlayWebsocketHandler(w http.ResponseWriter, r *http.Request
 			if err = ws.WriteNotifier(web.arena.ArenaStatusNotifier); err != nil {
 				log.Println(err)
 			}
+		case "clearFieldEStop":
+			web.arena.ClearFieldEStop()
+			if err = ws.WriteNotifier(web.arena.ArenaStatusNotifier); err != nil {
+				log.Println(err)
+			}
 		case "commitResults":
 			if web.arena.MatchState != field.PostMatch {
 				ws.WriteError("cannot commit match while it is in progress")

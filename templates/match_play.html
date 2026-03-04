@@ -6,6 +6,15 @@ Simplified match play UI for 10th Street practice field controller.
 */}}
 {{define "title"}}Match Play{{end}}
 {{define "body"}}
+<!-- Field E-Stop overlay: covers the entire UI when a hardware e-stop is active. -->
+<!-- Driven by arenaStatus.GpioFieldEStopActive via WebSocket push. -->
+<div id="fieldEstopOverlay" class="field-estop-overlay" style="display:none">
+  <div class="field-estop-box">
+    <div class="field-estop-title">&#x26D4; FIELD E-STOP ACTIVE</div>
+    <div class="field-estop-sub">All robots disabled. Address the condition, then clear.</div>
+    <button class="field-estop-clear-btn" onclick="clearFieldEStop()">Clear Field E-Stop</button>
+  </div>
+</div>
 <div class="row g-2">
   <!-- Sidebar: match list (desktop only) -->
   <div class="col-lg-3 d-none d-lg-block">

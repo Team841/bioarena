@@ -383,3 +383,56 @@ input[data-changed="true"], select[data-changed="true"] {
     width: 100px;
   }
 }
+/* =====================================================================
+   Field E-Stop Overlay
+   Full-screen blocking overlay that appears when a hardware GPIO
+   field e-stop is active. z-index 9999 ensures it covers everything.
+   ===================================================================== */
+
+.field-estop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(155, 0, 0, 0.93);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.field-estop-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  color: #fff;
+  text-align: center;
+  padding: 2rem;
+}
+
+.field-estop-title {
+  font-size: clamp(2rem, 7vw, 4rem);
+  font-weight: bold;
+  letter-spacing: 0.02em;
+}
+
+.field-estop-sub {
+  font-size: clamp(1rem, 2.5vw, 1.3rem);
+  max-width: 32rem;
+  opacity: 0.9;
+}
+
+.field-estop-clear-btn {
+  font-size: clamp(1rem, 2.5vw, 1.4rem);
+  padding: 0.9rem 2.5rem;
+  background: #fff;
+  color: #900;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: opacity 0.1s;
+}
+
+.field-estop-clear-btn:active {
+  opacity: 0.75;
+}

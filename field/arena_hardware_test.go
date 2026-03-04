@@ -138,6 +138,104 @@ func TestEStopPanelPollAllStations(t *testing.T) {
 	}
 }
 
+// --- GPIO FieldEStop arena integration ---
+
+// mockFieldEStop simulates a GPIO field e-stop for arena integration tests.
+type mockFieldEStop struct {
+	pinHeld   bool // true while button is physically held (pin active-low)
+	triggered bool // latched once pinHeld becomes true
+}
+
+func (m *mockFieldEStop) Triggered() bool {
+	if m.pinHeld {
+		m.triggered = true
+	}
+	return m.triggered
+}
+
+func (m *mockFieldEStop) Clear() {
+	if !m.pinHeld {
+		m.triggered = false
+	}
+}
+
+func TestFieldEStopDisablesAllStations(t *testing.T) {
+	arena := setupTestArena(t)
+	mock := &mockFieldEStop{}
+	arena.FieldEStop = mock
+
+	// Press button — first Triggered() call should latch.
+	mock.pinHeld = true
+	if arena.FieldEStop.Triggered() && !arena.fieldEStopActive.Load() {
+		arena.fieldEStopActive.Store(true)
+		for _, as := range arena.AllianceStations {
+			as.EStop.Store(true)
+		}
+	}
+
+	assert.True(t, arena.fieldEStopActive.Load())
+	for _, station := range []string{"R1", "R2", "R3", "B1", "B2", "B3"} {
+		assert.True(t, arena.AllianceStations[station].EStop.Load(), "station=%s should be e-stopped", station)
+	}
+}
+
+func TestFieldEStopLatchPersistsAfterRelease(t *testing.T) {
+	arena := setupTestArena(t)
+	mock := &mockFieldEStop{}
+	arena.FieldEStop = mock
+
+	// Press then release — latch must persist.
+	mock.pinHeld = true
+	mock.Triggered() // latch
+	arena.fieldEStopActive.Store(true)
+	mock.pinHeld = false
+
+	assert.True(t, arena.FieldEStop.Triggered(), "latch must persist after button release")
+	assert.True(t, arena.fieldEStopActive.Load())
+}
+
+func TestFieldEStopClearReleasedButton(t *testing.T) {
+	arena := setupTestArena(t)
+	mock := &mockFieldEStop{pinHeld: true}
+	arena.FieldEStop = mock
+
+	mock.Triggered() // latch
+	arena.fieldEStopActive.Store(true)
+	for _, as := range arena.AllianceStations {
+		as.EStop.Store(true)
+	}
+
+	// Release button and clear.
+	mock.pinHeld = false
+	arena.ClearFieldEStop()
+
+	assert.False(t, arena.fieldEStopActive.Load())
+	for _, station := range []string{"R1", "R2", "R3", "B1", "B2", "B3"} {
+		assert.False(t, arena.AllianceStations[station].EStop.Load(), "station=%s should be cleared", station)
+	}
+}
+
+func TestFieldEStopClearNoopWhileHeld(t *testing.T) {
+	arena := setupTestArena(t)
+	mock := &mockFieldEStop{pinHeld: true}
+	arena.FieldEStop = mock
+
+	mock.Triggered() // latch
+	arena.fieldEStopActive.Store(true)
+
+	// Try to clear while still held — should be no-op.
+	arena.ClearFieldEStop()
+	assert.True(t, arena.fieldEStopActive.Load(), "clear while held must be no-op")
+}
+
+func TestFieldEStopBlocksMatchStart(t *testing.T) {
+	arena := setupTestArena(t)
+	arena.fieldEStopActive.Store(true)
+
+	err := arena.checkCanStartMatch()
+	assert.ErrorContains(t, err, "field emergency stop")
+}
+
 // --- NoopFieldLights integration ---
 
 func TestNoopFieldLightsIntegration(t *testing.T) {

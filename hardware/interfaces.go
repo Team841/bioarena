@@ -62,3 +62,13 @@ type EStopEvent struct {
 type EStopPanel interface {
 	Poll() []EStopEvent
 }
+
+// FieldEStopPanel is a latching field-wide e-stop button.
+// Arena calls Triggered() every loop tick (~10 ms).
+// Clear() is called by the web UI after the operator acknowledges the condition.
+// Unlike EStopPanel, this interface carries state: once triggered the latch
+// persists until Clear() is called while the button is physically released.
+type FieldEStopPanel interface {
+	Triggered() bool // true while latch is active (button pressed or not yet cleared)
+	Clear()          // reset latch; no-op if button is still physically held
+}

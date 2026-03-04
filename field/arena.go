@@ -58,6 +58,7 @@ type Arena struct {
 	Plc                  plc.Plc
 	FieldLights          hardware.FieldLights
 	EStopPanels          []hardware.EStopPanel
+	FieldEStop           hardware.FieldEStopPanel
 	AutoWinner           hardware.Alliance
 	AllianceStations     map[string]*AllianceStation
 	ArenaNotifiers
@@ -76,6 +77,7 @@ type Arena struct {
 
 	freePracticeReconfiguring atomic.Bool  // true while AP is being reconfigured for a slot change
 	freePracticeReconfigMu    sync.Mutex   // serialises concurrent SetFreePracticeSlot calls
+	fieldEStopActive          atomic.Bool  // latched when GPIO field e-stop fires; cleared by ClearFieldEStop()
 }
 
 type AllianceStation struct {
@@ -97,6 +99,7 @@ func NewArena(dbPath string) (*Arena, error) {
 	log.Println("WARNING: FakePlc active — physical e-stop hardware is not monitored.")
 	arena.FieldLights = &hardware.NoopFieldLights{}
 	arena.EStopPanels = []hardware.EStopPanel{}
+	arena.FieldEStop = &hardware.NoopFieldEStopPanel{}
 
 	arena.AllianceStations = make(map[string]*AllianceStation)
 	arena.AllianceStations["R1"] = new(AllianceStation)
@@ -382,6 +385,21 @@ func (arena *Arena) DisableAll() {
 	}
 }
 
+// ClearFieldEStop is called by the "clearFieldEStop" WebSocket command.
+// It resets the GPIO field e-stop latch and clears all station e-stops so that
+// driver stations can re-enable their robots. If the button is still physically
+// held the underlying Clear() is a no-op, and the latch stays active.
+// Safe to call from any goroutine (all writes are atomic).
+func (arena *Arena) ClearFieldEStop() {
+	arena.FieldEStop.Clear()
+	if !arena.FieldEStop.Triggered() {
+		arena.fieldEStopActive.Store(false)
+		for _, as := range arena.AllianceStations {
+			as.EStop.Store(false)
+		}
+	}
+}
+
 // Returns the fractional number of seconds since the start of the match.
 func (arena *Arena) MatchTimeSec() float64 {
 	switch arena.MatchState {
@@ -488,6 +506,18 @@ func (arena *Arena) Update() {
 	}
 
 	arena.handleSounds(matchTimeSec)
+
+	// Poll GPIO field e-stop (latching; fires once per press, cleared via web UI).
+	if arena.FieldEStop.Triggered() && !arena.fieldEStopActive.Load() {
+		arena.fieldEStopActive.Store(true)
+		for _, as := range arena.AllianceStations {
+			as.EStop.Store(true)
+		}
+		switch arena.MatchState {
+		case StartMatch, WarmupPeriod, AutoPeriod, PausePeriod, TeleopPeriod:
+			_ = arena.AbortMatch()
+		}
+	}
 
 	// Poll hardware e-stop panels (runs on arena goroutine — no locking needed).
 	for _, panel := range arena.EStopPanels {
@@ -685,6 +715,10 @@ func (arena *Arena) setupNetwork(teams [6]*model.Team, isPreload bool) {
 func (arena *Arena) checkCanStartMatch() error {
 	if arena.MatchState != PreMatch {
 		return fmt.Errorf("cannot start match while there is a match still in progress or with results pending")
+	}
+
+	if arena.fieldEStopActive.Load() {
+		return fmt.Errorf("cannot start match while field emergency stop is active")
 	}
 
 	err := arena.checkAllianceStationsReady("R1", "R2", "R3", "B1", "B2", "B3")
