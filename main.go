@@ -44,7 +44,6 @@ type Config struct {
 	FieldLightsCommand     string           `yaml:"field_lights_command"`
 	RedEStopPanel          EStopPanelConfig `yaml:"red_estop_panel"`
 	BlueEStopPanel         EStopPanelConfig `yaml:"blue_estop_panel"`
-	FieldEStopPin          int              `yaml:"field_estop_pin"` // BCM GPIO pin; 0 or absent = disabled
 }
 
 func defaultConfig() *Config {
@@ -105,24 +104,12 @@ func buildFieldLights(cfg *Config) hardware.FieldLights {
 	}
 }
 
-// buildFieldEStop constructs the FieldEStopPanel from config.
-// A pin of 0 (or absent from config.yaml) returns a no-op implementation.
-func buildFieldEStop(cfg *Config) hardware.FieldEStopPanel {
-	if cfg.FieldEStopPin == 0 {
-		return &hardware.NoopFieldEStopPanel{}
-	}
-	panel, err := hardware.NewGpioFieldEStopPanel("gpiochip0", cfg.FieldEStopPin)
-	if err != nil {
-		log.Fatalf("GPIO field e-stop: %v", err)
-	}
-	return panel
-}
-
 // buildEStopPanel constructs an EStopPanel driver from config.
 // An empty driver string returns a no-op implementation.
-func buildEStopPanel(cfg EStopPanelConfig, _ []string) hardware.EStopPanel {
+func buildEStopPanel(cfg EStopPanelConfig, alliance string) hardware.EStopPanel {
 	switch cfg.Driver {
 	case "":
+		log.Printf("WARNING: No %s e-stop panel configured — %s e-stops not monitored.", alliance, alliance)
 		return &hardware.NoopEStopPanel{}
 	default:
 		log.Fatalf("unknown estop_panel driver: %q", cfg.Driver)
@@ -167,10 +154,9 @@ func main() {
 	}
 
 	arena.FieldLights = buildFieldLights(cfg)
-	arena.FieldEStop = buildFieldEStop(cfg)
 	arena.EStopPanels = []hardware.EStopPanel{
-		buildEStopPanel(cfg.RedEStopPanel, []string{"R1", "R2", "R3"}),
-		buildEStopPanel(cfg.BlueEStopPanel, []string{"B1", "B2", "B3"}),
+		buildEStopPanel(cfg.RedEStopPanel, "red"),
+		buildEStopPanel(cfg.BlueEStopPanel, "blue"),
 	}
 
 	// On SIGTERM/SIGINT: disable all robots and wait one DS packet cycle before exiting

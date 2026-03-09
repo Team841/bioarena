@@ -94,7 +94,6 @@ func NewArena(dbPath string) (*Arena, error) {
 	arena := new(Arena)
 	arena.configureNotifiers()
 	arena.Plc = new(plc.FakePlc)
-	log.Println("WARNING: FakePlc active — physical e-stop hardware is not monitored.")
 	arena.FieldLights = &hardware.NoopFieldLights{}
 	arena.EStopPanels = []hardware.EStopPanel{}
 	arena.FieldEStop = &hardware.NoopFieldEStopPanel{}
@@ -154,7 +153,19 @@ func (arena *Arena) LoadSettings() error {
 		settings.SwitchAddress, settings.SwitchPassword,
 		settings.SwitchDSPortUpCommands, settings.SwitchDSPortDownCommands,
 	)
-	arena.Plc.SetAddress(settings.PlcAddress)
+
+	if settings.FieldEStopPin != 0 {
+		panel, err := hardware.NewGpioFieldEStopPanel("gpiochip0", settings.FieldEStopPin)
+		if err != nil {
+			log.Printf("WARNING: Could not open field e-stop GPIO pin %d: %v", settings.FieldEStopPin, err)
+			arena.FieldEStop = &hardware.NoopFieldEStopPanel{}
+		} else {
+			arena.FieldEStop = panel
+		}
+	} else {
+		log.Println("WARNING: No field e-stop pin configured — field-wide e-stop not monitored.")
+		arena.FieldEStop = &hardware.NoopFieldEStopPanel{}
+	}
 
 	game.MatchTiming.WarmupDurationSec = settings.WarmupDurationSec
 	game.MatchTiming.AutoDurationSec = settings.AutoDurationSec

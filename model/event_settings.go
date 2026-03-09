@@ -38,7 +38,9 @@ type EventSettings struct {
 	SwitchPassword                   string
 	SwitchDSPortUpCommands           string
 	SwitchDSPortDownCommands         string
-	PlcAddress                       string
+	RedEStopPanelAddress             string
+	BlueEStopPanelAddress            string
+	FieldEStopPin                    int
 	AdminPassword                    string
 	TeamSignRed1Id                   int
 	TeamSignRed2Id                   int
