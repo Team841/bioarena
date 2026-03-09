@@ -52,37 +52,6 @@ func (web *Web) settingsPostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	previousAdminPassword := eventSettings.AdminPassword
 
-	// Validate and update playoff settings.
-	var playoffType model.PlayoffType
-	numAlliances := 0
-	if r.PostFormValue("playoffType") == "SingleEliminationPlayoff" {
-		playoffType = model.SingleEliminationPlayoff
-		numAlliances, _ = strconv.Atoi(r.PostFormValue("numPlayoffAlliances"))
-		if numAlliances < 2 || numAlliances > 16 {
-			web.renderSettings(w, r, "Number of alliances must be between 2 and 16.")
-			return
-		}
-	} else {
-		playoffType = model.DoubleEliminationPlayoff
-		numAlliances = 8
-	}
-	if eventSettings.PlayoffType != playoffType || eventSettings.NumPlayoffAlliances != numAlliances {
-		alliances, err := web.arena.Database.GetAllAlliances()
-		if err != nil {
-			handleWebErr(w, err)
-			return
-		}
-		if len(alliances) > 0 {
-			web.renderSettings(w, r, "Cannot change playoff type or size after alliance selection has been finalized.")
-			return
-		}
-	}
-	eventSettings.PlayoffType = playoffType
-	eventSettings.NumPlayoffAlliances = numAlliances
-	eventSettings.SelectionRound2Order = r.PostFormValue("selectionRound2Order")
-	eventSettings.SelectionRound3Order = r.PostFormValue("selectionRound3Order")
-	eventSettings.SelectionShowUnpickedTeams = r.PostFormValue("selectionShowUnpickedTeams") == "on"
-
 	eventSettings.NetworkSecurityEnabled = r.PostFormValue("networkSecurityEnabled") == "on"
 	eventSettings.ApAddress = r.PostFormValue("apAddress")
 	eventSettings.ApPassword = r.PostFormValue("apPassword")

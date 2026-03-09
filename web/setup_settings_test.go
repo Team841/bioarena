@@ -21,45 +21,12 @@ func TestSetupSettings(t *testing.T) {
 	recorder := web.getHttpResponse("/setup/settings")
 	assert.Equal(t, 200, recorder.Code)
 	assert.Contains(t, recorder.Body.String(), "Untitled Event")
-	assert.Contains(t, recorder.Body.String(), "8")
 
-	// Change the settings and check the response.
-	recorder = web.postHttpResponse(
-		"/setup/settings",
-		"name=Chezy Champs&playoffType=single&numPlayoffAlliances=16",
-	)
+	// Change the name and check the response.
+	recorder = web.postHttpResponse("/setup/settings", "name=Chezy Champs")
 	assert.Equal(t, 303, recorder.Code)
 	recorder = web.getHttpResponse("/setup/settings")
 	assert.Contains(t, recorder.Body.String(), "Chezy Champs")
-	assert.Contains(t, recorder.Body.String(), "16")
-}
-
-func TestSetupSettingsDoubleElimination(t *testing.T) {
-	web := setupTestWeb(t)
-
-	recorder := web.postHttpResponse("/setup/settings", "playoffType=DoubleEliminationPlayoff&numPlayoffAlliances=3")
-	assert.Equal(t, 303, recorder.Code)
-	assert.Equal(t, model.DoubleEliminationPlayoff, web.arena.EventSettings.PlayoffType)
-	assert.Equal(t, 8, web.arena.EventSettings.NumPlayoffAlliances)
-}
-
-func TestSetupSettingsInvalidValues(t *testing.T) {
-	web := setupTestWeb(t)
-	recorder := web.postHttpResponse("/setup/settings", "playoffType=SingleEliminationPlayoff&numPlayoffAlliances=8")
-	assert.Equal(t, 303, recorder.Code)
-
-	// Invalid number of alliances.
-	recorder = web.postHttpResponse("/setup/settings", "playoffType=SingleEliminationPlayoff&numAlliances=1")
-	assert.Contains(t, recorder.Body.String(), "must be between 2 and 16")
-
-	// Changing the playoff type after alliance selection is finalized.
-	assert.Nil(t, web.arena.Database.CreateAlliance(&model.Alliance{Id: 1}))
-	recorder = web.postHttpResponse("/setup/settings", "playoffType=DoubleEliminationPlayoff")
-	assert.Contains(t, recorder.Body.String(), "Cannot change playoff type or size after alliance selection")
-
-	// Changing the playoff size after alliance selection is finalized.
-	recorder = web.postHttpResponse("/setup/settings", "numPlayoffAlliances=2")
-	assert.Contains(t, recorder.Body.String(), "Cannot change playoff type or size after alliance selection")
 }
 
 func TestSetupSettingsClearDb(t *testing.T) {

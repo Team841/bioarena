@@ -18,8 +18,8 @@ UI for configuring event settings.
       <form method="POST">
         <ul class="nav nav-underline mb-3" id="settingsTabs" role="tablist">
           <li class="nav-item">
-            <button class="nav-link" id="event-tab" data-bs-toggle="tab" data-bs-target="#event" role="tab">
-              Event
+            <button class="nav-link" id="general-tab" data-bs-toggle="tab" data-bs-target="#general" role="tab">
+              General
             </button>
           </li>
           <li class="nav-item">
@@ -33,121 +33,15 @@ UI for configuring event settings.
               Field
             </button>
           </li>
-          <li class="nav-item">
-            <button class="nav-link" id="publishing-tab" data-bs-toggle="tab" data-bs-target="#publishing" type="button"
-              role="tab">
-              Publishing
-            </button>
-          </li>
-          <li class="nav-item">
-            <button class="nav-link" id="automation-tab" data-bs-toggle="tab" data-bs-target="#automation" type="button"
-              role="tab">
-              Automation
-            </button>
-          </li>
         </ul>
         <div class="tab-content">
-          <div class="tab-pane" id="event" role="tabpanel">
+          <div class="tab-pane" id="general" role="tabpanel">
             <fieldset class="mb-4">
               <legend>Event Settings</legend>
               <div class="row mb-3">
                 <label class="col-lg-6 control-label">Name</label>
                 <div class="col-lg-6">
                   <input type="text" class="form-control" name="name" value="{{.Name}}" placeholder="{{.Name}}">
-                </div>
-              </div>
-              <div class="row mb-3">
-                <label class="col-lg-6 control-label">Playoff Type</label>
-                <div class="col-lg-6">
-                  <div class="radio">
-                    <label>
-                      <input type="radio" name="playoffType" value="DoubleEliminationPlayoff"
-                        onclick="updateNumPlayoffAlliances(true);"
-                        {{if eq .PlayoffType 0}}checked{{end}}>
-                      Double-Elimination (8 alliances)
-                    </label>
-                  </div>
-                  <div class="radio">
-                    <label>
-                      <input type="radio" name="playoffType" value="SingleEliminationPlayoff"
-                        onclick="updateNumPlayoffAlliances(false);"
-                        {{if eq .PlayoffType 1}}checked{{end}}>
-                      Single-Elimination (2-16 alliances)
-                    </label>
-                  </div>
-                </div>
-              </div>
-              <div class="row mb-3">
-                <label class="col-lg-6 control-label">Number of Alliances</label>
-                <div class="col-lg-6">
-                  <input type="text" class="form-control" name="numPlayoffAlliances" value="{{.NumPlayoffAlliances}}"
-                    {{if eq .PlayoffType 0}}disabled{{end}}>
-                </div>
-              </div>
-              <div class="row mb-3">
-                <label class="col-lg-6 control-label">Round 2 Selection Order</label>
-                <div class="col-lg-6">
-                  <div class="radio">
-                    <label>
-                      <input type="radio" name="selectionRound2Order" value="F"
-                        {{if eq .SelectionRound2Order "F"}}checked{{end}}>
-                      First to Last
-                    </label>
-                  </div>
-                  <div class="radio">
-                    <label>
-                      <input type="radio" name="selectionRound2Order" value="L"
-                        {{if eq .SelectionRound2Order "L"}}checked{{end}}>
-                      Last to First
-                    </label>
-                  </div>
-                </div>
-              </div>
-              <div class="row mb-3">
-                <label class="col-lg-6 control-label">Round 3 Selection Order</label>
-                <div class="col-lg-6">
-                  <div class="radio">
-                    <label>
-                      <input type="radio" name="selectionRound3Order" value="F"
-                        {{if eq .SelectionRound3Order "F"}}checked{{end}}>
-                      First to Last
-                    </label>
-                  </div>
-                  <div class="radio">
-                    <label>
-                      <input type="radio" name="selectionRound3Order" value="L"
-                        {{if eq .SelectionRound3Order "L"}}checked{{end}}>
-                      Last to First
-                    </label>
-                  </div>
-                  <div class="radio">
-                    <label>
-                      <input type="radio" name="selectionRound3Order" value=""
-                        {{if eq .SelectionRound3Order ""}}checked{{end}}>
-                      None
-                    </label>
-                  </div>
-                </div>
-              </div>
-              <div class="row mb-3">
-                <label class="col-lg-6 control-label" for="selectionShowUnpickedTeams">
-                  Show Unpicked Teams On Overlay
-                </label>
-                <div class="col-lg-1 checkbox">
-                  <input type="checkbox" id="selectionShowUnpickedTeams"
-                    name="selectionShowUnpickedTeams" {{if .SelectionShowUnpickedTeams}} checked{{end}}>
-                </div>
-              </div>
-            </fieldset>
-            <fieldset class="mb-4">
-              <legend>Team Info Download</legend>
-              <div class="row mb-3">
-                <label class="col-lg-6 control-label" for="tbaDownloadEnabled">
-                  Enable Team Info Download (From The Blue Alliance)
-                </label>
-                <div class="col-lg-1 checkbox">
-                  <input type="checkbox" id="tbaDownloadEnabled"
-                    name="tbaDownloadEnabled" {{if .TbaDownloadEnabled}} checked{{end}}>
                 </div>
               </div>
             </fieldset>
@@ -169,17 +63,6 @@ UI for configuring event settings.
               <div class="mt-2">
                 <button type="button" class="btn btn-warning" onclick="$('#uploadDatabase').modal('show');">
                   Load Database from Backup
-                </button>
-              </div>
-              <div class="mt-2">
-                <button type="button" class="btn btn-danger" onclick="$('#confirmClearDataPlayoff').modal('show');">
-                  Clear Playoff/Alliance Data
-                </button>
-              </div>
-              <div class="mt-2">
-                <button type="button" class="btn btn-danger"
-                  onclick="$('#confirmClearDataQualification').modal('show');">
-                  Clear Qualification Data
                 </button>
               </div>
               <div class="mt-2">
@@ -216,7 +99,6 @@ UI for configuring event settings.
                   <input type="text" class="form-control" name="warningRemainingDurationSec"
                     value="{{.WarningRemainingDurationSec}}">
                 </div>
-              </div>
               </div>
             </fieldset>
           </div>
@@ -332,73 +214,11 @@ UI for configuring event settings.
               </div>
             </fieldset>
             <fieldset class="mb-4">
-              <legend>Team Signs</legend>
-              <p>
-                If you are using a set of the (2024+) official team number / timer signs, enter their two-digit IDs
-                (e.g.
-                51, 52, etc.) here.
-              </p>
+              <legend>Driver Station</legend>
+              <p>When enabled, the Driver Station software will prompt teams to allow Cheesy Arena to connect rather
+                than automatically connecting, and will preserve the ability to use the spacebar for robot
+                disablement. Consider enabling this setting when physical E-Stop buttons are not present.</p>
               <div class="row mb-3">
-                <label class="col-lg-6 control-label">Red 1 Sign ID</label>
-                <div class="col-lg-6">
-                  <input type="text" class="form-control" name="teamSignRed1Id"
-                    value="{{if gt .TeamSignRed1Id 0}}{{.TeamSignRed1Id}}{{end}}" placeholder="51">
-                </div>
-              </div>
-              <div class="row mb-3">
-                <label class="col-lg-6 control-label">Red 2 Sign ID</label>
-                <div class="col-lg-6">
-                  <input type="text" class="form-control" name="teamSignRed2Id"
-                    value="{{if gt .TeamSignRed2Id 0}}{{.TeamSignRed2Id}}{{end}}" placeholder="52">
-                </div>
-              </div>
-              <div class="row mb-3">
-                <label class="col-lg-6 control-label">Red 3 Sign ID</label>
-                <div class="col-lg-6">
-                  <input type="text" class="form-control" name="teamSignRed3Id"
-                    value="{{if gt .TeamSignRed3Id 0}}{{.TeamSignRed3Id}}{{end}}" placeholder="53">
-                </div>
-              </div>
-              <div class="row mb-3">
-                <label class="col-lg-6 control-label">Red Timer Sign ID</label>
-                <div class="col-lg-6">
-                  <input type="text" class="form-control" name="teamSignRedTimerId"
-                    value="{{if gt .TeamSignRedTimerId 0}}{{.TeamSignRedTimerId}}{{end}}" placeholder="50">
-                </div>
-              </div>
-              <div class="row mb-3">
-                <label class="col-lg-6 control-label">Blue 1 Sign ID</label>
-                <div class="col-lg-6">
-                  <input type="text" class="form-control" name="teamSignBlue1Id"
-                    value="{{if gt .TeamSignBlue1Id 0}}{{.TeamSignBlue1Id}}{{end}}" placeholder="55">
-                </div>
-              </div>
-              <div class="row mb-3">
-                <label class="col-lg-6 control-label">Blue 2 Sign ID</label>
-                <div class="col-lg-6">
-                  <input type="text" class="form-control" name="teamSignBlue2Id"
-                    value="{{if gt .TeamSignBlue2Id 0}}{{.TeamSignBlue2Id}}{{end}}" placeholder="56">
-                </div>
-              </div>
-              <div class="row mb-3">
-                <label class="col-lg-6 control-label">Blue 3 Sign ID</label>
-                <div class="col-lg-6">
-                  <input type="text" class="form-control" name="teamSignBlue3Id"
-                    value="{{if gt .TeamSignBlue3Id 0}}{{.TeamSignBlue3Id}}{{end}}" placeholder="57">
-                </div>
-              </div>
-              <div class="row mb-3">
-                <label class="col-lg-6 control-label">Blue Timer Sign ID</label>
-                <div class="col-lg-6">
-                  <input type="text" class="form-control" name="teamSignBlueTimerId"
-                    value="{{if gt .TeamSignBlueTimerId 0}}{{.TeamSignBlueTimerId}}{{end}}" placeholder="54">
-                </div>
-              </div>
-              <div class="row mb-3">
-                <legend>Driver Station Lite Mode</legend>
-                <p>When enabled, the Driver Station software will prompt teams to allow Cheesy Arena to connect rather
-                  than automatically connecting, and will preserve the ability to use the spacebar for robot
-                  disablement. Consider enabling this setting when physical E-Stop buttons are not present.</p>
                 <label class="col-lg-8 control-label" for="useLiteUdpPort"> Lite Mode </label>
                 <div class="col-lg-1 checkbox">
                   <input type="checkbox" id="useLiteUdpPort" name="useLiteUdpPort"
@@ -412,242 +232,6 @@ UI for configuring event settings.
                 <div class="col-lg-1 checkbox">
                   <input type="checkbox" id="autoConfigureTeams"
                     name="autoConfigureTeams" {{if .AutoConfigureTeams}} checked{{end}}>
-                </div>
-              </div>
-            </fieldset>
-          </div>
-          <div class="tab-pane" id="publishing" role="tabpanel">
-            <fieldset class="mb-4">
-              <legend>Publishing</legend>
-              <p>Contact The Blue Alliance to obtain an event code and credentials.</p>
-              <div class="row mb-3">
-                <label class="col-lg-8 control-label"
-                  for="tbaPublishingEnabled">Enable The Blue Alliance publishing</label>
-                <div class="col-lg-1 checkbox">
-                  <input type="checkbox" id="tbaPublishingEnabled"
-                    name="tbaPublishingEnabled" {{if .TbaPublishingEnabled}} checked{{end}}>
-                </div>
-              </div>
-              <div class="row mb-3">
-                <label class="col-lg-6 control-label">TBA Event Code</label>
-                <div class="col-lg-6">
-                  <input type="text" class="form-control" name="tbaEventCode" value="{{.TbaEventCode}}">
-                </div>
-              </div>
-              <div class="row mb-3">
-                <label class="col-lg-6 control-label">TBA Auth ID</label>
-                <div class="col-lg-6">
-                  <input type="text" class="form-control" name="tbaSecretId" value="{{.TbaSecretId}}">
-                </div>
-              </div>
-              <div class="row mb-3">
-                <label class="col-lg-6 control-label">TBA Secret</label>
-                <div class="col-lg-6">
-                  <input type="text" class="form-control" name="tbaSecret" value="{{.TbaSecret}}">
-                </div>
-              </div>
-            </fieldset>
-            <div class="col-lg-4">
-              {{if .TbaPublishingEnabled}}
-              <legend>Publishing Operations</legend>
-              <div>
-                <a href="/setup/settings/publish_teams" class="btn btn-primary">Publish Teams</a>
-              </div>
-              <div class="mt-2">
-                <a href="/setup/settings/publish_matches" class="btn btn-primary">Publish Schedule/Results</a></div>
-              <div class="mt-2">
-                <a href="/setup/settings/publish_rankings" class="btn btn-primary">Publish Standings</a>
-              </div>
-              <div class="mt-2">
-                <a href="/setup/settings/publish_alliances" class="btn btn-primary">Publish Alliances</a>
-              </div>
-              <div class="mt-2">
-                <a href="/setup/settings/publish_awards" class="btn btn-primary">Publish Awards</a>
-              </div>
-              {{end}}
-            </div>
-          </div>
-          <div class="tab-pane" id="automation" role="tabpanel">
-            <fieldset class="mb-4">
-              <legend>Nexus</legend>
-              <p>Automatically populates practice and playoff match lineups from Nexus. Uses the same event code as TBA;
-                configure it above if enabling.</p>
-              <div class="row mb-3">
-                <label class="col-lg-8 control-label" for="nexusEnabled">Enable pulling lineup from Nexus</label>
-                <div class="col-lg-1 checkbox">
-                  <input type="checkbox" id="nexusEnabled" name="nexusEnabled" {{if .NexusEnabled}} checked{{end}}>
-                </div>
-              </div>
-            </fieldset>
-            <fieldset class="mb-4">
-              <legend>Match Video Recording</legend>
-              <p>
-                If you are using a Blackmagic HyperDeck device to record match video, enter the device IP address(es)
-                here
-                to have Cheesy Arena automatically start and stop recording for each match. Separate multiple addresses
-                with
-                a comma.
-              </p>
-              <div class="row mb-3">
-                <label class="col-lg-6 control-label">Blackmagic Addresses</label>
-                <div class="col-lg-6">
-                  <input type="text" class="form-control" name="blackmagicAddresses" value="{{.BlackmagicAddresses}}">
-                </div>
-              </div>
-            </fieldset>
-            <fieldset class="mb-4">
-              <legend>BitFocus Companion Integration</legend>
-              <p>
-                If you are using BitFocus Companion for automation, configure the server address/port and button locations (page/row/column)
-                for each event type to automatically trigger button presses during match events. Leave the server address blank to disable
-                the integration.
-              </p>
-
-              <div class="row mb-3">
-                <label class="col-lg-3 control-label">Server Address</label>
-                <div class="col-lg-3">
-                  <input type="text" class="form-control" name="companionAddress" value="{{.CompanionAddress}}" placeholder="">
-                </div>
-                <label class="col-lg-2 control-label">Port</label>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control" name="companionPort" value="{{if .CompanionPort}}{{.CompanionPort}}{{end}}" placeholder="51234" min="0" max="65535">
-                </div>
-              </div>
-              <div class="row mb-3">
-                <div class="col-lg-12">
-                  <p class="text-muted small mb-0">
-                    <strong>Note:</strong> Enter the IP address and enable the TCP Listener in BitFocus Companion settings.
-                    The default TCP port is 51234. Leave address blank to disable Companion integration.
-                  </p>
-                </div>
-              </div>
-
-              <h5>Event Button Mappings</h5>
-              <p class="text-muted">Configure page/row/column coordinates for each event. <strong>Set Page to 0 to disable a specific event trigger.</strong>
-              Note: Companion uses 0 as a valid row/column number, so only the Page field is used to enable/disable events.</p>
-
-              <div class="row mb-2">
-                <div class="col-lg-3"><strong>Event</strong></div>
-                <div class="col-lg-2"><strong>Page</strong></div>
-                <div class="col-lg-2"><strong>Row</strong></div>
-                <div class="col-lg-2"><strong>Column</strong></div>
-              </div>
-
-
-              <div class="row mb-2">
-                <label class="col-lg-3 control-label">Match Preview</label>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control form-control-sm" name="companionMatchPreviewPage" value="{{.CompanionMatchPreviewPage}}" min="0">
-                </div>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control form-control-sm" name="companionMatchPreviewRow" value="{{.CompanionMatchPreviewRow}}" min="0">
-                </div>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control form-control-sm" name="companionMatchPreviewColumn" value="{{.CompanionMatchPreviewColumn}}" min="0">
-                </div>
-              </div>
-
-              <div class="row mb-2">
-                <label class="col-lg-3 control-label">Show Overlay</label>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control form-control-sm" name="companionSetAudiencePage" value="{{.CompanionSetAudiencePage}}" min="0">
-                </div>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control form-control-sm" name="companionSetAudienceRow" value="{{.CompanionSetAudienceRow}}" min="0">
-                </div>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control form-control-sm" name="companionSetAudienceColumn" value="{{.CompanionSetAudienceColumn}}" min="0">
-                </div>
-              </div>
-
-              <div class="row mb-2">
-                <label class="col-lg-3 control-label">Match Start</label>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control form-control-sm" name="companionMatchStartPage" value="{{.CompanionMatchStartPage}}" min="0">
-                </div>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control form-control-sm" name="companionMatchStartRow" value="{{.CompanionMatchStartRow}}" min="0">
-                </div>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control form-control-sm" name="companionMatchStartColumn" value="{{.CompanionMatchStartColumn}}" min="0">
-                </div>
-              </div>
-
-              <div class="row mb-2">
-                <label class="col-lg-3 control-label">Teleop Start</label>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control form-control-sm" name="companionTeleopStartPage" value="{{.CompanionTeleopStartPage}}" min="0">
-                </div>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control form-control-sm" name="companionTeleopStartRow" value="{{.CompanionTeleopStartRow}}" min="0">
-                </div>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control form-control-sm" name="companionTeleopStartColumn" value="{{.CompanionTeleopStartColumn}}" min="0">
-                </div>
-              </div>
-
-              <div class="row mb-2">
-                <label class="col-lg-3 control-label">Endgame Start</label>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control form-control-sm" name="companionEndgameStartPage" value="{{.CompanionEndgameStartPage}}" min="0">
-                </div>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control form-control-sm" name="companionEndgameStartRow" value="{{.CompanionEndgameStartRow}}" min="0">
-                </div>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control form-control-sm" name="companionEndgameStartColumn" value="{{.CompanionEndgameStartColumn}}" min="0">
-                </div>
-              </div>
-
-              <div class="row mb-2">
-                <label class="col-lg-3 control-label">Match End</label>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control form-control-sm" name="companionMatchEndPage" value="{{.CompanionMatchEndPage}}" min="0">
-                </div>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control form-control-sm" name="companionMatchEndRow" value="{{.CompanionMatchEndRow}}" min="0">
-                </div>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control form-control-sm" name="companionMatchEndColumn" value="{{.CompanionMatchEndColumn}}" min="0">
-                </div>
-              </div>
-
-              <div class="row mb-2">
-                <label class="col-lg-3 control-label">Match Abort</label>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control form-control-sm" name="companionMatchAbortPage" value="{{.CompanionMatchAbortPage}}" min="0">
-                </div>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control form-control-sm" name="companionMatchAbortRow" value="{{.CompanionMatchAbortRow}}" min="0">
-                </div>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control form-control-sm" name="companionMatchAbortColumn" value="{{.CompanionMatchAbortColumn}}" min="0">
-                </div>
-              </div>
-
-              <div class="row mb-2">
-                <label class="col-lg-3 control-label">Show Final Score</label>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control form-control-sm" name="companionPostResultPage" value="{{.CompanionPostResultPage}}" min="0">
-                </div>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control form-control-sm" name="companionPostResultRow" value="{{.CompanionPostResultRow}}" min="0">
-                </div>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control form-control-sm" name="companionPostResultColumn" value="{{.CompanionPostResultColumn}}" min="0">
-                </div>
-              </div>
-
-              <div class="row mb-2">
-                <label class="col-lg-3 control-label">Alliance Selection</label>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control form-control-sm" name="companionAllianceSelectionPage" value="{{.CompanionAllianceSelectionPage}}" min="0">
-                </div>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control form-control-sm" name="companionAllianceSelectionRow" value="{{.CompanionAllianceSelectionRow}}" min="0">
-                </div>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control form-control-sm" name="companionAllianceSelectionColumn" value="{{.CompanionAllianceSelectionColumn}}" min="0">
                 </div>
               </div>
             </fieldset>
@@ -682,46 +266,6 @@ UI for configuring event settings.
     </div>
   </div>
 </div>
-<div id="confirmClearDataPlayoff" class="modal" style="top: 20%;">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h4 class="modal-title">Confirm</h4>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-hidden="true"></button>
-      </div>
-      <div class="modal-body">
-        <p>Are you sure you want to clear all playoff match and alliance selection data?</p>
-        <p>The database will automatically be backed up.</p>
-      </div>
-      <div class="modal-footer">
-        <form class="form-horizontal" action="/setup/db/clear/playoff" method="POST">
-          <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-danger">Clear Playoff/Alliance Data</button>
-        </form>
-      </div>
-    </div>
-  </div>
-</div>
-<div id="confirmClearDataQualification" class="modal" style="top: 20%;">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h4 class="modal-title">Confirm</h4>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-hidden="true"></button>
-      </div>
-      <div class="modal-body">
-        <p>Are you sure you want to clear all qualification match and ranking data?</p>
-        <p>The database will automatically be backed up.</p>
-      </div>
-      <div class="modal-footer">
-        <form class="form-horizontal" action="/setup/db/clear/qualification" method="POST">
-          <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-danger">Clear Qualification Data</button>
-        </form>
-      </div>
-    </div>
-  </div>
-</div>
 <div id="confirmClearDataPractice" class="modal" style="top: 20%;">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -745,19 +289,11 @@ UI for configuring event settings.
 {{end}}
 {{define "script"}}
 <script>
-  updateNumPlayoffAlliances = function (isDoubleElimination) {
-    const numPlayoffAlliances = $("input[name=numPlayoffAlliances]");
-    numPlayoffAlliances.prop("disabled", isDoubleElimination);
-    if (isDoubleElimination) {
-      numPlayoffAlliances.val(8);
-    }
-  };
-
   // Handle initial tab selection based on URL fragment.
   document.addEventListener("DOMContentLoaded", function () {
     let hash = window.location.hash;
     if (!hash) {
-      hash = "#event";
+      hash = "#general";
     }
     const tabTrigger = document.querySelector(`[data-bs-target="${hash}"]`);
     const tab = new bootstrap.Tab(tabTrigger);
