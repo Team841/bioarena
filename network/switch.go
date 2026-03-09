@@ -38,6 +38,8 @@ type Switch struct {
 	address               string
 	port                  int
 	password              string
+	dsPortUpCommands      string
+	dsPortDownCommands    string
 	mutex                 sync.Mutex
 	configBackoffDuration time.Duration
 	configPauseDuration   time.Duration
@@ -46,11 +48,13 @@ type Switch struct {
 
 var ServerIpAddress = "10.0.100.5" // The DS will try to connect to this address only.
 
-func NewSwitch(address, password string) *Switch {
+func NewSwitch(address, password, dsPortUpCommands, dsPortDownCommands string) *Switch {
 	return &Switch{
 		address:               address,
 		port:                  switchTelnetPort,
 		password:              password,
+		dsPortUpCommands:      dsPortUpCommands,
+		dsPortDownCommands:    dsPortDownCommands,
 		configBackoffDuration: switchConfigBackoffDurationSec * time.Second,
 		configPauseDuration:   switchConfigPauseDurationSec * time.Second,
 		Status:                "UNKNOWN",
@@ -63,6 +67,14 @@ func (sw *Switch) ConfigureTeamEthernet(teams [6]*model.Team) error {
 	sw.mutex.Lock()
 	defer sw.mutex.Unlock()
 	sw.Status = "CONFIGURING"
+
+	// Shut down DS ethernet ports to prevent conflicts during VLAN reconfiguration.
+	if sw.dsPortDownCommands != "" {
+		if _, err := sw.runConfigCommand(sw.dsPortDownCommands); err != nil {
+			sw.Status = "ERROR"
+			return err
+		}
+	}
 
 	// Remove old team VLANs to reset the switch state.
 	removeTeamVlansCommand := ""
@@ -122,6 +134,14 @@ func (sw *Switch) ConfigureTeamEthernet(teams [6]*model.Team) error {
 
 	// Give some time for the configuration to take before another one can be attempted.
 	time.Sleep(sw.configBackoffDuration)
+
+	// Bring DS ethernet ports back up.
+	if sw.dsPortUpCommands != "" {
+		if _, err := sw.runConfigCommand(sw.dsPortUpCommands); err != nil {
+			sw.Status = "ERROR"
+			return err
+		}
+	}
 
 	sw.Status = "ACTIVE"
 	return nil

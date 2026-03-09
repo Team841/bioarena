@@ -6,8 +6,6 @@
 package model
 
 import (
-	"strings"
-
 	"github.com/Team254/cheesy-arena/game"
 )
 
@@ -16,26 +14,6 @@ type PlayoffType int
 const (
 	DoubleEliminationPlayoff PlayoffType = iota
 	SingleEliminationPlayoff
-)
-
-// Configured here to avoid circular import dependencies.
-var (
-	sccDefaultUpCommands = []string{
-		"configure terminal",
-		"interface range gigabitEthernet 1/2-4",
-		"no shutdown",
-		"exit",
-		"exit",
-		"exit",
-	}
-	sccDefaultDownCommands = []string{
-		"configure terminal",
-		"interface range gigabitEthernet 1/2-4",
-		"shutdown",
-		"exit",
-		"exit",
-		"exit",
-	}
 )
 
 type EventSettings struct {
@@ -58,13 +36,8 @@ type EventSettings struct {
 	ApChannel                        int
 	SwitchAddress                    string
 	SwitchPassword                   string
-	SCCManagementEnabled             bool
-	RedSCCAddress                    string
-	BlueSCCAddress                   string
-	SCCUsername                      string
-	SCCPassword                      string
-	SCCUpCommands                    string
-	SCCDownCommands                  string
+	SwitchDSPortUpCommands           string
+	SwitchDSPortDownCommands         string
 	PlcAddress                       string
 	AdminPassword                    string
 	TeamSignRed1Id                   int
@@ -134,8 +107,8 @@ func (database *Database) GetEventSettings() (*EventSettings, error) {
 		TbaDownloadEnabled:          false,
 		AutoConfigureTeams:          true,
 		ApChannel:                   36,
-		SCCUpCommands:               strings.Join(sccDefaultUpCommands, "\n"),
-		SCCDownCommands:             strings.Join(sccDefaultDownCommands, "\n"),
+		SwitchDSPortUpCommands:      "interface range FastEthernet0/1-6\nno shutdown",
+		SwitchDSPortDownCommands:    "interface range FastEthernet0/1-6\nshutdown",
 		CompanionAddress:            "",
 		WarmupDurationSec:           game.MatchTiming.WarmupDurationSec,
 		AutoDurationSec:             game.MatchTiming.AutoDurationSec,

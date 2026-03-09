@@ -11,9 +11,9 @@ import (
 func TestLoadConfigAbsent(t *testing.T) {
 	cfg, err := loadConfig(filepath.Join(t.TempDir(), "nonexistent.yaml"))
 	assert.Nil(t, err)
-	assert.Equal(t, 15, cfg.AutoDurationSec)
+	assert.Equal(t, 20, cfg.AutoDurationSec)
 	assert.Equal(t, 3, cfg.PauseDurationSec)
-	assert.Equal(t, 135, cfg.TeleopDurationSec)
+	assert.Equal(t, 140, cfg.TeleopDurationSec)
 	assert.Equal(t, 8080, cfg.HttpPort)
 }
 

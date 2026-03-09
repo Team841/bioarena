@@ -58,13 +58,8 @@ func (web *Web) settingsPostHandler(w http.ResponseWriter, r *http.Request) {
 	eventSettings.ApChannel, _ = strconv.Atoi(r.PostFormValue("apChannel"))
 	eventSettings.SwitchAddress = r.PostFormValue("switchAddress")
 	eventSettings.SwitchPassword = r.PostFormValue("switchPassword")
-	eventSettings.SCCManagementEnabled = r.PostFormValue("sccManagementEnabled") == "on"
-	eventSettings.RedSCCAddress = r.PostFormValue("redSCCAddress")
-	eventSettings.BlueSCCAddress = r.PostFormValue("blueSCCAddress")
-	eventSettings.SCCUsername = r.PostFormValue("sccUsername")
-	eventSettings.SCCPassword = r.PostFormValue("sccPassword")
-	eventSettings.SCCUpCommands = r.PostFormValue("sccUpCommands")
-	eventSettings.SCCDownCommands = r.PostFormValue("sccDownCommands")
+	eventSettings.SwitchDSPortUpCommands = r.PostFormValue("switchDSPortUpCommands")
+	eventSettings.SwitchDSPortDownCommands = r.PostFormValue("switchDSPortDownCommands")
 	eventSettings.PlcAddress = r.PostFormValue("plcAddress")
 	// Only update the admin password if a non-empty value was submitted.
 	// This prevents the settings form from inadvertently clearing the password.

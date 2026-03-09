@@ -14,7 +14,7 @@ import (
 )
 
 func TestConfigureSwitch(t *testing.T) {
-	sw := NewSwitch("127.0.0.1", "password")
+	sw := NewSwitch("127.0.0.1", "password", "", "")
 	assert.Equal(t, "UNKNOWN", sw.Status)
 	sw.port = 9050
 	sw.configBackoffDuration = time.Millisecond
@@ -86,7 +86,7 @@ func TestConfigureSwitch(t *testing.T) {
 }
 
 func TestGetStationForTeamId(t *testing.T) {
-	sw := NewSwitch("127.0.0.1", "password")
+	sw := NewSwitch("127.0.0.1", "password", "", "")
 	sw.port = 9060
 
 	ciscoArpOutput := "password\nenable\npassword\nterminal length 0\n" +
@@ -118,7 +118,7 @@ func TestGetStationForTeamId(t *testing.T) {
 	assert.Equal(t, "", station)
 
 	// Returns "" when switch address is empty.
-	emptySw := NewSwitch("", "password")
+	emptySw := NewSwitch("", "password", "", "")
 	station, err = emptySw.GetStationForTeamId(254)
 	assert.Nil(t, err)
 	assert.Equal(t, "", station)

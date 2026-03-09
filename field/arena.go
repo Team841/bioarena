@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -53,8 +52,6 @@ type Arena struct {
 	EventSettings        *model.EventSettings
 	accessPoint          network.AccessPoint
 	networkSwitch        *network.Switch
-	redSCC               *network.SCCSwitch
-	blueSCC              *network.SCCSwitch
 	Plc                  plc.Plc
 	FieldLights          hardware.FieldLights
 	EStopPanels          []hardware.EStopPanel
@@ -153,22 +150,9 @@ func (arena *Arena) LoadSettings() error {
 		settings.NetworkSecurityEnabled,
 		accessPointWifiStatuses,
 	)
-	arena.networkSwitch = network.NewSwitch(settings.SwitchAddress, settings.SwitchPassword)
-	sccUpCommands := strings.Split(settings.SCCUpCommands, "\n")
-	sccDownCommands := strings.Split(settings.SCCDownCommands, "\n")
-	arena.redSCC = network.NewSCCSwitch(
-		settings.RedSCCAddress,
-		settings.SCCUsername,
-		settings.SCCPassword,
-		sccUpCommands,
-		sccDownCommands,
-	)
-	arena.blueSCC = network.NewSCCSwitch(
-		settings.BlueSCCAddress,
-		settings.SCCUsername,
-		settings.SCCPassword,
-		sccUpCommands,
-		sccDownCommands,
+	arena.networkSwitch = network.NewSwitch(
+		settings.SwitchAddress, settings.SwitchPassword,
+		settings.SwitchDSPortUpCommands, settings.SwitchDSPortDownCommands,
 	)
 	arena.Plc.SetAddress(settings.PlcAddress)
 
@@ -677,25 +661,6 @@ func (arena *Arena) preLoadNextMatch() {
 	arena.setupNetwork(teams, true)
 }
 
-// Enable or disable the team ethernet ports on both SCCs
-func (arena *Arena) setSCCEthernetEnabled(enabled bool) {
-	if arena.EventSettings.SCCManagementEnabled {
-		var wg sync.WaitGroup
-		wg.Add(2)
-
-		configureSCC := func(scc *network.SCCSwitch, name string) {
-			defer wg.Done()
-			err := scc.SetTeamEthernetEnabled(enabled)
-			if err != nil {
-				log.Printf("Failed to set %s SCC enabled state to %t: %s", name, enabled, err.Error())
-			}
-		}
-		go configureSCC(arena.redSCC, "red")
-		go configureSCC(arena.blueSCC, "blue")
-		wg.Wait()
-	}
-}
-
 // Asynchronously reconfigures the networking hardware for the new set of teams.
 func (arena *Arena) setupNetwork(teams [6]*model.Team, isPreload bool) {
 	if arena.EventSettings.NetworkSecurityEnabled {
@@ -703,11 +668,9 @@ func (arena *Arena) setupNetwork(teams [6]*model.Team, isPreload bool) {
 			log.Printf("Failed to configure team WiFi: %s", err.Error())
 		}
 		go func() {
-			arena.setSCCEthernetEnabled(false)
 			if err := arena.networkSwitch.ConfigureTeamEthernet(teams); err != nil {
 				log.Printf("Failed to configure team Ethernet: %s", err.Error())
 			}
-			arena.setSCCEthernetEnabled(true)
 		}()
 	}
 }
