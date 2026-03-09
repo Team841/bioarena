@@ -13,7 +13,7 @@ Base template used by most pages to include common resources and optionally rend
   <body>
     <nav class="navbar navbar-expand-lg bg-body-tertiary">
       <div class="container">
-        <a class="navbar-brand" href="/">Cheesy Arena</a>
+        <a class="navbar-brand" href="/">10th Street Arena</a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
           data-bs-target="#navbarContent" aria-controls="navbarContent"
           aria-expanded="false" aria-label="Toggle navigation">
@@ -22,105 +22,16 @@ Base template used by most pages to include common resources and optionally rend
         <div class="collapse navbar-collapse" id="navbarContent">
           <ul class="navbar-nav me-auto">
             <li class="nav-item dropdown">
-              <a href="#" class="nav-link" data-bs-toggle="dropdown" role="button">Setup</a>
-              <div class="dropdown-menu">
-                <a class="dropdown-item" href="/setup/settings">Settings</a>
-                <a class="dropdown-item" href="/setup/teams">Team List</a>
-                <a class="dropdown-item" href="/setup/schedule">Match Scheduling</a>
-                <a class="dropdown-item" href="/setup/judging">Judge Scheduling</a>
-                <a class="dropdown-item" href="/setup/awards">Awards</a>
-                <a class="dropdown-item" href="/setup/lower_thirds">Lower Thirds</a>
-                <a class="dropdown-item" href="/setup/sponsor_slides">Sponsor Slides</a>
-                <a class="dropdown-item" href="/setup/breaks">Scheduled Breaks</a>
-                <a class="dropdown-item" href="/setup/displays">Display Configuration</a>
-                <a class="dropdown-item" href="/setup/field_testing">Field Testing</a>
-              </div>
-            </li>
-            <li class="nav-item dropdown">
               <a href="#" class="nav-link" data-bs-toggle="dropdown" role="button">Run</a>
               <div class="dropdown-menu">
                 <a class="dropdown-item" href="/match_play">Match Play</a>
-                <a class="dropdown-item" href="/match_review">Match Review</a>
-                <a class="dropdown-item" href="/match_logs">Match Logs</a>
-                <a class="dropdown-item" href="/alliance_selection">Alliance Selection</a>
+                <a class="dropdown-item" href="/free_practice">Free Practice</a>
               </div>
             </li>
             <li class="nav-item dropdown">
-              <a href="#" class="nav-link" data-bs-toggle="dropdown" role="button">Panel</a>
+              <a href="#" class="nav-link" data-bs-toggle="dropdown" role="button">Setup</a>
               <div class="dropdown-menu">
-                <a class="dropdown-item" href="/panels/referee">Head Referee</a>
-                <a class="dropdown-item" href="/panels/referee?hr=false">Referee</a>
-                <div class="dropdown-divider"></div>
-                <div class="dropdown-header">Scoring</div>
-                <a class="dropdown-item" href="/panels/scoring/red_near">Red Near</a>
-                <a class="dropdown-item" href="/panels/scoring/red_far">Red Far</a>
-                <a class="dropdown-item" href="/panels/scoring/blue_near">Blue Near</a>
-                <a class="dropdown-item" href="/panels/scoring/blue_far">Blue Far</a>
-              </div>
-            </li>
-            <li class="nav-item dropdown">
-              <a href="#" class="nav-link" data-bs-toggle="dropdown" role="button">Report</a>
-              <div class="dropdown-menu">
-                <div class="dropdown-header">PDF Reports</div>
-                <a class="dropdown-item" target="_blank" href="/reports/pdf/teams">Team List</a>
-                <a class="dropdown-item" target="_blank" href="/reports/pdf/schedule/practice">Practice Schedule</a>
-                <a class="dropdown-item" target="_blank" href="/reports/pdf/schedule/qualification">Qualification
-                  Schedule</a>
-                <a class="dropdown-item" target="_blank" href="/reports/pdf/schedule/playoff">Playoff Schedule</a>
-                <a class="dropdown-item" target="_blank" href="/reports/pdf/judging_schedule">Judging Schedule</a>
-                <a class="dropdown-item" target="_blank" href="/reports/pdf/rankings">Standings</a>
-                <a class="dropdown-item" target="_blank" href="/reports/pdf/alliances">Playoff Alliances</a>
-                <a class="dropdown-item" target="_blank" href="/reports/pdf/bracket">Playoff Bracket</a>
-                <a class="dropdown-item" target="_blank" href="/reports/pdf/backups">Backup Teams</a>
-                <a class="dropdown-item" target="_blank" href="/reports/pdf/coupons">Playoff Alliance Coupons</a>
-                <a class="dropdown-item" target="_blank" href="/reports/pdf/teams?showHasConnected=true">Team Connection
-                  Status</a>
-                <a class="dropdown-item" target="_blank" href="/reports/pdf/cycle/practice">Practice Cycle Report</a>
-                <a class="dropdown-item" target="_blank" href="/reports/pdf/cycle/qualification">Qualification Cycle
-                  Report</a>
-                <a class="dropdown-item" target="_blank" href="/reports/pdf/cycle/playoff">Playoff Cycle Report</a>
-                <div class="dropdown-divider"></div>
-                <div class="dropdown-header">CSV Data Export</div>
-                <a class="dropdown-item" target="_blank" href="/reports/csv/teams">Team List</a>
-                <a class="dropdown-item" target="_blank" href="/reports/csv/fta">FTA Report</a>
-                <a class="dropdown-item" target="_blank" href="/reports/csv/schedule/practice">Practice Schedule</a>
-                <a class="dropdown-item" target="_blank" href="/reports/csv/schedule/qualification">Qualification
-                  Schedule</a>
-                <a class="dropdown-item" target="_blank" href="/reports/csv/schedule/playoff">Playoff Schedule</a>
-                <a class="dropdown-item" target="_blank" href="/reports/csv/rankings">Standings</a>
-                <a class="dropdown-item" target="_blank" href="/reports/csv/backups">Backup Teams</a>
-                {{if .EventSettings.NetworkSecurityEnabled}}
-                <a class="dropdown-item" target="_blank" href="/reports/csv/wpa_keys">WPA Keys</a>
-                {{end}}
-              </div>
-            </li>
-            <li class="nav-item dropdown">
-              <a href="#" class="nav-link" data-bs-toggle="dropdown" role="button">Display</a>
-              <div class="dropdown-menu">
-                <a class="dropdown-item" href="/display">Placeholder</a>
-                <a class="dropdown-item" href="/displays/announcer">Announcer</a>
-                <a class="dropdown-item" href="/displays/audience">Audience</a>
-                <a class="dropdown-item" href="/displays/bracket">Bracket</a>
-                <a class="dropdown-item" href="/displays/field_monitor">Field Monitor</a>
-                <a class="dropdown-item" href="/displays/field_monitor?fta=true">Field Monitor (FTA)</a>
-                <a class="dropdown-item" href="/displays/field_monitor?ds=true&reversed=true">Field Monitor (Blue DS)</a>
-                <a class="dropdown-item" href="/displays/field_monitor?ds=true&reversed=false">Field Monitor (Red DS)</a>
-                <a class="dropdown-item" href="/displays/logo">Logo</a>
-                <a class="dropdown-item" href="/displays/queueing">Queueing</a>
-                <a class="dropdown-item" href="/displays/rankings">Standings</a>
-                <a class="dropdown-item" href="/displays/wall">Wall</a>
-                <a class="dropdown-item" href="/displays/webpage">Web Page</a>
-                <div class="dropdown-divider"></div>
-                <div class="dropdown-header">Alliance Station</div>
-                <a class="dropdown-item" href="/displays/alliance_station?station=R1">Red 1</a>
-                <a class="dropdown-item" href="/displays/alliance_station?station=R2">Red 2</a>
-                <a class="dropdown-item" href="/displays/alliance_station?station=R3">Red 3</a>
-                <a class="dropdown-item" href="/displays/alliance_station?station=B1">Blue 1</a>
-                <a class="dropdown-item" href="/displays/alliance_station?station=B2">Blue 2</a>
-                <a class="dropdown-item" href="/displays/alliance_station?station=B3">Blue 3</a>
-                <a class="dropdown-item" href="/displays/alliance_station?station=N2">Clock</a>
-                <a class="dropdown-item" href="/displays/alliance_station?station=N3">Red Score</a>
-                <a class="dropdown-item" href="/displays/alliance_station?station=N1">Blue Score</a>
+                <a class="dropdown-item" href="/setup/settings">Settings</a>
               </div>
             </li>
           </ul>
@@ -139,13 +50,13 @@ Base template used by most pages to include common resources and optionally rend
       <div class="modal-dialog">
         <div class="modal-content">
           <div class="modal-header">
-            <h4 class="modal-title">About Cheesy Arena</h4>
+            <h4 class="modal-title">About 10th Street Arena</h4>
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
           </div>
           <div class="modal-body">
-            <p>A field management system that just works.</p>
+            <p>A practice arena management system for 10th Street Arena.</p>
+            <p>Forked from <a href="https://github.com/Team254/cheesy-arena">Cheesy Arena</a> by Team 254.</p>
             <p>Copyright &copy; 2014-2025 Team 254. All Rights Reserved.</p>
-            <p><a href="https://github.com/Team254/cheesy-arena">https://github.com/Team254/cheesy-arena</a></p>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -177,7 +88,7 @@ Base template used by most pages to include common resources and optionally rend
 {{end}}
 
 {{define "head_common"}}
-<title>{{template "title" .}} - {{.EventSettings.Name}} - Cheesy Arena</title>
+<title>{{template "title" .}} - {{.EventSettings.Name}} - 10th Street Arena</title>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="shortcut icon" href="/static/img/favicon.ico">
