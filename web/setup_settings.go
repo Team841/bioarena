@@ -102,6 +102,7 @@ func (web *Web) settingsPostHandler(w http.ResponseWriter, r *http.Request) {
 	if newPass := r.PostFormValue("adminPassword"); newPass != "" {
 		eventSettings.AdminPassword = newPass
 	}
+	eventSettings.AutoConfigureTeams = r.PostFormValue("autoConfigureTeams") == "on"
 	eventSettings.UseLiteUdpPort = r.PostFormValue("useLiteUdpPort") == "on"
 	eventSettings.WarmupDurationSec, _ = strconv.Atoi(r.PostFormValue("warmupDurationSec"))
 	eventSettings.AutoDurationSec, _ = strconv.Atoi(r.PostFormValue("autoDurationSec"))
