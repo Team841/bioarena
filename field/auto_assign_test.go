@@ -5,10 +5,21 @@
 package field
 
 import (
+	"fmt"
 	"github.com/Team254/cheesy-arena/model"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
+
+// mockStationDetector satisfies the stationDetector interface for testing switch-based detection.
+type mockStationDetector struct {
+	station string
+	err     error
+}
+
+func (m *mockStationDetector) GetStationForTeamId(_ int) (string, error) {
+	return m.station, m.err
+}
 
 func TestAutoAssignTeamFallbackToR1(t *testing.T) {
 	arena := setupTestArena(t)
@@ -86,4 +97,89 @@ func TestAutoAssignTeamQualificationMatch(t *testing.T) {
 	station := arena.autoAssignTeam(254)
 	assert.Equal(t, "", station)
 	assert.Nil(t, arena.AllianceStations["R1"].Team)
+}
+
+func TestAutoAssignTeamMatchFieldsAllUpdated(t *testing.T) {
+	arena := setupTestArena(t)
+	arena.autoAssignTeam(111)
+	arena.autoAssignTeam(222)
+	arena.autoAssignTeam(333)
+	arena.autoAssignTeam(444)
+	arena.autoAssignTeam(555)
+	arena.autoAssignTeam(666)
+	assert.Equal(t, 111, arena.CurrentMatch.Red1)
+	assert.Equal(t, 222, arena.CurrentMatch.Red2)
+	assert.Equal(t, 333, arena.CurrentMatch.Red3)
+	assert.Equal(t, 444, arena.CurrentMatch.Blue1)
+	assert.Equal(t, 555, arena.CurrentMatch.Blue2)
+	assert.Equal(t, 666, arena.CurrentMatch.Blue3)
+}
+
+func TestAutoAssignTeamWpaKeyEdgeCases(t *testing.T) {
+	arena := setupTestArena(t)
+
+	arena.autoAssignTeam(1)
+	team1, err := arena.Database.GetTeamById(1)
+	assert.Nil(t, err)
+	assert.Equal(t, "00000001", team1.WpaKey)
+
+	arena.autoAssignTeam(9999)
+	team9999, err := arena.Database.GetTeamById(9999)
+	assert.Nil(t, err)
+	assert.Equal(t, "00009999", team9999.WpaKey)
+}
+
+func TestAutoAssignTeamPracticeMatchPersistsToDb(t *testing.T) {
+	arena := setupTestArena(t)
+	practiceMatch := model.Match{Type: model.Practice, ShortName: "P1", LongName: "Practice 1"}
+	assert.Nil(t, arena.Database.CreateMatch(&practiceMatch))
+	assert.Nil(t, arena.LoadMatch(&practiceMatch))
+
+	arena.autoAssignTeam(254)
+
+	saved, err := arena.Database.GetMatchById(practiceMatch.Id)
+	assert.Nil(t, err)
+	assert.Equal(t, 254, saved.Red1)
+}
+
+func TestAutoAssignTeamAdditionalStateGuards(t *testing.T) {
+	for _, state := range []MatchState{WarmupPeriod, TeleopPeriod, PostMatch} {
+		arena := setupTestArena(t)
+		arena.MatchState = state
+		station := arena.autoAssignTeam(254)
+		assert.Equal(t, "", station, "expected no assignment in state %v", state)
+		assert.Nil(t, arena.AllianceStations["R1"].Team, "expected no team in R1 in state %v", state)
+	}
+}
+
+func TestAutoAssignTeamSwitchDetectsStation(t *testing.T) {
+	arena := setupTestArena(t)
+	arena.stationDetectorOverride = &mockStationDetector{station: "B3"}
+
+	station := arena.autoAssignTeam(254)
+	assert.Equal(t, "B3", station)
+	assert.NotNil(t, arena.AllianceStations["B3"].Team)
+	assert.Equal(t, 254, arena.AllianceStations["B3"].Team.Id)
+	assert.Nil(t, arena.AllianceStations["R1"].Team)
+}
+
+func TestAutoAssignTeamSwitchStationOccupied(t *testing.T) {
+	arena := setupTestArena(t)
+	arena.autoAssignTeam(111) // occupies R1
+	arena.stationDetectorOverride = &mockStationDetector{station: "R1"}
+
+	station := arena.autoAssignTeam(222)
+	assert.Equal(t, "R2", station)
+	assert.NotNil(t, arena.AllianceStations["R2"].Team)
+	assert.Equal(t, 222, arena.AllianceStations["R2"].Team.Id)
+}
+
+func TestAutoAssignTeamSwitchError(t *testing.T) {
+	arena := setupTestArena(t)
+	arena.stationDetectorOverride = &mockStationDetector{err: fmt.Errorf("telnet timeout")}
+
+	station := arena.autoAssignTeam(254)
+	assert.Equal(t, "R1", station)
+	assert.NotNil(t, arena.AllianceStations["R1"].Team)
+	assert.Equal(t, 254, arena.AllianceStations["R1"].Team.Id)
 }

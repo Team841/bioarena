@@ -78,6 +78,7 @@ type Arena struct {
 	freePracticeReconfiguring atomic.Bool  // true while AP is being reconfigured for a slot change
 	freePracticeReconfigMu    sync.Mutex   // serialises concurrent SetFreePracticeSlot calls
 	fieldEStopActive          atomic.Bool  // latched when GPIO field e-stop fires; cleared by ClearFieldEStop()
+	stationDetectorOverride   stationDetector // nil in production; injected in tests
 }
 
 type AllianceStation struct {
@@ -1156,6 +1157,11 @@ func shiftWarning(remaining int) bool {
 		(remaining >= 55 && remaining < 58) // 3s before Shift4
 }
 
+// stationDetector abstracts switch-based physical station detection for testability.
+type stationDetector interface {
+	GetStationForTeamId(teamId int) (string, error)
+}
+
 // stationOrder is the fill order for auto-assignment fallback (R1→R2→R3→B1→B2→B3).
 var stationOrder = []string{"R1", "R2", "R3", "B1", "B2", "B3"}
 
@@ -1189,7 +1195,11 @@ func (arena *Arena) autoAssignTeam(teamId int) string {
 	}
 
 	// Try to detect the physical station via the switch VLAN/ARP table.
-	station, err := arena.networkSwitch.GetStationForTeamId(teamId)
+	var detector stationDetector = arena.networkSwitch
+	if arena.stationDetectorOverride != nil {
+		detector = arena.stationDetectorOverride
+	}
+	station, err := detector.GetStationForTeamId(teamId)
 	if err != nil {
 		log.Printf("Switch station detection for Team %d failed: %v; falling back to sequential.", teamId, err)
 	}
