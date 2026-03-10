@@ -13,8 +13,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/team841/10thStArena/model"
-	"github.com/team841/10thStArena/network"
+	"github.com/team841/bioarena/model"
+	"github.com/team841/bioarena/network"
 )
 
 const logsDir = "static/logs"

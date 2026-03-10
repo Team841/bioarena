@@ -5,9 +5,9 @@
 package web
 
 import (
-	"github.com/team841/10thStArena/field"
-	"github.com/team841/10thStArena/game"
-	"github.com/team841/10thStArena/websocket"
+	"github.com/team841/bioarena/field"
+	"github.com/team841/bioarena/game"
+	"github.com/team841/bioarena/websocket"
 	"github.com/stretchr/testify/assert"
 	"net/http"
 	"net/http/httptest"

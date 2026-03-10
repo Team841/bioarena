@@ -7,7 +7,7 @@
 package field
 
 import (
-	"github.com/team841/10thStArena/websocket"
+	"github.com/team841/bioarena/websocket"
 )
 
 type FakePlc struct {

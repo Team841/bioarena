@@ -1,4 +1,4 @@
-module github.com/team841/10thStArena
+module github.com/team841/bioarena
 
 go 1.23.0
 

@@ -6,7 +6,7 @@ package network
 
 import (
 	"encoding/json"
-	"github.com/team841/10thStArena/model"
+	"github.com/team841/bioarena/model"
 	"github.com/stretchr/testify/assert"
 	"net/http"
 	"net/http/httptest"

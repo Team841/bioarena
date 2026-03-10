@@ -7,10 +7,10 @@
 package field
 
 import (
-	"github.com/team841/10thStArena/game"
-	"github.com/team841/10thStArena/model"
-	"github.com/team841/10thStArena/network"
-	"github.com/team841/10thStArena/websocket"
+	"github.com/team841/bioarena/game"
+	"github.com/team841/bioarena/model"
+	"github.com/team841/bioarena/network"
+	"github.com/team841/bioarena/websocket"
 )
 
 type ArenaNotifiers struct {

@@ -15,9 +15,9 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/team841/10thStArena/field"
-	"github.com/team841/10thStArena/game"
-	"github.com/team841/10thStArena/model"
+	"github.com/team841/bioarena/field"
+	"github.com/team841/bioarena/game"
+	"github.com/team841/bioarena/model"
 )
 
 const (

@@ -12,9 +12,9 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/team841/10thStArena/field"
-	"github.com/team841/10thStArena/model"
-	"github.com/team841/10thStArena/websocket"
+	"github.com/team841/bioarena/field"
+	"github.com/team841/bioarena/model"
+	"github.com/team841/bioarena/websocket"
 	"github.com/mitchellh/mapstructure"
 )
 

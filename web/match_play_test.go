@@ -8,10 +8,10 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/team841/10thStArena/field"
-	"github.com/team841/10thStArena/hardware"
-	"github.com/team841/10thStArena/model"
-	"github.com/team841/10thStArena/websocket"
+	"github.com/team841/bioarena/field"
+	"github.com/team841/bioarena/hardware"
+	"github.com/team841/bioarena/model"
+	"github.com/team841/bioarena/websocket"
 	gorillawebsocket "github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 )

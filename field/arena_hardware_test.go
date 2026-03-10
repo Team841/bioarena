@@ -3,7 +3,7 @@ package field
 import (
 	"testing"
 
-	"github.com/team841/10thStArena/hardware"
+	"github.com/team841/bioarena/hardware"
 	"github.com/stretchr/testify/assert"
 )
 

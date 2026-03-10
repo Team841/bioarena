@@ -13,7 +13,7 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/team841/10thStArena/model"
+	"github.com/team841/bioarena/model"
 	"net"
 	"sync"
 	"time"

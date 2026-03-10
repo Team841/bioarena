@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/team841/10thStArena/model"
+	"github.com/team841/bioarena/model"
 )
 
 // Returns a single team as JSON.

@@ -8,7 +8,7 @@ package web
 
 import (
 	"fmt"
-	"github.com/team841/10thStArena/model"
+	"github.com/team841/bioarena/model"
 	"github.com/google/uuid"
 	"net/http"
 	"net/url"

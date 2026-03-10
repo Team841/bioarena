@@ -14,11 +14,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/team841/10thStArena/game"
-	"github.com/team841/10thStArena/hardware"
-	"github.com/team841/10thStArena/model"
-	"github.com/team841/10thStArena/network"
-	"github.com/team841/10thStArena/plc"
+	"github.com/team841/bioarena/game"
+	"github.com/team841/bioarena/hardware"
+	"github.com/team841/bioarena/model"
+	"github.com/team841/bioarena/network"
+	"github.com/team841/bioarena/plc"
 )
 
 const (

@@ -16,7 +16,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/team841/10thStArena/model"
+	"github.com/team841/bioarena/model"
 )
 
 const (

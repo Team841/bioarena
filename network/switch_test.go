@@ -7,7 +7,7 @@ package network
 import (
 	"bytes"
 	"fmt"
-	"github.com/team841/10thStArena/model"
+	"github.com/team841/bioarena/model"
 	"github.com/stretchr/testify/assert"
 	"net"
 	"testing"

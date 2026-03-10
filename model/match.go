@@ -8,7 +8,7 @@ package model
 
 import (
 	"fmt"
-	"github.com/team841/10thStArena/game"
+	"github.com/team841/bioarena/game"
 	"sort"
 	"strings"
 	"time"

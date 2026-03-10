@@ -8,7 +8,7 @@ package plc
 
 import (
 	"fmt"
-	"github.com/team841/10thStArena/websocket"
+	"github.com/team841/bioarena/websocket"
 	"github.com/goburrow/modbus"
 	"log"
 	"strings"

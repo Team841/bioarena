@@ -15,9 +15,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/team841/10thStArena/game"
-	"github.com/team841/10thStArena/model"
-	"github.com/team841/10thStArena/network"
+	"github.com/team841/bioarena/game"
+	"github.com/team841/bioarena/model"
+	"github.com/team841/bioarena/network"
 )
 
 // FMS uses 1121 for sending UDP packets, and FMS Lite uses 1120. Using 1121

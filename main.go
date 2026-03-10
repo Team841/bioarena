@@ -16,9 +16,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/team841/10thStArena/field"
-	"github.com/team841/10thStArena/hardware"
-	"github.com/team841/10thStArena/web"
+	"github.com/team841/bioarena/field"
+	"github.com/team841/bioarena/hardware"
+	"github.com/team841/bioarena/web"
 	"gopkg.in/yaml.v3"
 )
 

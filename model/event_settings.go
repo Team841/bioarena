@@ -7,7 +7,7 @@
 package model
 
 import (
-	"github.com/team841/10thStArena/game"
+	"github.com/team841/bioarena/game"
 )
 
 type PlayoffType int
