@@ -105,17 +105,59 @@ $(function () {
   });
 
   // Auto-populate the WPA key when a team number is entered.
+  // If the team is not in the DB, prompt the operator to add it.
   $(document).on("blur", "[id^='teamId-']", function () {
     const station = this.id.replace("teamId-", "");
     const teamId = parseInt($(this).val(), 10);
     if (!teamId || teamId < 1) return;
     fetch("/setup/teams/" + teamId)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data && data.wpaKey) {
-          $("#wpaKey-" + station).val(data.wpaKey);
+      .then(r => {
+        if (r.ok) {
+          return r.json().then(data => {
+            if (data.wpaKey) {
+              $("#wpaKey-" + station).val(data.wpaKey);
+            }
+          });
+        }
+        if (r.status === 404) {
+          showTeamNotInDbModal(teamId, station);
         }
       })
       .catch(() => {});
   });
 });
+
+// -- Team-not-in-DB modal --
+
+function showTeamNotInDbModal(teamId, station) {
+  $("#teamNotInDbMessage").text(
+    "Team " + teamId + " is not in the database. Exit free practice to add it via Setup → Teams, or add it now."
+  );
+
+  const modalEl = document.getElementById("teamNotInDbModal");
+  const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+
+  // Re-bind buttons each time to capture current teamId/station.
+  $("#teamNotInDbCancel").off("click").on("click", function () {
+    $("#teamId-" + station).val("");
+    modal.hide();
+  });
+
+  $("#teamNotInDbAdd").off("click").on("click", function () {
+    fetch("/setup/teams/quick-add", {
+      method: "POST",
+      headers: {"Content-Type": "application/x-www-form-urlencoded"},
+      body: "id=" + teamId,
+    })
+      .then(r => {
+        if (r.ok) {
+          modal.hide();
+        } else {
+          r.text().then(msg => alert("Failed to add team: " + msg));
+        }
+      })
+      .catch(() => alert("Failed to add team."));
+  });
+
+  modal.show();
+}

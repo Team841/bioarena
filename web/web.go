@@ -122,6 +122,7 @@ func (web *Web) newHandler() http.Handler {
 	mux.HandleFunc("GET /setup/teams/{id}", web.teamGetHandler)
 	mux.HandleFunc("GET /setup/teams", web.teamsGetHandler)
 	mux.HandleFunc("POST /setup/teams/add", web.teamsAddHandler)
+	mux.HandleFunc("POST /setup/teams/quick-add", web.teamQuickAddHandler)
 	mux.HandleFunc("POST /setup/teams/{id}/edit", web.teamsEditHandler)
 	mux.HandleFunc("POST /setup/teams/{id}/delete", web.teamsDeleteHandler)
 	return mux

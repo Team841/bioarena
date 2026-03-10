@@ -5,6 +5,24 @@ drive indefinitely without timers. Per-station E-stops remain functional.
 */}}
 {{define "title"}}Free Practice{{end}}
 {{define "body"}}
+<!-- Team-not-in-DB warning modal -->
+<div class="modal fade" id="teamNotInDbModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Team Not in Database</h5>
+      </div>
+      <div class="modal-body">
+        <p id="teamNotInDbMessage"></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="teamNotInDbCancel">Cancel</button>
+        <button type="button" class="btn btn-primary" id="teamNotInDbAdd">Add to DB</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="reconfiguringOverlay" class="alert alert-warning text-center fw-bold d-none" role="alert">
   Reconfiguring network&hellip; Robots disabled.
 </div>

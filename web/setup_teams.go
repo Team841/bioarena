@@ -45,6 +45,37 @@ func (web *Web) teamGetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Creates a new team with just an ID; used by the free practice UI when an anonymous team is encountered.
+// Returns 201 on success, 409 if the team already exists.
+func (web *Web) teamQuickAddHandler(w http.ResponseWriter, r *http.Request) {
+	if !web.userIsAdmin(w, r) {
+		return
+	}
+
+	teamId, err := strconv.Atoi(r.PostFormValue("id"))
+	if err != nil || teamId <= 0 {
+		http.Error(w, "Team number must be a positive integer.", http.StatusBadRequest)
+		return
+	}
+
+	existingTeam, err := web.arena.Database.GetTeamById(teamId)
+	if err != nil {
+		handleWebErr(w, err)
+		return
+	}
+	if existingTeam != nil {
+		http.Error(w, "A team with that number already exists.", http.StatusConflict)
+		return
+	}
+
+	if err = web.arena.Database.CreateTeam(&model.Team{Id: teamId}); err != nil {
+		handleWebErr(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+}
+
 // Shows the team list page.
 func (web *Web) teamsGetHandler(w http.ResponseWriter, r *http.Request) {
 	if !web.userIsAdmin(w, r) {
