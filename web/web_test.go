@@ -1,12 +1,13 @@
 // Copyright 2014 Team 254. All Rights Reserved.
+// Portions Copyright Team 841. All Rights Reserved.
 // Author: pat@patfairbank.com (Patrick Fairbank)
 
 package web
 
 import (
-	"github.com/Team254/cheesy-arena/field"
-	"github.com/Team254/cheesy-arena/game"
-	"github.com/Team254/cheesy-arena/websocket"
+	"github.com/team841/10thStArena/field"
+	"github.com/team841/10thStArena/game"
+	"github.com/team841/10thStArena/websocket"
 	"github.com/stretchr/testify/assert"
 	"net/http"
 	"net/http/httptest"

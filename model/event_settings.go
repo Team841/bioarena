@@ -1,4 +1,5 @@
 // Copyright 2014 Team 254. All Rights Reserved.
+// Portions Copyright Team 841. All Rights Reserved.
 // Author: pat@patfairbank.com (Patrick Fairbank)
 //
 // Model and datastore read/write methods for event-level configuration.
@@ -6,7 +7,7 @@
 package model
 
 import (
-	"github.com/Team254/cheesy-arena/game"
+	"github.com/team841/10thStArena/game"
 )
 
 type PlayoffType int

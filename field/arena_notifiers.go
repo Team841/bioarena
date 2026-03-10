@@ -1,4 +1,5 @@
 // Copyright 2018 Team 254. All Rights Reserved.
+// Portions Copyright Team 841. All Rights Reserved.
 // Author: pat@patfairbank.com (Patrick Fairbank)
 //
 // Contains configuration of the publish-subscribe notifiers that allow the arena to push updates to websocket clients.
@@ -6,10 +7,10 @@
 package field
 
 import (
-	"github.com/Team254/cheesy-arena/game"
-	"github.com/Team254/cheesy-arena/model"
-	"github.com/Team254/cheesy-arena/network"
-	"github.com/Team254/cheesy-arena/websocket"
+	"github.com/team841/10thStArena/game"
+	"github.com/team841/10thStArena/model"
+	"github.com/team841/10thStArena/network"
+	"github.com/team841/10thStArena/websocket"
 )
 
 type ArenaNotifiers struct {

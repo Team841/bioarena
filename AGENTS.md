@@ -5,9 +5,9 @@
 
 ## Build, Test, and Development Commands
 Use Go 1.23+ (see `go.mod`).
-1. `go build`
-   Builds the `cheesy-arena` binary in the repo root.
-1. `./cheesy-arena`
+1. `go build -o bioarena`
+   Builds the `bioarena` binary in the repo root.
+1. `./bioarena`
    Runs the server; open `http://localhost:8080` in a browser.
 1. `go test ./...`
    Runs all Go tests across packages.
@@ -49,4 +49,4 @@ PRs should include:
 1. UI screenshots when changing pages in `web/`, `static/`, or `templates/`.
 
 ## Configuration & Ops Notes
-Cheesy Arena is designed to run as a local web server and uses BoltDB for data. For field networking and hardware integrations, see the project README and relevant `field/` or `plc/` code before making behavioral changes.
+Bioarena is designed to run as a local web server and uses BoltDB for data. For field networking and hardware integrations, see the project README and relevant `field/` or `plc/` code before making behavioral changes.

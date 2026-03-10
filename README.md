@@ -20,23 +20,23 @@ Run this on your development machine (not on the Pi):
 ./build-pi.sh
 ```
 
-This cross-compiles an ARM binary named `cheesy-arena-pi`.
+This cross-compiles an ARM binary named `bioarena`.
 
 **Copy files to the Pi**
 
 ```bash
-scp cheesy-arena-pi pi@<PI_IP>:~/cheesy-arena/
-scp -r static templates font schedules audio pi@<PI_IP>:~/cheesy-arena/
-scp cheesy-arena.service pi@<PI_IP>:~/
+scp bioarena pi@<PI_IP>:~/bioarena/
+scp -r static templates font schedules audio pi@<PI_IP>:~/bioarena/
+scp bioarena.service pi@<PI_IP>:~/
 ```
 
 **Install the systemd service (run on the Pi)**
 
 ```bash
-sudo mv ~/cheesy-arena.service /etc/systemd/system/
+sudo mv ~/bioarena.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable cheesy-arena
-sudo systemctl start cheesy-arena
+sudo systemctl enable bioarena
+sudo systemctl start bioarena
 ```
 
 The service automatically assigns `10.0.100.5/24` to `eth0` on startup.
@@ -106,14 +106,14 @@ Do not put the Pi on a robot subnet (`10.TE.AM.x`). Use a dedicated management s
 
 ### Step 2 — Configure the Cisco 3500 switch
 
-The switch must support VLANs. Cheesy Arena configures it automatically over Telnet (port 23). You must:
+The switch must support VLANs. Bioarena configures it automatically over Telnet (port 23). You must:
 
 1. Enable Telnet access with a password.
 2. Create VLANs 10, 20, 30, 40, 50, 60 (one per alliance station).
 3. Set the Pi's port as a trunk carrying all VLANs.
 4. Set each robot's port as an access port in the correct VLAN.
 
-The switch address and password are set in the Cheesy Arena web UI under Settings > Network.
+The switch address and password are set in the Bioarena web UI under Settings > Network.
 
 VLAN assignments (fixed, managed automatically):
 
@@ -130,7 +130,7 @@ When a match loads, the controller pushes DHCP pool and IP configurations for ea
 
 ### Step 3 — Configure the field access point
 
-The AP must run the Vivid-Hosting OpenWRT firmware with the REST API enabled. Cheesy Arena communicates over HTTP. Set the AP address and password in Settings > Network.
+The AP must run the Vivid-Hosting OpenWRT firmware with the REST API enabled. Bioarena communicates over HTTP. Set the AP address and password in Settings > Network.
 
 When a match loads, the controller pushes one SSID + WPA2 key per team (six total). Driver Station laptops connect to their team's SSID and land on the correct VLAN.
 
@@ -174,16 +174,16 @@ The DHCP pool reserves `.1`–`.19` and `.200`–`.254`. Addresses `.20`–`.199
 ### Starting and stopping the service
 
 ```bash
-sudo systemctl start cheesy-arena
-sudo systemctl stop cheesy-arena
-sudo systemctl restart cheesy-arena
-sudo systemctl status cheesy-arena
+sudo systemctl start bioarena
+sudo systemctl stop bioarena
+sudo systemctl restart bioarena
+sudo systemctl status bioarena
 ```
 
 ### Viewing logs
 
 ```bash
-journalctl -u cheesy-arena -f
+journalctl -u bioarena -f
 ```
 
 ### Running a practice match
@@ -285,8 +285,8 @@ if (typeof module !== "undefined") {
 **Run locally (no robots)**
 
 ```bash
-go build
-./cheesy-arena
+go build -o bioarena
+./bioarena
 ```
 
 Open `http://localhost:8080`. No network hardware is required for testing.
@@ -297,7 +297,7 @@ Open `http://localhost:8080`. No network hardware is required for testing.
 ./build-pi.sh
 ```
 
-Output: `cheesy-arena-pi` (ARM, statically linked, ready to copy to the Pi).
+Output: `bioarena` (ARM, statically linked, ready to copy to the Pi).
 
 ## Contributing
 

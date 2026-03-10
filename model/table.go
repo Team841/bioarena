@@ -1,4 +1,5 @@
 // Copyright 2021 Team 254. All Rights Reserved.
+// Portions Copyright Team 841. All Rights Reserved.
 // Author: pat@patfairbank.com (Patrick Fairbank)
 //
 // Defines a "table" wrapper struct and helper methods for persisting data using Bolt.

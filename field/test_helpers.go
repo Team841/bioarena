@@ -1,4 +1,5 @@
 // Copyright 2017 Team 254. All Rights Reserved.
+// Portions Copyright Team 841. All Rights Reserved.
 // Author: pat@patfairbank.com (Patrick Fairbank)
 //
 // Helper methods for use in tests in this package and others.
@@ -6,8 +7,8 @@
 package field
 
 import (
-	"github.com/Team254/cheesy-arena/game"
-	"github.com/Team254/cheesy-arena/model"
+	"github.com/team841/10thStArena/game"
+	"github.com/team841/10thStArena/model"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"path/filepath"

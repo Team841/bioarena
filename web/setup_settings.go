@@ -1,4 +1,5 @@
 // Copyright 2014 Team 254. All Rights Reserved.
+// Portions Copyright Team 841. All Rights Reserved.
 // Author: pat@patfairbank.com (Patrick Fairbank)
 //
 // Web routes for configuring the event settings.
@@ -15,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Team254/cheesy-arena/field"
-	"github.com/Team254/cheesy-arena/model"
+	"github.com/team841/10thStArena/field"
+	"github.com/team841/10thStArena/model"
 )
 
 // Shows the event settings editing page.

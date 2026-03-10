@@ -1,4 +1,4 @@
-module github.com/Team254/cheesy-arena
+module github.com/team841/10thStArena
 
 go 1.23.0
 

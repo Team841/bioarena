@@ -1,4 +1,5 @@
 // Copyright 2014 Team 254. All Rights Reserved.
+// Portions Copyright Team 841. All Rights Reserved.
 // Author: pat@patfairbank.com (Patrick Fairbank)
 //
 // Web routes for free practice mode.
@@ -11,9 +12,9 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/Team254/cheesy-arena/field"
-	"github.com/Team254/cheesy-arena/model"
-	"github.com/Team254/cheesy-arena/websocket"
+	"github.com/team841/10thStArena/field"
+	"github.com/team841/10thStArena/model"
+	"github.com/team841/10thStArena/websocket"
 	"github.com/mitchellh/mapstructure"
 )
 

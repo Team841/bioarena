@@ -1,4 +1,5 @@
 // Copyright 2017 Team 254. All Rights Reserved.
+// Portions Copyright Team 841. All Rights Reserved.
 // Author: pat@patfairbank.com (Patrick Fairbank)
 //
 // Methods for configuring a Vivid-Hosting VH-113 access point running OpenWRT for team SSIDs and VLANs.
@@ -15,7 +16,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Team254/cheesy-arena/model"
+	"github.com/team841/10thStArena/model"
 )
 
 const (

@@ -1,4 +1,5 @@
 // Copyright 2023 Team 254. All Rights Reserved.
+// Portions Copyright Team 841. All Rights Reserved.
 // Author: pat@patfairbank.com (Patrick Fairbank)
 //
 // Contains a fake implementation of the modbus.Client interface for testing.

@@ -1,4 +1,5 @@
 // Copyright 2014 Team 254. All Rights Reserved.
+// Portions Copyright Team 841. All Rights Reserved.
 // Author: pat@patfairbank.com (Patrick Fairbank)
 //
 // Configuration and functions for the event server web interface.
@@ -14,9 +15,9 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/Team254/cheesy-arena/field"
-	"github.com/Team254/cheesy-arena/game"
-	"github.com/Team254/cheesy-arena/model"
+	"github.com/team841/10thStArena/field"
+	"github.com/team841/10thStArena/game"
+	"github.com/team841/10thStArena/model"
 )
 
 const (

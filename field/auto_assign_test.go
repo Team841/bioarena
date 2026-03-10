@@ -1,4 +1,5 @@
 // Copyright 2026 Team 254. All Rights Reserved.
+// Portions Copyright Team 841. All Rights Reserved.
 //
 // Tests for autoAssignTeam in arena.go.
 
@@ -6,7 +7,7 @@ package field
 
 import (
 	"fmt"
-	"github.com/Team254/cheesy-arena/model"
+	"github.com/team841/10thStArena/model"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )

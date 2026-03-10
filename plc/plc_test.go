@@ -1,10 +1,11 @@
 // Copyright 2017 Team 254. All Rights Reserved.
+// Portions Copyright Team 841. All Rights Reserved.
 // Author: pat@patfairbank.com (Patrick Fairbank)
 
 package plc
 
 import (
-	"github.com/Team254/cheesy-arena/websocket"
+	"github.com/team841/10thStArena/websocket"
 	"github.com/goburrow/modbus"
 	"github.com/stretchr/testify/assert"
 	"testing"

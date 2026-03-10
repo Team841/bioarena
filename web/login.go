@@ -1,4 +1,5 @@
 // Copyright 2018 Team 254. All Rights Reserved.
+// Portions Copyright Team 841. All Rights Reserved.
 // Author: pat@patfairbank.com (Patrick Fairbank)
 //
 // Web routes for authenticating with the server.
@@ -7,7 +8,7 @@ package web
 
 import (
 	"fmt"
-	"github.com/Team254/cheesy-arena/model"
+	"github.com/team841/10thStArena/model"
 	"github.com/google/uuid"
 	"net/http"
 	"net/url"

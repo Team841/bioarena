@@ -1,10 +1,11 @@
 // Copyright 2014 Team 254. All Rights Reserved.
+// Portions Copyright Team 841. All Rights Reserved.
 // Author: pat@patfairbank.com (Patrick Fairbank)
 
 package model
 
 import (
-	"github.com/Team254/cheesy-arena/game"
+	"github.com/team841/10thStArena/game"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"

@@ -1,4 +1,5 @@
 // Copyright 2014 Team 254. All Rights Reserved.
+// Portions Copyright Team 841. All Rights Reserved.
 // Author: pat@patfairbank.com (Patrick Fairbank)
 //
 // Utilities for logging packets received from team driver stations during a match.
@@ -12,8 +13,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/Team254/cheesy-arena/model"
-	"github.com/Team254/cheesy-arena/network"
+	"github.com/team841/10thStArena/model"
+	"github.com/team841/10thStArena/network"
 )
 
 const logsDir = "static/logs"

@@ -1,4 +1,5 @@
 // Copyright 2014 Team 254. All Rights Reserved.
+// Portions Copyright Team 841. All Rights Reserved.
 // Author: pat@patfairbank.com (Patrick Fairbank)
 //
 // Functions for controlling the arena and match play.
@@ -13,11 +14,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Team254/cheesy-arena/game"
-	"github.com/Team254/cheesy-arena/hardware"
-	"github.com/Team254/cheesy-arena/model"
-	"github.com/Team254/cheesy-arena/network"
-	"github.com/Team254/cheesy-arena/plc"
+	"github.com/team841/10thStArena/game"
+	"github.com/team841/10thStArena/hardware"
+	"github.com/team841/10thStArena/model"
+	"github.com/team841/10thStArena/network"
+	"github.com/team841/10thStArena/plc"
 )
 
 const (

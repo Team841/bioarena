@@ -1,4 +1,5 @@
 // Copyright 2014 Team 254. All Rights Reserved.
+// Portions Copyright Team 841. All Rights Reserved.
 // Author: pat@patfairbank.com (Patrick Fairbank)
 
 // Go version 1.22 or newer is required.
@@ -15,9 +16,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Team254/cheesy-arena/field"
-	"github.com/Team254/cheesy-arena/hardware"
-	"github.com/Team254/cheesy-arena/web"
+	"github.com/team841/10thStArena/field"
+	"github.com/team841/10thStArena/hardware"
+	"github.com/team841/10thStArena/web"
 	"gopkg.in/yaml.v3"
 )
 

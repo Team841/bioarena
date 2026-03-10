@@ -1,4 +1,5 @@
 // Copyright 2017 Team 254. All Rights Reserved.
+// Portions Copyright Team 841. All Rights Reserved.
 // Author: pat@patfairbank.com (Patrick Fairbank)
 //
 // Methods for interfacing with the field PLC.
@@ -7,7 +8,7 @@ package plc
 
 import (
 	"fmt"
-	"github.com/Team254/cheesy-arena/websocket"
+	"github.com/team841/10thStArena/websocket"
 	"github.com/goburrow/modbus"
 	"log"
 	"strings"
