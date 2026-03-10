@@ -259,10 +259,27 @@ Both drivers default to no-op stubs. The field runs normally without them.
 
 ## Development
 
-**Run tests**
+**Run Go tests**
 
 ```bash
 go test ./...
+```
+
+**Run JavaScript tests**
+
+Client-side behaviour (DOM manipulation, WebSocket message handlers, UI state) is tested with [Jest](https://jestjs.io/) using a jsdom environment.
+
+```bash
+npm install        # first time only
+npm run test:js
+```
+
+Tests live in `static/js/__tests__/`. Each JS source file that contains non-trivial logic should have a corresponding `*.test.js` file. To make a file importable by Jest, add a `module.exports` guard at the bottom:
+
+```javascript
+if (typeof module !== "undefined") {
+  module.exports = { myFunction };
+}
 ```
 
 **Run locally (no robots)**
