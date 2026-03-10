@@ -494,7 +494,7 @@ func TestSaveTeamHasConnected(t *testing.T) {
 	arena.Database.CreateTeam(&model.Team{Id: 103})
 	arena.Database.CreateTeam(&model.Team{Id: 104})
 	arena.Database.CreateTeam(&model.Team{Id: 105})
-	arena.Database.CreateTeam(&model.Team{Id: 106, City: "San Jose", HasConnected: true})
+	arena.Database.CreateTeam(&model.Team{Id: 106, HasConnected: true})
 	match := model.Match{Red1: 101, Red2: 102, Red3: 103, Blue1: 104, Blue2: 105, Blue3: 106}
 	arena.Database.CreateMatch(&match)
 	arena.LoadMatch(&match)
@@ -507,7 +507,6 @@ func TestSaveTeamHasConnected(t *testing.T) {
 	arena.AllianceStations["B1"].Bypass.Store(true)
 	arena.AllianceStations["B2"].DsConn = &DriverStationConnection{TeamId: 105, RobotLinked: true}
 	arena.AllianceStations["B3"].DsConn = &DriverStationConnection{TeamId: 106, RobotLinked: true}
-	arena.AllianceStations["B3"].Team.City = "Sand Hosay" // Change some other field to verify that it isn't saved.
 	assert.Nil(t, arena.StartMatch())
 
 	// Check that the connection status was saved for the teams that just linked for the first time.
@@ -519,7 +518,6 @@ func TestSaveTeamHasConnected(t *testing.T) {
 		assert.False(t, teams[3].HasConnected)
 		assert.True(t, teams[4].HasConnected)
 		assert.True(t, teams[5].HasConnected)
-		assert.Equal(t, "San Jose", teams[5].City)
 	}
 }
 

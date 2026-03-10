@@ -24,11 +24,8 @@ UI for managing teams.
       <thead>
         <tr>
           <th>ID</th>
-          <th>Nickname</th>
           <th>Name</th>
-          <th>City</th>
           <th>WPA Key</th>
-          <th>Connected</th>
           <th>Actions</th>
         </tr>
       </thead>
@@ -36,36 +33,23 @@ UI for managing teams.
         {{range .Teams}}
         <tr>
           <td>{{.Id}}</td>
-          <td>{{.Nickname}}</td>
           <td>{{.Name}}</td>
-          <td>{{.City}}</td>
           <td>{{.WpaKey}}</td>
-          <td>{{if .HasConnected}}Yes{{end}}</td>
           <td>
             <button type="button" class="btn btn-sm btn-secondary me-1"
               data-id="{{.Id}}"
               data-name="{{.Name}}"
-              data-nickname="{{.Nickname}}"
-              data-city="{{.City}}"
-              data-stateprov="{{.StateProv}}"
-              data-country="{{.Country}}"
-              data-schoolname="{{.SchoolName}}"
-              data-rookieyear="{{.RookieYear}}"
-              data-robotname="{{.RobotName}}"
-              data-accomplishments="{{.Accomplishments}}"
               data-wpakey="{{.WpaKey}}"
-              data-hasconnected="{{.HasConnected}}"
-              data-ftanotes="{{.FtaNotes}}"
               onclick="openEditModal(this)">Edit</button>
             <button type="button" class="btn btn-sm btn-danger"
               data-id="{{.Id}}"
-              data-nickname="{{.Nickname}}"
+              data-name="{{.Name}}"
               onclick="openDeleteModal(this)">Delete</button>
           </td>
         </tr>
         {{else}}
         <tr>
-          <td colspan="8" class="text-center text-muted">No teams added yet.</td>
+          <td colspan="4" class="text-center text-muted">No teams added yet.</td>
         </tr>
         {{end}}
       </tbody>
@@ -75,7 +59,7 @@ UI for managing teams.
 
 <!-- Add Team Modal -->
 <div id="addTeamModal" class="modal fade" tabindex="-1">
-  <div class="modal-dialog modal-lg">
+  <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title">Add Team</h5>
@@ -96,69 +80,9 @@ UI for managing teams.
             </div>
           </div>
           <div class="row mb-2">
-            <label class="col-sm-4 col-form-label">Nickname</label>
-            <div class="col-sm-8">
-              <input type="text" class="form-control" name="nickname">
-            </div>
-          </div>
-          <div class="row mb-2">
-            <label class="col-sm-4 col-form-label">City</label>
-            <div class="col-sm-8">
-              <input type="text" class="form-control" name="city">
-            </div>
-          </div>
-          <div class="row mb-2">
-            <label class="col-sm-4 col-form-label">State/Province</label>
-            <div class="col-sm-8">
-              <input type="text" class="form-control" name="stateProv">
-            </div>
-          </div>
-          <div class="row mb-2">
-            <label class="col-sm-4 col-form-label">Country</label>
-            <div class="col-sm-8">
-              <input type="text" class="form-control" name="country">
-            </div>
-          </div>
-          <div class="row mb-2">
-            <label class="col-sm-4 col-form-label">School Name</label>
-            <div class="col-sm-8">
-              <input type="text" class="form-control" name="schoolName">
-            </div>
-          </div>
-          <div class="row mb-2">
-            <label class="col-sm-4 col-form-label">Rookie Year</label>
-            <div class="col-sm-8">
-              <input type="number" class="form-control" name="rookieYear" min="0">
-            </div>
-          </div>
-          <div class="row mb-2">
-            <label class="col-sm-4 col-form-label">Robot Name</label>
-            <div class="col-sm-8">
-              <input type="text" class="form-control" name="robotName">
-            </div>
-          </div>
-          <div class="row mb-2">
-            <label class="col-sm-4 col-form-label">Accomplishments</label>
-            <div class="col-sm-8">
-              <textarea class="form-control" name="accomplishments" rows="3"></textarea>
-            </div>
-          </div>
-          <div class="row mb-2">
             <label class="col-sm-4 col-form-label">WPA Key</label>
             <div class="col-sm-8">
               <input type="text" class="form-control" name="wpaKey">
-            </div>
-          </div>
-          <div class="row mb-2">
-            <label class="col-sm-4 col-form-label">FTA Notes</label>
-            <div class="col-sm-8">
-              <textarea class="form-control" name="ftaNotes" rows="3"></textarea>
-            </div>
-          </div>
-          <div class="row mb-2">
-            <label class="col-sm-4 col-form-label">Has Connected</label>
-            <div class="col-sm-8 d-flex align-items-center">
-              <input type="checkbox" name="hasConnected">
             </div>
           </div>
         </div>
@@ -173,7 +97,7 @@ UI for managing teams.
 
 <!-- Edit Team Modal -->
 <div id="editTeamModal" class="modal fade" tabindex="-1">
-  <div class="modal-dialog modal-lg">
+  <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title">Edit Team <span id="editTeamTitle"></span></h5>
@@ -194,69 +118,9 @@ UI for managing teams.
             </div>
           </div>
           <div class="row mb-2">
-            <label class="col-sm-4 col-form-label">Nickname</label>
-            <div class="col-sm-8">
-              <input type="text" class="form-control" name="nickname" id="editNickname">
-            </div>
-          </div>
-          <div class="row mb-2">
-            <label class="col-sm-4 col-form-label">City</label>
-            <div class="col-sm-8">
-              <input type="text" class="form-control" name="city" id="editCity">
-            </div>
-          </div>
-          <div class="row mb-2">
-            <label class="col-sm-4 col-form-label">State/Province</label>
-            <div class="col-sm-8">
-              <input type="text" class="form-control" name="stateProv" id="editStateProv">
-            </div>
-          </div>
-          <div class="row mb-2">
-            <label class="col-sm-4 col-form-label">Country</label>
-            <div class="col-sm-8">
-              <input type="text" class="form-control" name="country" id="editCountry">
-            </div>
-          </div>
-          <div class="row mb-2">
-            <label class="col-sm-4 col-form-label">School Name</label>
-            <div class="col-sm-8">
-              <input type="text" class="form-control" name="schoolName" id="editSchoolName">
-            </div>
-          </div>
-          <div class="row mb-2">
-            <label class="col-sm-4 col-form-label">Rookie Year</label>
-            <div class="col-sm-8">
-              <input type="number" class="form-control" name="rookieYear" id="editRookieYear" min="0">
-            </div>
-          </div>
-          <div class="row mb-2">
-            <label class="col-sm-4 col-form-label">Robot Name</label>
-            <div class="col-sm-8">
-              <input type="text" class="form-control" name="robotName" id="editRobotName">
-            </div>
-          </div>
-          <div class="row mb-2">
-            <label class="col-sm-4 col-form-label">Accomplishments</label>
-            <div class="col-sm-8">
-              <textarea class="form-control" name="accomplishments" id="editAccomplishments" rows="3"></textarea>
-            </div>
-          </div>
-          <div class="row mb-2">
             <label class="col-sm-4 col-form-label">WPA Key</label>
             <div class="col-sm-8">
               <input type="text" class="form-control" name="wpaKey" id="editWpaKey">
-            </div>
-          </div>
-          <div class="row mb-2">
-            <label class="col-sm-4 col-form-label">FTA Notes</label>
-            <div class="col-sm-8">
-              <textarea class="form-control" name="ftaNotes" id="editFtaNotes" rows="3"></textarea>
-            </div>
-          </div>
-          <div class="row mb-2">
-            <label class="col-sm-4 col-form-label">Has Connected</label>
-            <div class="col-sm-8 d-flex align-items-center">
-              <input type="checkbox" name="hasConnected" id="editHasConnected">
             </div>
           </div>
         </div>
@@ -297,17 +161,7 @@ UI for managing teams.
     document.getElementById("editTeamTitle").textContent = "#" + id;
     document.getElementById("editId").value = id;
     document.getElementById("editName").value = btn.getAttribute("data-name");
-    document.getElementById("editNickname").value = btn.getAttribute("data-nickname");
-    document.getElementById("editCity").value = btn.getAttribute("data-city");
-    document.getElementById("editStateProv").value = btn.getAttribute("data-stateprov");
-    document.getElementById("editCountry").value = btn.getAttribute("data-country");
-    document.getElementById("editSchoolName").value = btn.getAttribute("data-schoolname");
-    document.getElementById("editRookieYear").value = btn.getAttribute("data-rookieyear");
-    document.getElementById("editRobotName").value = btn.getAttribute("data-robotname");
-    document.getElementById("editAccomplishments").value = btn.getAttribute("data-accomplishments");
     document.getElementById("editWpaKey").value = btn.getAttribute("data-wpakey");
-    document.getElementById("editFtaNotes").value = btn.getAttribute("data-ftanotes");
-    document.getElementById("editHasConnected").checked = btn.getAttribute("data-hasconnected") === "true";
     document.getElementById("editTeamForm").action = "/setup/teams/" + id + "/edit";
     var modal = new bootstrap.Modal(document.getElementById("editTeamModal"));
     modal.show();
@@ -315,8 +169,8 @@ UI for managing teams.
 
   function openDeleteModal(btn) {
     var id = btn.getAttribute("data-id");
-    var nickname = btn.getAttribute("data-nickname");
-    document.getElementById("deleteTeamName").textContent = (nickname || "#" + id) + " (#" + id + ")";
+    var name = btn.getAttribute("data-name");
+    document.getElementById("deleteTeamName").textContent = (name || "#" + id) + " (#" + id + ")";
     document.getElementById("deleteTeamForm").action = "/setup/teams/" + id + "/delete";
     var modal = new bootstrap.Modal(document.getElementById("deleteTeamModal"));
     modal.show();

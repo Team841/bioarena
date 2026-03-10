@@ -44,20 +44,10 @@ func (web *Web) teamsAddHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	team := model.Team{
-		Id:              teamId,
-		Name:            r.PostFormValue("name"),
-		Nickname:        r.PostFormValue("nickname"),
-		City:            r.PostFormValue("city"),
-		StateProv:       r.PostFormValue("stateProv"),
-		Country:         r.PostFormValue("country"),
-		SchoolName:      r.PostFormValue("schoolName"),
-		RobotName:       r.PostFormValue("robotName"),
-		Accomplishments: r.PostFormValue("accomplishments"),
-		WpaKey:          r.PostFormValue("wpaKey"),
-		HasConnected:    r.PostFormValue("hasConnected") == "on",
-		FtaNotes:        r.PostFormValue("ftaNotes"),
+		Id:     teamId,
+		Name:   r.PostFormValue("name"),
+		WpaKey: r.PostFormValue("wpaKey"),
 	}
-	team.RookieYear, _ = strconv.Atoi(r.PostFormValue("rookieYear"))
 
 	if err = web.arena.Database.CreateTeam(&team); err != nil {
 		handleWebErr(w, err)
@@ -90,17 +80,7 @@ func (web *Web) teamsEditHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	team.Name = r.PostFormValue("name")
-	team.Nickname = r.PostFormValue("nickname")
-	team.City = r.PostFormValue("city")
-	team.StateProv = r.PostFormValue("stateProv")
-	team.Country = r.PostFormValue("country")
-	team.SchoolName = r.PostFormValue("schoolName")
-	team.RookieYear, _ = strconv.Atoi(r.PostFormValue("rookieYear"))
-	team.RobotName = r.PostFormValue("robotName")
-	team.Accomplishments = r.PostFormValue("accomplishments")
 	team.WpaKey = r.PostFormValue("wpaKey")
-	team.HasConnected = r.PostFormValue("hasConnected") == "on"
-	team.FtaNotes = r.PostFormValue("ftaNotes")
 
 	if err = web.arena.Database.UpdateTeam(team); err != nil {
 		handleWebErr(w, err)

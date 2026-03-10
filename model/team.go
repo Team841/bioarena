@@ -8,19 +8,10 @@ package model
 import "sort"
 
 type Team struct {
-	Id              int `db:"id,manual"`
-	Name            string
-	Nickname        string
-	City            string
-	StateProv       string
-	Country         string
-	SchoolName      string
-	RookieYear      int
-	RobotName       string
-	Accomplishments string
-	WpaKey          string
-	HasConnected    bool
-	FtaNotes        string
+	Id           int `db:"id,manual"`
+	Name         string
+	WpaKey       string
+	HasConnected bool
 }
 
 func (database *Database) CreateTeam(team *Team) error {
