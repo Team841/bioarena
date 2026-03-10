@@ -20,7 +20,7 @@ func TestLoginDisplay(t *testing.T) {
 
 	recorder = web.getHttpResponse("/login?redirect=%2Fmatch_play%3Fp1%3Dv1%26p2%3Dv2")
 	assert.Equal(t, 200, recorder.Code)
-	assert.Contains(t, recorder.Body.String(), "Log In - Untitled Event - 10th Street Arena")
+	assert.Contains(t, recorder.Body.String(), "Log In - Untitled Event - Bioarena")
 
 	// Check logging in with the wrong username and right password.
 	recorder = web.postHttpResponse(
