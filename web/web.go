@@ -119,6 +119,7 @@ func (web *Web) newHandler() http.Handler {
 	mux.HandleFunc("GET /setup/db/save", web.saveDbHandler)
 	mux.HandleFunc("GET /setup/settings", web.settingsGetHandler)
 	mux.HandleFunc("POST /setup/settings", web.settingsPostHandler)
+	mux.HandleFunc("GET /setup/teams/{id}", web.teamGetHandler)
 	mux.HandleFunc("GET /setup/teams", web.teamsGetHandler)
 	mux.HandleFunc("POST /setup/teams/add", web.teamsAddHandler)
 	mux.HandleFunc("POST /setup/teams/{id}/edit", web.teamsEditHandler)

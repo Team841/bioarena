@@ -3,6 +3,7 @@ package field
 import (
 	"testing"
 
+	"github.com/Team254/cheesy-arena/model"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -125,6 +126,38 @@ func TestSetFreePracticeSlotAllowsSixDistinctTeams(t *testing.T) {
 	for i, s := range []string{"R1", "R2", "R3", "B1", "B2", "B3"} {
 		assert.NoError(t, arena.SetFreePracticeSlot(s, 100+i, "key"))
 	}
+}
+
+// --- SetFreePracticeSlot DB persistence ---
+
+func TestSetFreePracticeSlotPersistsWpaKeyToDb(t *testing.T) {
+	arena := setupTestArena(t)
+	assert.Nil(t, arena.Database.CreateTeam(&model.Team{Id: 254, WpaKey: "old"}))
+	assert.NoError(t, arena.EnterFreePractice())
+	assert.NoError(t, arena.SetFreePracticeSlot("R1", 254, "new"))
+
+	team, err := arena.Database.GetTeamById(254)
+	assert.Nil(t, err)
+	assert.Equal(t, "new", team.WpaKey)
+}
+
+func TestSetFreePracticeSlotSameWpaKeyNoOp(t *testing.T) {
+	arena := setupTestArena(t)
+	assert.Nil(t, arena.Database.CreateTeam(&model.Team{Id: 254, WpaKey: "same"}))
+	assert.NoError(t, arena.EnterFreePractice())
+	assert.NoError(t, arena.SetFreePracticeSlot("R1", 254, "same"))
+
+	team, err := arena.Database.GetTeamById(254)
+	assert.Nil(t, err)
+	assert.Equal(t, "same", team.WpaKey)
+}
+
+func TestSetFreePracticeSlotAnonymousTeamNoPanic(t *testing.T) {
+	arena := setupTestArena(t)
+	// Team 9999 is not in the DB; SetFreePracticeSlot should still succeed.
+	assert.NoError(t, arena.EnterFreePractice())
+	assert.NoError(t, arena.SetFreePracticeSlot("R1", 9999, "key"))
+	assert.Equal(t, 9999, arena.AllianceStations["R1"].Team.Id)
 }
 
 // --- ClearFreePracticeSlot ---

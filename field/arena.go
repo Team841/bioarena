@@ -1009,6 +1009,15 @@ func (arena *Arena) SetFreePracticeSlot(station string, teamId int, wpaKey strin
 	}
 
 	arena.freePracticeReconfiguring.Store(false)
+
+	// Best-effort: persist the WPA key back to the team record in the database.
+	if dbTeam, dbErr := arena.Database.GetTeamById(teamId); dbErr == nil && dbTeam != nil && dbTeam.WpaKey != wpaKey {
+		dbTeam.WpaKey = wpaKey
+		if dbErr = arena.Database.UpdateTeam(dbTeam); dbErr != nil {
+			log.Printf("Failed to persist WPA key for team %d: %v", teamId, dbErr)
+		}
+	}
+
 	arena.ArenaStatusNotifier.Notify()
 	return nil
 }

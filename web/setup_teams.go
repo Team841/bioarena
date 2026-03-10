@@ -6,11 +6,44 @@
 package web
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 
 	"github.com/Team254/cheesy-arena/model"
 )
+
+// Returns a single team as JSON.
+func (web *Web) teamGetHandler(w http.ResponseWriter, r *http.Request) {
+	if !web.userIsAdmin(w, r) {
+		return
+	}
+
+	teamId, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		handleWebErr(w, err)
+		return
+	}
+
+	team, err := web.arena.Database.GetTeamById(teamId)
+	if err != nil {
+		handleWebErr(w, err)
+		return
+	}
+	if team == nil {
+		http.Error(w, "Team not found.", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err = json.NewEncoder(w).Encode(struct {
+		Id     int    `json:"id"`
+		Name   string `json:"name"`
+		WpaKey string `json:"wpaKey"`
+	}{team.Id, team.Name, team.WpaKey}); err != nil {
+		handleWebErr(w, err)
+	}
+}
 
 // Shows the team list page.
 func (web *Web) teamsGetHandler(w http.ResponseWriter, r *http.Request) {

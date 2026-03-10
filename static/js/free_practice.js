@@ -74,10 +74,16 @@ const handleArenaStatus = function (data) {
       if (!$("#teamId-" + s).is(":focus")) {
         $("#teamId-" + s).val(as.Team.Id);
       }
+      if (!$("#wpaKey-" + s).is(":focus")) {
+        $("#wpaKey-" + s).val(as.Team.WpaKey || "");
+      }
     } else {
       slotCard.removeClass("border-danger");
       if (!$("#teamId-" + s).is(":focus")) {
         $("#teamId-" + s).val("");
+      }
+      if (!$("#wpaKey-" + s).is(":focus")) {
+        $("#wpaKey-" + s).val("");
       }
     }
     statusEl.text(statusText);
@@ -96,5 +102,20 @@ $(function () {
     arenaStatus: function (event) {
       handleArenaStatus(event.data);
     },
+  });
+
+  // Auto-populate the WPA key when a team number is entered.
+  $(document).on("blur", "[id^='teamId-']", function () {
+    const station = this.id.replace("teamId-", "");
+    const teamId = parseInt($(this).val(), 10);
+    if (!teamId || teamId < 1) return;
+    fetch("/setup/teams/" + teamId)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data && data.wpaKey) {
+          $("#wpaKey-" + station).val(data.wpaKey);
+        }
+      })
+      .catch(() => {});
   });
 });
