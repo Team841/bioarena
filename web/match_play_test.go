@@ -4,13 +4,15 @@
 package web
 
 import (
+	"net/http"
+	"testing"
+
 	"github.com/Team254/cheesy-arena/field"
 	"github.com/Team254/cheesy-arena/hardware"
 	"github.com/Team254/cheesy-arena/model"
 	"github.com/Team254/cheesy-arena/websocket"
 	gorillawebsocket "github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 // mockWebFieldEStop is a controllable FieldEStopPanel for web handler tests.
@@ -38,6 +40,15 @@ func TestMatchPlay(t *testing.T) {
 	recorder := web.getHttpResponse("/match_play")
 	assert.Equal(t, 200, recorder.Code)
 	assert.Contains(t, recorder.Body.String(), "Match Play")
+}
+
+func TestMatchPlayRedirectsWhenFreePracticeActive(t *testing.T) {
+	web := setupTestWeb(t)
+	assert.Nil(t, web.arena.EnterFreePractice())
+
+	recorder := web.getHttpResponse("/match_play")
+	assert.Equal(t, http.StatusSeeOther, recorder.Code)
+	assert.Equal(t, "/free_practice?warn=1", recorder.Header().Get("Location"))
 }
 
 func TestMatchPlayMatchLoadRouteRemoved(t *testing.T) {

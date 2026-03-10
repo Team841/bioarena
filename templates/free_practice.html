@@ -23,6 +23,12 @@ drive indefinitely without timers. Per-station E-stops remain functional.
   </div>
 </div>
 
+{{if .WarnExitFreePractice}}
+<div class="alert alert-danger" role="alert">
+  Exit free practice before beginning pre-match setup.
+</div>
+{{end}}
+
 <div id="reconfiguringOverlay" class="alert alert-warning text-center fw-bold d-none" role="alert">
   Reconfiguring network&hellip; Robots disabled.
 </div>
@@ -36,7 +42,7 @@ drive indefinitely without timers. Per-station E-stops remain functional.
     <button id="exitBtn" class="btn btn-warning d-none" onclick="exitFreePractice()">
       Exit Free Practice
     </button>
-    <a href="/match_play" class="btn btn-secondary ms-2">Match Play</a>
+    <a href="/match_play" class="btn btn-secondary ms-2" id="matchPlayBtn">Match Play</a>
   </div>
 </div>
 

@@ -46,6 +46,13 @@ const handleArenaStatus = function (data) {
   $("#enterBtn").toggleClass("d-none", inFreePractice);
   $("#exitBtn").toggleClass("d-none", !inFreePractice);
 
+  // Disable the Match Play link while free practice is running.
+  // The server also redirects /match_play → /free_practice?warn=1, so this
+  // is defence-in-depth on the client side.
+  $("#matchPlayBtn")
+    .toggleClass("disabled", inFreePractice)
+    .attr("aria-disabled", inFreePractice ? "true" : "false");
+
   // Reconfiguring overlay.
   $("#reconfiguringOverlay").toggleClass("d-none", !data.FreePracticeReconfiguring);
 
@@ -113,6 +120,11 @@ $(function () {
     arenaStatus: function (event) {
       handleArenaStatus(event.data);
     },
+  });
+
+  // Prevent navigation via the Match Play button when it is disabled.
+  $(document).on("click", "#matchPlayBtn.disabled", function (e) {
+    e.preventDefault();
   });
 
   // Auto-populate the WPA key when a team number is entered.

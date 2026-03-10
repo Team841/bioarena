@@ -25,6 +25,11 @@ func (web *Web) matchPlayHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if web.arena.MatchState == field.FreePractice {
+		http.Redirect(w, r, "/free_practice?warn=1", http.StatusSeeOther)
+		return
+	}
+
 	template, err := web.parseFiles("templates/match_play.html", "templates/base.html")
 	if err != nil {
 		handleWebErr(w, err)

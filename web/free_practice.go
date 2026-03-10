@@ -32,10 +32,12 @@ func (web *Web) freePracticeHandler(w http.ResponseWriter, r *http.Request) {
 	// Also expose FreePracticeState so the template can inject it as a JS constant.
 	data := struct {
 		*model.EventSettings
-		FreePracticeState field.MatchState
+		FreePracticeState    field.MatchState
+		WarnExitFreePractice bool
 	}{
 		web.arena.EventSettings,
 		field.FreePractice,
+		r.URL.Query().Get("warn") == "1",
 	}
 	err = template.ExecuteTemplate(w, "base", data)
 	if err != nil {

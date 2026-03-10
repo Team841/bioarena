@@ -24,6 +24,7 @@ function buildDom() {
     <button id="enterBtn"></button>
     <button id="exitBtn" class="d-none"></button>
     <div id="reconfiguringOverlay" class="d-none"></div>
+    <a id="matchPlayBtn" href="/match_play" class="btn btn-secondary">Match Play</a>
     ${STATIONS.map(
       (s) => `
       <div id="slot-${s}">
@@ -54,6 +55,25 @@ function occupiedStation(teamId, wpaKey = "") {
 // ---- tests ------------------------------------------------------------------
 
 beforeEach(buildDom);
+
+describe("handleArenaStatus — Match Play button", () => {
+  test("disables the Match Play button when free practice is active", () => {
+    handleArenaStatus(emptyStatus());
+    expect($("#matchPlayBtn").hasClass("disabled")).toBe(true);
+    expect($("#matchPlayBtn").attr("aria-disabled")).toBe("true");
+  });
+
+  test("enables the Match Play button when not in free practice", () => {
+    // First put it into free-practice state so the button is disabled.
+    handleArenaStatus(emptyStatus());
+    expect($("#matchPlayBtn").hasClass("disabled")).toBe(true);
+
+    // Now simulate a non-free-practice arena status.
+    handleArenaStatus({ ...emptyStatus(), MatchState: 0 /* PreMatch */ });
+    expect($("#matchPlayBtn").hasClass("disabled")).toBe(false);
+    expect($("#matchPlayBtn").attr("aria-disabled")).toBe("false");
+  });
+});
 
 describe("handleArenaStatus — team number field", () => {
   test("does not clear a user-typed team number on an empty-slot status push", () => {
