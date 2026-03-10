@@ -194,6 +194,22 @@ describe("handleArenaStatus — setup (PreMatch) state", () => {
     });
   });
 
+  test("Register button is enabled in setup state so slots can be committed", () => {
+    handleArenaStatus(preMatchStatus());
+    STATIONS.forEach((s) => {
+      const registerBtn = $("#slot-" + s).find(".btn-primary");
+      expect(registerBtn.length).toBe(1);
+      expect(registerBtn.prop("disabled")).toBe(false);
+    });
+  });
+
+  test("Register button is disabled while reconfiguring in setup state", () => {
+    handleArenaStatus({ ...preMatchStatus(), FreePracticeReconfiguring: true });
+    STATIONS.forEach((s) => {
+      expect($("#slot-" + s).find(".btn-primary").prop("disabled")).toBe(true);
+    });
+  });
+
   test("inputs are disabled while reconfiguring in PreMatch", () => {
     handleArenaStatus({ ...preMatchStatus(), FreePracticeReconfiguring: true });
     STATIONS.forEach((s) => {
