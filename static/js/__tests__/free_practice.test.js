@@ -21,6 +21,9 @@ const STATIONS = ["R1", "R2", "R3", "B1", "B2", "B3"];
 
 function buildDom() {
   document.body.innerHTML = `
+    <div id="fpModeBanner" class="fp-mode-banner fp-mode-setup">
+      <div id="fpModeLabel" class="fp-mode-label">FREE PRACTICE SETUP</div>
+    </div>
     <button id="enterBtn"></button>
     <button id="exitBtn" class="d-none"></button>
     <div id="reconfiguringOverlay" class="d-none"></div>
@@ -30,6 +33,9 @@ function buildDom() {
       <div id="slot-${s}">
         <input id="teamId-${s}" />
         <input id="wpaKey-${s}" />
+        <button class="btn btn-sm btn-primary">Register</button>
+        <button class="btn btn-sm btn-outline-secondary">Clear</button>
+        <button class="btn btn-sm btn-danger">E-Stop</button>
         <div id="status-${s}"></div>
       </div>`
     ).join("")}
@@ -139,5 +145,67 @@ describe("handleArenaStatus — WPA key field", () => {
   test("populates WPA key from occupied-slot status", () => {
     handleArenaStatus(emptyStatus({ B3: occupiedStation(9999, "wpaB3") }));
     expect($("#wpaKey-B3").val()).toBe("wpaB3");
+  });
+});
+
+// ── Setup / PreMatch state ────────────────────────────────────────────────
+
+function preMatchStatus(overrides = {}) {
+  const stations = {};
+  STATIONS.forEach((s) => {
+    stations[s] = overrides[s] ?? { Team: null, DsConn: null, EStop: false };
+  });
+  return {
+    MatchState: 0, // PreMatch
+    FreePracticeReconfiguring: false,
+    AllianceStations: stations,
+  };
+}
+
+describe("handleArenaStatus — setup (PreMatch) state", () => {
+  test("inputs are enabled in PreMatch when not reconfiguring", () => {
+    handleArenaStatus(preMatchStatus());
+    STATIONS.forEach((s) => {
+      expect($("#teamId-" + s).prop("disabled")).toBe(false);
+      expect($("#wpaKey-" + s).prop("disabled")).toBe(false);
+      // Non-danger buttons (Register, Clear) should also be enabled.
+      const nonDanger = $("#slot-" + s).find("button:not(.btn-danger)");
+      nonDanger.each(function () {
+        expect($(this).prop("disabled")).toBe(false);
+      });
+    });
+  });
+
+  test("banner has fp-mode-setup class and not fp-mode-enabled in PreMatch", () => {
+    handleArenaStatus(preMatchStatus());
+    expect($("#fpModeBanner").hasClass("fp-mode-setup")).toBe(true);
+    expect($("#fpModeBanner").hasClass("fp-mode-enabled")).toBe(false);
+  });
+
+  test("banner label reads FREE PRACTICE SETUP in PreMatch", () => {
+    handleArenaStatus(preMatchStatus());
+    expect($("#fpModeLabel").text()).toBe("FREE PRACTICE SETUP");
+  });
+
+  test("E-Stop button is disabled in PreMatch", () => {
+    handleArenaStatus(preMatchStatus());
+    STATIONS.forEach((s) => {
+      expect($("#slot-" + s).find(".btn-danger").prop("disabled")).toBe(true);
+    });
+  });
+
+  test("inputs are disabled while reconfiguring in PreMatch", () => {
+    handleArenaStatus({ ...preMatchStatus(), FreePracticeReconfiguring: true });
+    STATIONS.forEach((s) => {
+      expect($("#teamId-" + s).prop("disabled")).toBe(true);
+      expect($("#wpaKey-" + s).prop("disabled")).toBe(true);
+    });
+  });
+
+  test("banner has fp-mode-enabled and label reads FREE PRACTICE ENABLED when active", () => {
+    handleArenaStatus(emptyStatus()); // FreePracticeState
+    expect($("#fpModeBanner").hasClass("fp-mode-enabled")).toBe(true);
+    expect($("#fpModeBanner").hasClass("fp-mode-setup")).toBe(false);
+    expect($("#fpModeLabel").text()).toBe("FREE PRACTICE ENABLED");
   });
 });

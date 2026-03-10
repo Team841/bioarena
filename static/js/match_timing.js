@@ -51,7 +51,7 @@ const translateMatchTime = function (data, callback) {
       matchStateText = "POST-MATCH";
       break;
     case "FREE_PRACTICE":
-      matchStateText = "FREE PRACTICE";
+      matchStateText = "FREE PRACTICE ENABLED";
       break;
   }
   callback(matchStates[data.MatchState], matchStateText, getCountdown(data.MatchState, data.MatchTimeSec));

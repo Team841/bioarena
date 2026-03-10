@@ -42,6 +42,12 @@ const handleArenaStatus = function (data) {
   // FreePracticeState is injected as a JS constant by the HTML template.
   const inFreePractice = data.MatchState === FreePracticeState;
 
+  // Update the mode banner.
+  const inSetup = !inFreePractice;
+  const banner = $("#fpModeBanner");
+  banner.toggleClass("fp-mode-setup", inSetup).toggleClass("fp-mode-enabled", inFreePractice);
+  $("#fpModeLabel").text(inFreePractice ? "FREE PRACTICE ENABLED" : "FREE PRACTICE SETUP");
+
   // Toggle UI sections based on current state.
   $("#enterBtn").toggleClass("d-none", inFreePractice);
   $("#exitBtn").toggleClass("d-none", !inFreePractice);
@@ -106,8 +112,8 @@ const handleArenaStatus = function (data) {
     }
     statusEl.text(statusText);
 
-    // Disable inputs when not in free practice.
-    const disabled = !inFreePractice || data.FreePracticeReconfiguring;
+    // Disable inputs while reconfiguring (allowed in both setup and enabled states).
+    const disabled = data.FreePracticeReconfiguring;
     slotCard.find("input, button:not(.btn-danger)").prop("disabled", disabled);
     slotCard.find(".btn-danger").prop("disabled", !inFreePractice);
   });

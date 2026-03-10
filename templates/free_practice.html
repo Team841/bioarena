@@ -30,18 +30,14 @@ drive indefinitely without timers. Per-station E-stops remain functional.
 {{end}}
 
 <div id="reconfiguringOverlay" class="alert alert-warning text-center fw-bold d-none" role="alert">
-  Reconfiguring network&hellip; Robots disabled.
+  Reconfiguring network&hellip; Please wait.
 </div>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h2 class="mb-0">FREE PRACTICE</h2>
+<div id="fpModeBanner" class="fp-mode-banner fp-mode-setup d-flex justify-content-between align-items-center mb-3 p-3">
+  <div id="fpModeLabel" class="fp-mode-label">FREE PRACTICE SETUP</div>
   <div>
-    <button id="enterBtn" class="btn btn-success me-2" onclick="enterFreePractice()">
-      Enter Free Practice
-    </button>
-    <button id="exitBtn" class="btn btn-warning d-none" onclick="exitFreePractice()">
-      Exit Free Practice
-    </button>
+    <button id="enterBtn" class="btn btn-success me-2" onclick="enterFreePractice()">ENABLE FIELD</button>
+    <button id="exitBtn" class="btn btn-warning d-none" onclick="exitFreePractice()">DISABLE FIELD</button>
     <a href="/match_play" class="btn btn-secondary ms-2" id="matchPlayBtn">Match Play</a>
   </div>
 </div>

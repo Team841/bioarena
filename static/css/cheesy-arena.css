@@ -436,3 +436,42 @@ input[data-changed="true"], select[data-changed="true"] {
 .field-estop-clear-btn:active {
   opacity: 0.75;
 }
+
+/* ── Free Practice page mode indicators ─────────────────────────────────── */
+.fp-mode-banner {
+  border-radius: 6px;
+  transition: background 0.4s, border-color 0.4s;
+}
+.fp-mode-label {
+  font-size: clamp(1rem, 3vw, 1.5rem);
+  font-weight: bold;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+
+/* SETUP / STOPPED / SAFE — solid dark-green */
+.fp-mode-setup {
+  background: #0d2b0d;
+  border: 2px solid #2e6b2e;
+}
+.fp-mode-setup .fp-mode-label { color: #5fef5f; }
+
+/* ENABLED / RUNNING — animated diagonal orange hazard stripes */
+.fp-mode-enabled {
+  border: 2px solid #c54000;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    #5a1e00 0px, #5a1e00 12px,
+    #1a1a1a 12px, #1a1a1a 24px
+  );
+  background-size: 34px 34px;
+  animation: fp-stripe-scroll 0.7s linear infinite;
+}
+.fp-mode-enabled .fp-mode-label {
+  color: #ff6600;
+  text-shadow: 0 0 6px rgba(255,102,0,0.7);
+}
+@keyframes fp-stripe-scroll {
+  from { background-position: 0 0; }
+  to   { background-position: 34px 0; }
+}

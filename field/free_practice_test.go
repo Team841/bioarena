@@ -78,7 +78,16 @@ func TestSetFreePracticeSlotBasic(t *testing.T) {
 
 func TestSetFreePracticeSlotRejectedOutsideFreePractice(t *testing.T) {
 	arena := setupTestArena(t)
+	arena.MatchState = PostMatch
 	assert.Error(t, arena.SetFreePracticeSlot("R1", 254, "key"))
+}
+
+func TestSetFreePracticeSlotAllowedInPreMatch(t *testing.T) {
+	arena := setupTestArena(t)
+	assert.Equal(t, PreMatch, arena.MatchState)
+	assert.NoError(t, arena.SetFreePracticeSlot("R1", 254, "key"))
+	assert.NotNil(t, arena.AllianceStations["R1"].Team)
+	assert.Equal(t, 254, arena.AllianceStations["R1"].Team.Id)
 }
 
 func TestSetFreePracticeSlotRejectedTeamZero(t *testing.T) {
@@ -181,7 +190,15 @@ func TestClearFreePracticeSlotAlreadyEmpty(t *testing.T) {
 
 func TestClearFreePracticeSlotRejectedOutsideFreePractice(t *testing.T) {
 	arena := setupTestArena(t)
+	arena.MatchState = PostMatch
 	assert.Error(t, arena.ClearFreePracticeSlot("R1"))
+}
+
+func TestClearFreePracticeSlotAllowedInPreMatch(t *testing.T) {
+	arena := setupTestArena(t)
+	assert.Equal(t, PreMatch, arena.MatchState)
+	// Clearing an empty slot in PreMatch should succeed without error.
+	assert.NoError(t, arena.ClearFreePracticeSlot("R1"))
 }
 
 func TestClearFreePracticeSlotRejectedInvalidStation(t *testing.T) {

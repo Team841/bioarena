@@ -968,7 +968,7 @@ func (arena *Arena) ExitFreePractice() error {
 // Triggers a brief AP reconfiguration during which all robots are disabled.
 // If AP reconfiguration fails the slot assignment is rolled back.
 func (arena *Arena) SetFreePracticeSlot(station string, teamId int, wpaKey string) error {
-	if arena.MatchState != FreePractice {
+	if arena.MatchState != FreePractice && arena.MatchState != PreMatch {
 		return fmt.Errorf("not in free practice mode")
 	}
 	if _, ok := arena.AllianceStations[station]; !ok {
@@ -1027,7 +1027,7 @@ func (arena *Arena) SetFreePracticeSlot(station string, teamId int, wpaKey strin
 // If the slot is already empty no AP reconfiguration is triggered.
 // Triggers a brief AP reconfiguration pause otherwise.
 func (arena *Arena) ClearFreePracticeSlot(station string) error {
-	if arena.MatchState != FreePractice {
+	if arena.MatchState != FreePractice && arena.MatchState != PreMatch {
 		return fmt.Errorf("not in free practice mode")
 	}
 	if _, ok := arena.AllianceStations[station]; !ok {
