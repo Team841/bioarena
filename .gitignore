@@ -5,8 +5,8 @@ cheesy-arena.exe
 bioarena
 bioarena-pi
 bioarena.exe
-estop-panel
-estop-panel-pi
+/estop-panel
+/estop-panel-pi
 
 # Claude Code editor config
 .claude/
