@@ -272,6 +272,8 @@ Set `field_lights_driver: "gpio"` in your build configuration to activate.
 
 **E-stop panel**
 
+> For full wiring diagrams, component list, and step-by-step assembly, see **[docs/hardware-wiring.md](docs/hardware-wiring.md)**.
+
 Each alliance can have a dedicated Raspberry Pi wired to 7 GPIO inputs:
 
 | Pin role           | Station              |
@@ -284,7 +286,7 @@ Each alliance can have a dedicated Raspberry Pi wired to 7 GPIO inputs:
 | station3_astop     | R3 or B3 (a-stop)    |
 | field_estop        | all stations (e-stop) |
 
-Wiring: NC (normally-closed) contacts between each GPIO pin and GND. Internal pull-up enabled; pin reads LOW (0) when the button is pressed (active-low). Buttons self-latch in hardware; the panel reports current pin state on every poll.
+Wiring: NO (normally-open) contacts; one side to a GPIO pin, the other to GND. Internal pull-up enabled; pin reads LOW (0) when the button is pressed (active-low). Use latching mushroom-head buttons for e-stops and momentary pushbuttons for a-stops. The panel reports current pin state on every poll.
 
 Recommended static IPs: `10.0.100.11` (red panel), `10.0.100.12` (blue panel).
 
