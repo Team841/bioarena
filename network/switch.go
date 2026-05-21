@@ -152,11 +152,16 @@ func (sw *Switch) ConfigureTeamEthernet(teams [6]*model.Team) error {
 // returns it as a string.
 func (sw *Switch) runCommand(command string) (string, error) {
 	// Open a Telnet connection to the switch.
-	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", sw.address, sw.port))
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", sw.address, sw.port), 10*time.Second)
 	if err != nil {
 		return "", err
 	}
 	defer conn.Close()
+
+	// Set a deadline so the read doesn't block forever if the switch doesn't close the connection.
+	if err = conn.SetDeadline(time.Now().Add(15 * time.Second)); err != nil {
+		return "", err
+	}
 
 	// Login to the AP, send the command, and log out all at once.
 	writer := bufio.NewWriter(conn)
@@ -174,10 +179,15 @@ func (sw *Switch) runCommand(command string) (string, error) {
 		return "", err
 	}
 
-	// Read the response.
+	// Read the response. The switch may not close the connection after exit, so we read
+	// until the deadline fires (indicated by a timeout error, which we treat as success).
 	var reader bytes.Buffer
 	_, err = reader.ReadFrom(conn)
 	if err != nil {
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			// Timeout just means the switch kept the connection open — the commands were sent.
+			return reader.String(), nil
+		}
 		return "", err
 	}
 	return reader.String(), nil

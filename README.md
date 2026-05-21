@@ -26,7 +26,7 @@ This cross-compiles an ARM binary named `bioarena`.
 
 ```bash
 scp bioarena pi@<PI_IP>:~/bioarena/
-scp -r static templates font schedules audio pi@<PI_IP>:~/bioarena/
+scp -r static templates pi@<PI_IP>:~/bioarena/
 scp bioarena.service pi@<PI_IP>:~/
 ```
 
@@ -114,6 +114,30 @@ The switch must support VLANs. Bioarena configures it automatically over Telnet 
 4. Set each robot's port as an access port in the correct VLAN.
 
 The switch address and password are set in the Bioarena web UI under Settings > Network.
+
+#### First-time switch setup via console cable
+
+A console cable (USB to RJ45) is required for initial configuration. Connect it to the switch's `CONSOLE` port, then open a terminal emulator at 9600 baud, 8N1.
+
+From a Pi over SSH you can use Python if minicom is unavailable:
+
+```bash
+python3 ~/console.py   # see console.py script in this repo's docs
+```
+
+When prompted by the setup wizard, assign the switch a static management IP on the field management subnet. Each site uses `10.X.100.3/24` where `X` is the site number:
+
+| Site         | Switch IP     |
+|--------------|---------------|
+| Richmond lab | 10.0.100.3    |
+| Site 2       | 10.2.100.3    |
+| Site 3       | 10.3.100.3    |
+| Site 4       | 10.4.100.3    |
+| Site 5       | 10.5.100.3    |
+
+Subnet mask: `255.255.255.0`
+
+Set an enable password when prompted — this is the password bioarena uses to authenticate over Telnet. Enter it in **Setup > Settings > Switch Password**.
 
 VLAN assignments (fixed, managed automatically):
 
