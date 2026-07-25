@@ -374,6 +374,11 @@ Open `http://localhost:8080`. No network hardware is required for testing.
 
 Output: `bioarena` (ARM, statically linked, ready to copy to the Pi).
 
+## Documentation
+
+- [docs/hardware-wiring.md](docs/hardware-wiring.md) — field hardware wiring, opto-isolation, e-stop panel assembly.
+- [docs/prd-half-field-match-simulation.md](docs/prd-half-field-match-simulation.md) — requirements for 1v0 half-field REBUILT 2026 simulation: AUTO outcome selection, FMS Game Data, DMX HUB light.
+
 ## Contributing
 
 - Open a [GitHub issue](https://github.com/Team254/cheesy-arena/issues) for bugs or feature requests.
