@@ -30,6 +30,7 @@ const (
 	driverStationTcpLinkTimeoutSec = 5
 	driverStationUdpLinkTimeoutSec = 1
 	maxTcpPacketBytes              = 65537 // 2 for size, then 2^16-1 for data.
+	maxInitialPacketBytes          = 1500  // Newer driver stations send a variable-length handshake.
 )
 
 type DriverStationConnection struct {
@@ -54,6 +55,10 @@ type DriverStationConnection struct {
 	udpConn                   net.Conn
 	log                       *TeamMatchLog
 
+	// newDs is true for driver stations using the newer protocol (handshake tag 30),
+	// which receive game data in the UDP control packet rather than over TCP.
+	newDs bool
+
 	// WrongStation indicates if the team in the station is the incorrect team
 	// by being non-empty. If the team is in the correct station, or no team is
 	// connected, this is empty.
@@ -68,6 +73,8 @@ func newDriverStationConnection(
 	allianceStation string,
 	tcpConn net.Conn,
 	useLiteUdpPort bool,
+	newDs bool,
+	udpSendPort int,
 ) (*DriverStationConnection, error) {
 	ipAddress, _, err := net.SplitHostPort(tcpConn.RemoteAddr().String())
 	if err != nil {
@@ -75,9 +82,13 @@ func newDriverStationConnection(
 	}
 	log.Printf("Driver station for Team %d connected from %s\n", teamId, ipAddress)
 
-	udpSendPort := driverStationUdpSendPort
-	if useLiteUdpPort {
-		udpSendPort = driverStationUdpSendPortLite
+	// Newer driver stations nominate their own receive port during the handshake.
+	// Legacy ones always listen on the fixed FMS or FMS Lite port.
+	if udpSendPort == 0 {
+		udpSendPort = driverStationUdpSendPort
+		if useLiteUdpPort {
+			udpSendPort = driverStationUdpSendPortLite
+		}
 	}
 
 	udpConn, err := net.Dial("udp4", fmt.Sprintf("%s:%d", ipAddress, udpSendPort))
@@ -89,6 +100,7 @@ func newDriverStationConnection(
 		AllianceStation: allianceStation,
 		tcpConn:         tcpConn,
 		udpConn:         udpConn,
+		newDs:           newDs,
 	}, nil
 }
 
@@ -316,19 +328,24 @@ func (arena *Arena) listenForDriverStations() {
 			continue
 		}
 
-		// Read the team number back and start tracking the driver station.
-		var packet [5]byte
-		_, err = readTaggedTcpPacket(tcpConn, packet[:])
+		// Read the team number back and start tracking the driver station. Legacy NI
+		// driver stations identify with tag 24 and a big-endian team number. Newer ones
+		// use tag 30, send the team number as ASCII, and nominate the UDP port they
+		// expect control packets on.
+		fullPacket := make([]byte, maxInitialPacketBytes)
+		count, err := readTaggedTcpPacket(tcpConn, fullPacket)
 		if err != nil {
 			log.Println("Error reading initial packet: ", err.Error())
 			continue
 		}
-		if !(packet[0] == 0 && packet[1] == 3 && packet[2] == 24) {
-			log.Printf("Invalid initial packet received: %v", packet)
+		packet := fullPacket[:count]
+
+		teamId, newDs, udpSendPort, err := parseInitialPacket(packet)
+		if err != nil {
+			log.Printf("Invalid initial packet received (%v): %v", err, packet)
 			tcpConn.Close()
 			continue
 		}
-		teamId := int(packet[3])<<8 + int(packet[4])
 
 		// Check to see if the team is supposed to be on the field, and notify the DS accordingly.
 		assignedStation := arena.getAssignedAllianceStation(teamId)
@@ -379,7 +396,14 @@ func (arena *Arena) listenForDriverStations() {
 			continue
 		}
 
-		dsConn, err := newDriverStationConnection(teamId, assignedStation, tcpConn, arena.EventSettings.UseLiteUdpPort)
+		dsConn, err := newDriverStationConnection(
+			teamId,
+			assignedStation,
+			tcpConn,
+			arena.EventSettings.UseLiteUdpPort,
+			newDs,
+			udpSendPort,
+		)
 		if err != nil {
 			log.Printf("Error registering driver station connection: %v", err)
 			tcpConn.Close()
@@ -393,6 +417,43 @@ func (arena *Arena) listenForDriverStations() {
 
 		// Spin up a goroutine to handle further TCP communication with this driver station.
 		go dsConn.handleTcpConnection(arena)
+	}
+}
+
+// parseInitialPacket extracts the team number and protocol generation from a driver
+// station's handshake packet.
+//
+// Legacy NI driver stations identify with tag 24 and a big-endian team number. Newer
+// driver stations use tag 30, send the team number as decimal ASCII whose length is
+// given by the preceding byte, and nominate the UDP port they expect control packets
+// on. A returned udpSendPort of 0 means the caller should fall back to the fixed FMS
+// or FMS Lite port.
+func parseInitialPacket(packet []byte) (teamId int, newDs bool, udpSendPort int, err error) {
+	count := len(packet)
+
+	switch {
+	case count >= 5 && packet[0] == 0 && packet[1] == 3 && packet[2] == 24:
+		return int(packet[3])<<8 + int(packet[4]), false, 0, nil
+
+	case count >= 7 && packet[0] == 0 && packet[1] >= 5 && packet[2] == 30:
+		packetLength := int(packet[0])<<8 + int(packet[1])
+		udpSendPort = int(packet[3])<<8 + int(packet[4])
+		// packet[5] carries flags, currently unused.
+		teamNumberLen := int(packet[6])
+		if packetLength < 5+teamNumberLen || count < 7+teamNumberLen {
+			return 0, false, 0, fmt.Errorf(
+				"declared length %d too short for team number length %d", packetLength, teamNumberLen,
+			)
+		}
+		teamIdStr := string(packet[7 : 7+teamNumberLen])
+		teamId, err = strconv.Atoi(teamIdStr)
+		if err != nil {
+			return 0, false, 0, fmt.Errorf("unparseable ASCII team number %q", teamIdStr)
+		}
+		return teamId, true, udpSendPort, nil
+
+	default:
+		return 0, false, 0, fmt.Errorf("unrecognized protocol tag")
 	}
 }
 

@@ -20,7 +20,7 @@ func TestEncodeControlPacket(t *testing.T) {
 
 	tcpConn := setupFakeTcpConnection(t)
 	defer tcpConn.Close()
-	dsConn, err := newDriverStationConnection(254, "R1", tcpConn, false)
+	dsConn, err := newDriverStationConnection(254, "R1", tcpConn, false, false, 0)
 	assert.Nil(t, err)
 	defer dsConn.close()
 
@@ -142,7 +142,7 @@ func TestSendControlPacket(t *testing.T) {
 
 	tcpConn := setupFakeTcpConnection(t)
 	defer tcpConn.Close()
-	dsConn, err := newDriverStationConnection(254, "R1", tcpConn, false)
+	dsConn, err := newDriverStationConnection(254, "R1", tcpConn, false, false, 0)
 	assert.Nil(t, err)
 	defer dsConn.close()
 
@@ -228,7 +228,7 @@ func TestNewDriverStationConnection_UdpPortSelection(t *testing.T) {
 	defer tcpConn.Close()
 
 	// Test with default settings (FMS port).
-	dsConn, err := newDriverStationConnection(254, "R1", tcpConn, false)
+	dsConn, err := newDriverStationConnection(254, "R1", tcpConn, false, false, 0)
 	assert.Nil(t, err)
 	defer dsConn.close()
 	assert.Contains(t, dsConn.udpConn.RemoteAddr().String(), fmt.Sprintf(":%d", driverStationUdpSendPort))
@@ -237,10 +237,71 @@ func TestNewDriverStationConnection_UdpPortSelection(t *testing.T) {
 	defer tcpConnLite.Close()
 
 	// Test with FMS Lite port enabled.
-	dsConnLite, err := newDriverStationConnection(254, "R1", tcpConnLite, true)
+	dsConnLite, err := newDriverStationConnection(254, "R1", tcpConnLite, true, false, 0)
 	assert.Nil(t, err)
 	defer dsConnLite.close()
 	assert.Contains(t, dsConnLite.udpConn.RemoteAddr().String(), fmt.Sprintf(":%d", driverStationUdpSendPortLite))
+
+	tcpConnNew := setupFakeTcpConnection(t)
+	defer tcpConnNew.Close()
+
+	// A port nominated by a newer driver station wins over the Lite setting.
+	dsConnNew, err := newDriverStationConnection(254, "R1", tcpConnNew, true, true, 1234)
+	assert.Nil(t, err)
+	defer dsConnNew.close()
+	assert.Contains(t, dsConnNew.udpConn.RemoteAddr().String(), ":1234")
+	assert.True(t, dsConnNew.newDs)
+}
+
+func TestParseInitialPacketLegacyDs(t *testing.T) {
+	// Tag 24, team number 254 big-endian across bytes 3-4.
+	packet := []byte{0, 3, 24, 0, 254}
+	teamId, newDs, udpSendPort, err := parseInitialPacket(packet)
+	assert.Nil(t, err)
+	assert.Equal(t, 254, teamId)
+	assert.False(t, newDs)
+	assert.Equal(t, 0, udpSendPort)
+
+	// Team numbers above 255 span both bytes.
+	packet = []byte{0, 3, 24, 3, 73} // 3<<8 + 73 = 841
+	teamId, _, _, err = parseInitialPacket(packet)
+	assert.Nil(t, err)
+	assert.Equal(t, 841, teamId)
+}
+
+func TestParseInitialPacketNewDs(t *testing.T) {
+	// Tag 30, UDP port 1121 in bytes 3-4, flags byte, then ASCII "841".
+	packet := []byte{0, 8, 30, 0x04, 0x61, 0, 3, '8', '4', '1'}
+	teamId, newDs, udpSendPort, err := parseInitialPacket(packet)
+	assert.Nil(t, err)
+	assert.Equal(t, 841, teamId)
+	assert.True(t, newDs)
+	assert.Equal(t, 1121, udpSendPort)
+
+	// A four-digit team number, to confirm the length byte is honoured.
+	packet = []byte{0, 9, 30, 0x04, 0x61, 0, 4, '9', '9', '9', '4'}
+	teamId, _, _, err = parseInitialPacket(packet)
+	assert.Nil(t, err)
+	assert.Equal(t, 9994, teamId)
+}
+
+func TestParseInitialPacketRejectsMalformed(t *testing.T) {
+	cases := []struct {
+		name   string
+		packet []byte
+	}{
+		{"unknown tag", []byte{0, 3, 99, 0, 254}},
+		{"legacy too short", []byte{0, 3, 24, 0}},
+		{"new ds too short", []byte{0, 5, 30, 0, 0, 0}},
+		{"team number length overruns packet", []byte{0, 8, 30, 0x04, 0x61, 0, 9, '8', '4', '1'}},
+		{"team number not numeric", []byte{0, 8, 30, 0x04, 0x61, 0, 3, 'a', 'b', 'c'}},
+		{"empty", []byte{}},
+	}
+
+	for _, c := range cases {
+		_, _, _, err := parseInitialPacket(c.packet)
+		assert.NotNil(t, err, "expected rejection for %s", c.name)
+	}
 }
 
 func setupFakeTcpConnection(t *testing.T) net.Conn {
