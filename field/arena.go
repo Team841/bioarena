@@ -58,6 +58,7 @@ type Arena struct {
 	EStopPanels          []hardware.EStopPanel
 	FieldEStop           hardware.FieldEStopPanel
 	AutoWinner           hardware.Alliance
+	GameData             string
 	AllianceStations     map[string]*AllianceStation
 	ArenaNotifiers
 	MatchState
@@ -371,6 +372,7 @@ func (arena *Arena) ResetMatch() error {
 	}
 	arena.MatchState = PreMatch
 	arena.matchAborted = false
+	arena.GameData = ""
 	arena.AllianceStations["R1"].Bypass.Store(false)
 	arena.AllianceStations["R2"].Bypass.Store(false)
 	arena.AllianceStations["R3"].Bypass.Store(false)
@@ -458,6 +460,8 @@ func (arena *Arena) Update() {
 	case StartMatch:
 		arena.MatchStartTime = time.Now()
 		arena.LastMatchTimeSec = -1
+		// Game data is withheld until the teleop transition, matching a real field.
+		arena.GameData = ""
 		auto = true
 		if game.MatchTiming.WarmupDurationSec > 0 {
 			arena.MatchState = WarmupPeriod
@@ -491,6 +495,7 @@ func (arena *Arena) Update() {
 				enabled = false
 			} else {
 				arena.MatchState = TeleopPeriod
+				arena.GameData = arena.gameDataForAutoWinner()
 				enabled = true
 			}
 		}
@@ -499,6 +504,7 @@ func (arena *Arena) Update() {
 		enabled = false
 		if matchTimeSec >= game.GetDurationToTeleopStart().Seconds() {
 			arena.MatchState = TeleopPeriod
+			arena.GameData = arena.gameDataForAutoWinner()
 			auto = false
 			enabled = true
 			sendDsPacket = true
@@ -1107,6 +1113,21 @@ func (arena *Arena) freePracticeTeams() [6]*model.Team {
 		teams[i] = arena.AllianceStations[s].Team
 	}
 	return teams
+}
+
+// gameDataForAutoWinner returns the FMS Game Data string for the current AUTO result:
+// a single character naming the alliance whose HUB goes inactive first in Shift1.
+// Returns the empty string if no winner has been assigned, which is what driver
+// stations should see before the teleop transition.
+func (arena *Arena) gameDataForAutoWinner() string {
+	switch arena.AutoWinner {
+	case hardware.AllianceRed:
+		return "R"
+	case hardware.AllianceBlue:
+		return "B"
+	default:
+		return ""
+	}
 }
 
 // assignAutoWinner randomly picks which alliance's HUB goes inactive first in Shift1.

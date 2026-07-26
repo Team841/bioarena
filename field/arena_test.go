@@ -6,11 +6,75 @@ package field
 
 import (
 	"github.com/team841/bioarena/game"
+	"github.com/team841/bioarena/hardware"
 	"github.com/team841/bioarena/model"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 )
+
+func TestGameDataForAutoWinner(t *testing.T) {
+	arena := setupTestArena(t)
+
+	arena.AutoWinner = hardware.AllianceRed
+	assert.Equal(t, "R", arena.gameDataForAutoWinner())
+	arena.AutoWinner = hardware.AllianceBlue
+	assert.Equal(t, "B", arena.gameDataForAutoWinner())
+
+	// No assigned winner yields no game data rather than a misleading character.
+	arena.AutoWinner = hardware.AllianceNone
+	assert.Equal(t, "", arena.gameDataForAutoWinner())
+}
+
+// Game data must be withheld until the teleop transition even though the AUTO winner
+// is decided at the start of AUTO, matching a real field. Robot code that reads it
+// early would otherwise behave differently here than at an event.
+func TestGameDataWithheldUntilTeleop(t *testing.T) {
+	arena := setupTestArena(t)
+
+	assert.Nil(t, arena.Database.CreateTeam(&model.Team{Id: 254}))
+	assert.Nil(t, arena.assignTeam(254, "R1"))
+	arena.AllianceStations["R1"].DsConn = &DriverStationConnection{TeamId: 254}
+	arena.AllianceStations["R1"].DsConn.RobotLinked = true
+	for _, station := range []string{"R2", "R3", "B1", "B2", "B3"} {
+		arena.AllianceStations[station].Bypass.Store(true)
+	}
+
+	assert.Nil(t, arena.StartMatch())
+	arena.Update()
+	assert.Equal(t, "", arena.GameData)
+
+	// Empty throughout AUTO.
+	arena.MatchStartTime = time.Now().Add(-time.Duration(game.MatchTiming.WarmupDurationSec) * time.Second)
+	arena.Update()
+	assert.Equal(t, AutoPeriod, arena.MatchState)
+	assert.Equal(t, "", arena.GameData)
+
+	// Still empty through the pause, even though the winner is already assigned.
+	arena.MatchStartTime = time.Now().Add(
+		-time.Duration(game.MatchTiming.WarmupDurationSec+game.MatchTiming.AutoDurationSec) * time.Second,
+	)
+	arena.Update()
+	assert.Equal(t, PausePeriod, arena.MatchState)
+	assert.Equal(t, "", arena.GameData)
+	assert.NotEqual(t, hardware.AllianceNone, arena.AutoWinner)
+
+	// Released at the teleop transition, and consistent with the assigned winner.
+	arena.MatchStartTime = time.Now().Add(
+		-time.Duration(
+			game.MatchTiming.WarmupDurationSec+game.MatchTiming.AutoDurationSec+game.MatchTiming.PauseDurationSec,
+		) * time.Second,
+	)
+	arena.Update()
+	assert.Equal(t, TeleopPeriod, arena.MatchState)
+	assert.Equal(t, arena.gameDataForAutoWinner(), arena.GameData)
+	assert.Contains(t, []string{"R", "B"}, arena.GameData)
+
+	// Cleared again when the match is reset.
+	arena.MatchState = PostMatch
+	assert.Nil(t, arena.ResetMatch())
+	assert.Equal(t, "", arena.GameData)
+}
 
 func TestAssignTeam(t *testing.T) {
 	arena := setupTestArena(t)

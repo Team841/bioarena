@@ -31,6 +31,12 @@ const (
 	driverStationUdpLinkTimeoutSec = 1
 	maxTcpPacketBytes              = 65537 // 2 for size, then 2^16-1 for data.
 	maxInitialPacketBytes          = 1500  // Newer driver stations send a variable-length handshake.
+
+	// Game data is appended to the control packet for newer driver stations.
+	baseControlPacketBytes = 22
+	maxGameDataBytes       = 8
+	gameDataTag            = 32
+	maxControlPacketBytes  = baseControlPacketBytes + 2 + maxGameDataBytes
 )
 
 type DriverStationConnection struct {
@@ -58,6 +64,10 @@ type DriverStationConnection struct {
 	// newDs is true for driver stations using the newer protocol (handshake tag 30),
 	// which receive game data in the UDP control packet rather than over TCP.
 	newDs bool
+
+	// SentGameData is the last game data value sent to a legacy driver station over
+	// TCP, used to avoid resending it on every tick. Unused when newDs is true.
+	SentGameData string
 
 	// WrongStation indicates if the team in the station is the incorrect team
 	// by being non-empty. If the team is in the correct station, or no team is
@@ -211,8 +221,11 @@ func (dsConn *DriverStationConnection) signalMatchStart(match *model.Match, wifi
 }
 
 // Serializes the control information into a packet.
-func (dsConn *DriverStationConnection) encodeControlPacket(arena *Arena) [22]byte {
-	var packet [22]byte
+// encodeControlPacket builds the UDP control packet, returning the buffer and the
+// number of bytes to send from it. Newer driver stations receive game data appended to
+// the packet; legacy ones are sent it over TCP instead, by checkGameData.
+func (dsConn *DriverStationConnection) encodeControlPacket(arena *Arena) ([maxControlPacketBytes]byte, int) {
+	var packet [maxControlPacketBytes]byte
 
 	// Packet number, stored big-endian in two bytes.
 	packet[0] = byte((dsConn.packetCount >> 8) & 0xff)
@@ -294,20 +307,55 @@ func (dsConn *DriverStationConnection) encodeControlPacket(arena *Arena) [22]byt
 	// Increment the packet count for next time.
 	dsConn.packetCount++
 
-	return packet
+	packetLength := baseControlPacketBytes
+
+	// Newer driver stations read game data from the control packet. An empty value is
+	// omitted entirely rather than sent as a zero-length field.
+	if dsConn.newDs {
+		gameData := arena.GameData
+		if len(gameData) > maxGameDataBytes {
+			gameData = gameData[:maxGameDataBytes]
+		}
+		if len(gameData) > 0 {
+			packet[22] = byte(len(gameData)) + 1
+			packet[23] = gameDataTag
+			copy(packet[24:], gameData)
+			packetLength += 2 + len(gameData)
+		}
+	}
+
+	return packet, packetLength
+}
+
+// checkGameData sends game data over TCP to legacy driver stations, which do not read
+// it from the control packet. Sends only when the value has changed, so the packet goes
+// out once at the teleop transition rather than on every tick.
+func (dsConn *DriverStationConnection) checkGameData(gameData string) error {
+	if dsConn.newDs || dsConn.SentGameData == gameData {
+		return nil
+	}
+
+	if err := dsConn.sendGameDataPacket(gameData); err != nil {
+		return err
+	}
+	dsConn.SentGameData = gameData
+
+	return nil
 }
 
 // Builds and sends the next control packet to the Driver Station.
 func (dsConn *DriverStationConnection) sendControlPacket(arena *Arena) error {
-	packet := dsConn.encodeControlPacket(arena)
+	gameDataErr := dsConn.checkGameData(arena.GameData)
+
+	packet, packetLength := dsConn.encodeControlPacket(arena)
 	if dsConn.udpConn != nil {
-		_, err := dsConn.udpConn.Write(packet[:])
+		_, err := dsConn.udpConn.Write(packet[:packetLength])
 		if err != nil {
 			return err
 		}
 	}
 
-	return nil
+	return gameDataErr
 }
 
 // Listens for TCP connection requests to Cheesy Arena from driver stations.

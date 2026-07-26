@@ -352,7 +352,13 @@ enables and disables under normal match flow. No game data yet.
 
 ### Phase 2 — Game Data plumbing
 
-1. Add `GameData` and `SentGameData` fields to `AllianceStation` (`field/arena.go:82`).
+1. Add `GameData` to `Arena` and `SentGameData` to `DriverStationConnection`.
+
+   Upstream stores game data per-station on `AllianceStation`, but the value is
+   field-wide by definition — the manual specifies it reaches all operator consoles
+   simultaneously — so six copies would be six chances to disagree. `SentGameData`
+   does belong per-connection: it tracks what was actually put on the wire for that
+   driver station and must reset when one reconnects.
 2. Change `encodeControlPacket` to return `([32]byte, int)` — array plus length —
    appending the game-data bytes at offset 22 for new DS only
    ([§4.6](#46-driver-station-wire-format)). Max game data is 8 bytes, so 32 is
