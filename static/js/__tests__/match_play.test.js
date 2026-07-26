@@ -59,6 +59,11 @@ function buildDom() {
     <strong id="matchName"></strong>
     <span id="testMatchNameWrap" style="display:none"></span>
     <input type="text" id="testMatchName">
+    <select id="autoWinnerMode">
+      <option value="random">Random</option>
+      <option value="red">Red</option>
+      <option value="blue">Blue</option>
+    </select>
     ${STATIONS.map(
       (s) => `
       <div id="card-${s}">
@@ -293,6 +298,24 @@ describe("handleMatchLoad", () => {
       Teams: { R1: null, R2: null, R3: null, B1: null, B2: null, B3: null },
     });
     expect(document.getElementById("matchName").textContent).toBe("Test Match");
+  });
+
+  test("syncs the AUTO winner selector to server state", () => {
+    const load = (mode) =>
+      handleMatchLoad({
+        Match: { LongName: "Test Match", Type: 0 },
+        AllowSubstitution: true,
+        IsReplay: false,
+        Teams: { R1: null, R2: null, R3: null, B1: null, B2: null, B3: null },
+        AutoWinnerMode: mode,
+      });
+
+    load("red");
+    expect(document.getElementById("autoWinnerMode").value).toBe("red");
+    load("blue");
+    expect(document.getElementById("autoWinnerMode").value).toBe("blue");
+    load("random");
+    expect(document.getElementById("autoWinnerMode").value).toBe("random");
   });
 
   test("populates team inputs for occupied stations", () => {

@@ -66,6 +66,13 @@ const clearMatch = function () {
   websocket.send("clearMatch");
 };
 
+// Selects how the AUTO result is decided for the next match. Rejected by the server
+// once a match is underway, since the winner drives both the HUB lighting and the game
+// data already sent to driver stations.
+const setAutoWinnerMode = function () {
+  websocket.send("setAutoWinnerMode", document.getElementById("autoWinnerMode").value);
+};
+
 const setTestMatchName = function () {
   websocket.send("setTestMatchName", document.getElementById("testMatchName").value);
 };
@@ -163,6 +170,7 @@ const handleMatchLoad = function (data) {
     input.disabled = !data.AllowSubstitution;
   }
   document.getElementById("btnRegister").disabled = true;
+  document.getElementById("autoWinnerMode").value = data.AutoWinnerMode;
 };
 
 const handleMatchTime = function (data) {

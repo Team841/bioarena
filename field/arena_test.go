@@ -26,6 +26,113 @@ func TestGameDataForAutoWinner(t *testing.T) {
 	assert.Equal(t, "", arena.gameDataForAutoWinner())
 }
 
+func TestParseAutoWinnerMode(t *testing.T) {
+	for name, expected := range map[string]AutoWinnerMode{
+		"random": AutoWinnerRandom,
+		"red":    AutoWinnerForceRed,
+		"blue":   AutoWinnerForceBlue,
+	} {
+		mode, err := ParseAutoWinnerMode(name)
+		assert.Nil(t, err)
+		assert.Equal(t, expected, mode)
+		assert.Equal(t, name, mode.String())
+	}
+
+	_, err := ParseAutoWinnerMode("purple")
+	assert.NotNil(t, err)
+}
+
+func TestAssignAutoWinnerHonoursMode(t *testing.T) {
+	arena := setupTestArena(t)
+
+	arena.AutoWinnerMode = AutoWinnerForceRed
+	for i := 0; i < 20; i++ {
+		arena.assignAutoWinner()
+		assert.Equal(t, hardware.AllianceRed, arena.AutoWinner)
+	}
+
+	arena.AutoWinnerMode = AutoWinnerForceBlue
+	for i := 0; i < 20; i++ {
+		arena.assignAutoWinner()
+		assert.Equal(t, hardware.AllianceBlue, arena.AutoWinner)
+	}
+
+	// Random must always resolve to a concrete alliance -- a real field breaks an AUTO
+	// tie by selecting one, so AllianceNone is never a valid result.
+	arena.AutoWinnerMode = AutoWinnerRandom
+	seen := map[hardware.Alliance]bool{}
+	for i := 0; i < 200; i++ {
+		arena.assignAutoWinner()
+		assert.NotEqual(t, hardware.AllianceNone, arena.AutoWinner)
+		seen[arena.AutoWinner] = true
+	}
+	assert.True(t, seen[hardware.AllianceRed], "random never selected red in 200 draws")
+	assert.True(t, seen[hardware.AllianceBlue], "random never selected blue in 200 draws")
+}
+
+func TestSetAutoWinnerModeRejectedDuringMatch(t *testing.T) {
+	arena := setupTestArena(t)
+
+	// Settable while the field is idle.
+	for _, state := range []MatchState{PreMatch, PostMatch, FreePractice} {
+		arena.MatchState = state
+		assert.Nil(t, arena.SetAutoWinnerMode(AutoWinnerForceBlue))
+		assert.Equal(t, AutoWinnerForceBlue, arena.AutoWinnerMode)
+	}
+
+	// Locked once a match is underway, so the winner cannot drift out of step with the
+	// game data and HUB lighting already derived from it.
+	for _, state := range []MatchState{StartMatch, WarmupPeriod, AutoPeriod, PausePeriod, TeleopPeriod} {
+		arena.MatchState = state
+		assert.NotNil(t, arena.SetAutoWinnerMode(AutoWinnerForceRed))
+		assert.Equal(t, AutoWinnerForceBlue, arena.AutoWinnerMode, "mode changed in state %v", state)
+	}
+}
+
+// Forcing the AUTO outcome must drive the game data the driver stations receive, since
+// that is how robot code learns which shifts its HUB is live.
+func TestForcedAutoWinnerDrivesGameData(t *testing.T) {
+	for _, c := range []struct {
+		mode     AutoWinnerMode
+		expected string
+	}{
+		{AutoWinnerForceRed, "R"},
+		{AutoWinnerForceBlue, "B"},
+	} {
+		arena := setupTestArena(t)
+		arena.AutoWinnerMode = c.mode
+
+		assert.Nil(t, arena.Database.CreateTeam(&model.Team{Id: 254}))
+		assert.Nil(t, arena.assignTeam(254, "R1"))
+		arena.AllianceStations["R1"].DsConn = &DriverStationConnection{TeamId: 254}
+		arena.AllianceStations["R1"].DsConn.RobotLinked = true
+		for _, station := range []string{"R2", "R3", "B1", "B2", "B3"} {
+			arena.AllianceStations[station].Bypass.Store(true)
+		}
+
+		// The state machine advances one period per Update, so step through them.
+		assert.Nil(t, arena.StartMatch())
+		arena.Update()
+		arena.MatchStartTime = time.Now().Add(-time.Duration(game.MatchTiming.WarmupDurationSec) * time.Second)
+		arena.Update()
+		arena.MatchStartTime = time.Now().Add(
+			-time.Duration(game.MatchTiming.WarmupDurationSec+game.MatchTiming.AutoDurationSec) * time.Second,
+		)
+		arena.Update()
+		arena.MatchStartTime = time.Now().Add(
+			-time.Duration(
+				game.MatchTiming.WarmupDurationSec+game.MatchTiming.AutoDurationSec+
+					game.MatchTiming.PauseDurationSec,
+			) * time.Second,
+		)
+		arena.Update()
+
+		assert.Equal(t, TeleopPeriod, arena.MatchState)
+		assert.Equal(t, c.expected, arena.GameData)
+		assert.Equal(t, c.expected, arena.gameDataForAutoWinner())
+	}
+}
+
 // Game data must be withheld until the teleop transition even though the AUTO winner
 // is decided at the start of AUTO, matching a real field. Robot code that reads it
 // early would otherwise behave differently here than at an event.

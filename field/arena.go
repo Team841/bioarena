@@ -58,6 +58,7 @@ type Arena struct {
 	EStopPanels          []hardware.EStopPanel
 	FieldEStop           hardware.FieldEStopPanel
 	AutoWinner           hardware.Alliance
+	AutoWinnerMode       AutoWinnerMode
 	GameData             string
 	AllianceStations     map[string]*AllianceStation
 	ArenaNotifiers
@@ -1115,6 +1116,60 @@ func (arena *Arena) freePracticeTeams() [6]*model.Team {
 	return teams
 }
 
+// AutoWinnerMode selects how the AUTO result is decided for a practice match. On a
+// real field the winner is whichever alliance scored more FUEL during AUTO; bioarena
+// does not score, so the operator chooses the outcome to practice against.
+//
+// The mode names an alliance rather than "win" or "lose" because arena state has no
+// concept of which alliance is practising. The half-field mode can present it in
+// win/lose terms once a live alliance is known.
+type AutoWinnerMode int
+
+const (
+	AutoWinnerRandom AutoWinnerMode = iota
+	AutoWinnerForceRed
+	AutoWinnerForceBlue
+)
+
+func (mode AutoWinnerMode) String() string {
+	switch mode {
+	case AutoWinnerForceRed:
+		return "red"
+	case AutoWinnerForceBlue:
+		return "blue"
+	default:
+		return "random"
+	}
+}
+
+// ParseAutoWinnerMode converts the wire representation used by the web UI.
+func ParseAutoWinnerMode(name string) (AutoWinnerMode, error) {
+	switch name {
+	case "random":
+		return AutoWinnerRandom, nil
+	case "red":
+		return AutoWinnerForceRed, nil
+	case "blue":
+		return AutoWinnerForceBlue, nil
+	default:
+		return AutoWinnerRandom, fmt.Errorf("invalid AUTO winner mode %q", name)
+	}
+}
+
+// SetAutoWinnerMode selects how the AUTO result will be decided for the next match.
+// It cannot be changed once a match is underway: the winner is assigned at the start
+// of AUTO and drives both the HUB lighting and the game data sent to driver stations,
+// so a mid-match change would desynchronise them.
+func (arena *Arena) SetAutoWinnerMode(mode AutoWinnerMode) error {
+	switch arena.MatchState {
+	case PreMatch, PostMatch, FreePractice:
+		arena.AutoWinnerMode = mode
+		return nil
+	default:
+		return fmt.Errorf("cannot change AUTO winner mode while a match is in progress")
+	}
+}
+
 // gameDataForAutoWinner returns the FMS Game Data string for the current AUTO result:
 // a single character naming the alliance whose HUB goes inactive first in Shift1.
 // Returns the empty string if no winner has been assigned, which is what driver
@@ -1130,12 +1185,21 @@ func (arena *Arena) gameDataForAutoWinner() string {
 	}
 }
 
-// assignAutoWinner randomly picks which alliance's HUB goes inactive first in Shift1.
+// assignAutoWinner picks which alliance's HUB goes inactive first in Shift1, honouring
+// the operator's selected mode. Random always resolves to a concrete alliance: a real
+// field breaks an AUTO tie by selecting one, so AllianceNone is never a valid result.
 func (arena *Arena) assignAutoWinner() {
-	if rand.Intn(2) == 0 {
+	switch arena.AutoWinnerMode {
+	case AutoWinnerForceRed:
 		arena.AutoWinner = hardware.AllianceRed
-	} else {
+	case AutoWinnerForceBlue:
 		arena.AutoWinner = hardware.AllianceBlue
+	default:
+		if rand.Intn(2) == 0 {
+			arena.AutoWinner = hardware.AllianceRed
+		} else {
+			arena.AutoWinner = hardware.AllianceBlue
+		}
 	}
 }
 

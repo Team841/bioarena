@@ -102,11 +102,13 @@ func (arena *Arena) GenerateMatchLoadMessage() any {
 		AllowSubstitution bool
 		IsReplay          bool
 		Teams             map[string]*model.Team
+		AutoWinnerMode    string
 	}{
 		arena.CurrentMatch,
 		arena.CurrentMatch.ShouldAllowSubstitution(),
 		isReplay,
 		teams,
+		arena.AutoWinnerMode.String(),
 	}
 }
 

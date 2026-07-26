@@ -175,6 +175,22 @@ func (web *Web) matchPlayWebsocketHandler(w http.ResponseWriter, r *http.Request
 			}
 			testMatchCounter++
 			log.Printf("Loading test match #%d", testMatchCounter)
+		case "setAutoWinnerMode":
+			name, ok := data.(string)
+			if !ok {
+				ws.WriteError(fmt.Sprintf("Failed to parse '%s' message.", messageType))
+				continue
+			}
+			mode, err := field.ParseAutoWinnerMode(name)
+			if err != nil {
+				ws.WriteError(err.Error())
+				continue
+			}
+			if err = web.arena.SetAutoWinnerMode(mode); err != nil {
+				ws.WriteError(err.Error())
+				continue
+			}
+			web.arena.MatchLoadNotifier.Notify()
 		case "setTestMatchName":
 			if web.arena.CurrentMatch.Type != model.Test {
 				// Don't allow changing the name of a non-test match.

@@ -375,7 +375,12 @@ generations.
 
 ### Phase 3 — AUTO outcome selection
 
-1. Add an `AutoWinnerMode` (win / lose / random) to arena state, settable pre-match.
+1. Add an `AutoWinnerMode` to arena state, settable pre-match.
+
+   **Named by alliance (`random` / `red` / `blue`), not win/lose.** Arena state has no
+   concept of which alliance is practising until [R1](#r1--half-field-1v0-mode) lands,
+   so "win" would be undefined here. Phase 6 can relabel the same control in win/lose
+   terms once a live alliance exists. The capability is identical either way.
 2. `assignAutoWinner()` (`field/arena.go:1112`) honours it; random resolves to a
    concrete alliance, never `AllianceNone`.
 3. Expose the selector in the match-play UI.

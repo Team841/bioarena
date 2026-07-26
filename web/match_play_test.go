@@ -125,6 +125,44 @@ func TestMatchPlayWebsocketCommands(t *testing.T) {
 	assert.Equal(t, field.PreMatch, web.arena.MatchState)
 }
 
+func TestMatchPlayWebsocketSetAutoWinnerMode(t *testing.T) {
+	web := setupTestWeb(t)
+
+	server, wsUrl := web.startTestServer()
+	defer server.Close()
+	conn, _, err := gorillawebsocket.DefaultDialer.Dial(wsUrl+"/match_play/websocket", nil)
+	assert.Nil(t, err)
+	defer conn.Close()
+	ws := websocket.NewTestWebsocket(conn)
+	readWebsocketMultiple(t, ws, 4)
+
+	// Default is random.
+	assert.Equal(t, field.AutoWinnerRandom, web.arena.AutoWinnerMode)
+
+	ws.Write("setAutoWinnerMode", "red")
+	readWebsocketType(t, ws, "matchLoad")
+	assert.Equal(t, field.AutoWinnerForceRed, web.arena.AutoWinnerMode)
+
+	ws.Write("setAutoWinnerMode", "blue")
+	readWebsocketType(t, ws, "matchLoad")
+	assert.Equal(t, field.AutoWinnerForceBlue, web.arena.AutoWinnerMode)
+
+	// An unrecognised mode is rejected and leaves the selection untouched.
+	ws.Write("setAutoWinnerMode", "purple")
+	readWebsocketType(t, ws, "error")
+	assert.Equal(t, field.AutoWinnerForceBlue, web.arena.AutoWinnerMode)
+
+	// Rejected once a match is underway.
+	for _, station := range []string{"R1", "R2", "R3", "B1", "B2", "B3"} {
+		web.arena.AllianceStations[station].Bypass.Store(true)
+	}
+	ws.Write("startMatch", nil)
+	readWebsocketType(t, ws, "arenaStatus")
+	ws.Write("setAutoWinnerMode", "red")
+	readWebsocketType(t, ws, "error")
+	assert.Equal(t, field.AutoWinnerForceBlue, web.arena.AutoWinnerMode)
+}
+
 func TestMatchPlayWebsocketClearMatchPreservesTeams(t *testing.T) {
 	web := setupTestWeb(t)
 	web.arena.Database.CreateTeam(&model.Team{Id: 254})
