@@ -1236,21 +1236,26 @@ func (arena *Arena) computeLightingState(matchTimeSec float64) hardware.Lighting
 	}
 }
 
-// teleopSubPhase returns the REBUILT 2026 sub-phase for the given remaining teleop seconds.
+// teleopSubPhase returns the REBUILT 2026 sub-phase for the given remaining teleop
+// seconds. Boundaries are derived from the shift durations rather than hardcoded, so a
+// change to those constants moves the boundaries with them.
 func teleopSubPhase(remaining int) hardware.TeleopSubPhase {
+	endgame := game.MatchTiming.EndgameDurationSec
+	shift := game.MatchTiming.ShiftDurationSec
+
 	switch {
-	case remaining > 130:
-		return hardware.SubPhaseTransition // T=2:20–2:10
-	case remaining > 105:
-		return hardware.SubPhaseShift1 // T=2:10–1:45
-	case remaining > 80:
-		return hardware.SubPhaseShift2 // T=1:45–1:20
-	case remaining > 55:
-		return hardware.SubPhaseShift3 // T=1:20–0:55
-	case remaining > 30:
-		return hardware.SubPhaseShift4 // T=0:55–0:30
+	case remaining > endgame+4*shift: // transition shift
+		return hardware.SubPhaseTransition
+	case remaining > endgame+3*shift:
+		return hardware.SubPhaseShift1
+	case remaining > endgame+2*shift:
+		return hardware.SubPhaseShift2
+	case remaining > endgame+shift:
+		return hardware.SubPhaseShift3
+	case remaining > endgame:
+		return hardware.SubPhaseShift4
 	default:
-		return hardware.SubPhaseEndGame // T=0:30–0:00
+		return hardware.SubPhaseEndGame
 	}
 }
 

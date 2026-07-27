@@ -391,10 +391,30 @@ the opposite HUB dark windows.
 ### Phase 4 — HUB alternation helper
 
 Implement [Table 6-3](#43-hub-active-state-manual-table-6-3) **once**, as a tested
-pure function — e.g. `HubActive(subPhase TeleopSubPhase, wonAuto bool) bool` — rather
-than inside any individual lighting driver. Both the serial and DMX drivers consume it.
+pure function, rather than inside any individual lighting driver. Both the serial and
+DMX drivers consume it.
 
 **Exit criteria:** unit tests reproduce the full table for both AUTO outcomes.
+
+**Done.** Ported from upstream rather than written fresh:
+
+- `game/hub.go` mirrors upstream's `Shift` enum and `isShiftActive` body verbatim.
+  Upstream's scoring half — Fuel counting, per-shift tallies, grace periods, and the
+  shift-timing lookups serving them — is omitted per [§3](#3-non-goals). The one
+  deliberate change is that `IsShiftActive` is exported, since bioarena's lighting
+  drivers live outside the package.
+- `hardware.HubActive(state, alliance)` is the driver-facing entry point, mapping
+  `TeleopSubPhase` onto `game.Shift` and delegating the rule.
+- `game/match_timing.go` gains upstream's `TransitionShiftDurationSec`,
+  `ShiftDurationSec`, and `EndgameDurationSec`. `teleopSubPhase` now derives its
+  boundaries from these instead of the hardcoded 130/105/80/55/30, and a test guards
+  the flat `TeleopDurationSec` against drifting from the shift breakdown.
+
+**Known divergence:** `hardware.TeleopSubPhase` and `game.Shift` remain separate enums
+bridged by `TeleopSubPhase.Shift()`. Collapsing them onto `game.Shift` would be closer
+to upstream still, but `game.Shift` covers the whole match (its zero value is
+`ShiftAuto`, where `SubPhaseNone` means "not in teleop"), so the swap changes the
+meaning of a zero-valued `LightingState`. Left as a follow-up.
 
 ### Phase 5 — DMX HUB light driver
 
@@ -458,9 +478,10 @@ design and its reliability characteristics on a Raspberry Pi.
 Affects R1 and R2. A fixed alliance makes "win AUTO" a constant mapping; a
 selectable one requires an alliance control alongside the outcome selector.
 
-**Q4 — Should the HUB light render the AUTO period at all?**
-Both HUBs are active during AUTO on a real field. Confirm the practice HUB should
-show active rather than idle before AUTO ends.
+**~~Q4 — Should the HUB light render the AUTO period?~~ RESOLVED by upstream.**
+`isShiftActive` treats `ShiftAuto` and `ShiftPostMatch` as always active, so both HUBs
+are lit during AUTO and after the match. Ported verbatim; `hardware.HubActive` follows
+it. Idle and the auto/teleop pause are not shifts and leave the HUB dark.
 
 ---
 
