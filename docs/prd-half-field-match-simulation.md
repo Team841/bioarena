@@ -31,8 +31,9 @@ A driver on a half field with one robot should be able to practice the REBUILT
 teleop shift cycle exactly as it behaves in a real match:
 
 - Run a 1v0 match without hand-bypassing five stations every time.
-- Choose whether the practice alliance **won** AUTO, **lost** AUTO, or let the
-  system pick **randomly** — because that determines which shifts their HUB is dark.
+- Choose **Red**, **Blue**, or **Random** as the AUTO winner — because that determines
+  which shifts each HUB is dark. The operator knows whether that means winning or
+  losing from the driver station they attached to.
 - Receive the same FMS Game Data string their robot code will see at a real event.
 - See a physical HUB light change state at the correct shift boundaries.
 
@@ -206,18 +207,21 @@ in-match channel for shift state is the physical HUB light — which is why
 
 ### R1 — Half-field 1v0 mode
 
-A named mode that configures the field for a single practice robot, rather than
-requiring the operator to manually bypass five stations.
+Reduce the setup cost of running a single practice robot, rather than requiring the
+operator to manually bypass five stations.
 
-- Operator selects the live station (or at minimum the live alliance).
-- All other stations are auto-bypassed so `checkAllianceStationsReady`
-  (`field/arena.go:758`) passes.
-- The mode is visible in the match-play UI so the operator knows which alliance is
-  live.
+- Stations with no driver station attached are bypassed so
+  `checkAllianceStationsReady` (`field/arena.go:758`) passes.
 
-**Rationale:** 1v0 already works today via per-station `Bypass`, but it is convention,
-not a mode. Naming it removes six manual steps per practice session and removes the
-ambiguity about which alliance the AUTO-outcome selector refers to.
+**The alliance is chosen by where the robot is plugged in**, not by a software setting.
+An operator practising as red attaches the driver station to a red station and picks
+Red or Blue in the AUTO-winner selector depending on which outcome they want to
+rehearse. bioarena therefore has no notion of a "practice alliance" and does not need
+one — the concept would only exist to relabel a control the operator already
+understands.
+
+**Rationale:** 1v0 already works today via per-station `Bypass`; this is convenience,
+not new capability.
 
 ### R2 — Selectable AUTO outcome
 
@@ -257,30 +261,26 @@ tag-24 path and its TCP type-28 packet are retained for older stations.
 shifts their HUB is live. If bioarena sends it early, or not at all, code that works
 on the practice field will behave differently at an event.
 
-### R4 — DMX HUB light
+### R4 — Hub LED lighting
 
-A new `hardware.FieldLights` implementation driving the DMX HUB light.
+**Decision (Q2, resolved): E1.31 sACN over Ethernet**, not DMX over USB. Recorded as
+USB first, then reversed on finding upstream already implements this exact use case,
+which turns the requirement into a port. See [Phase 5](#phase-5--hub-led-driver-sacn).
 
-**Decision (Q2, resolved):** the HUB light is **DMX over a USB interface**, not
-Art-Net. This mirrors the existing `hardware/serial_lights.go` pattern and reuses the
-`go.bug.st/serial` dependency already in `go.mod`. See [Q2a](#8-open-questions) for the
-one remaining hardware detail.
-
-- Implements the existing `SetState(LightingState) error` interface — no interface
-  change required.
-- Registered as a new `case` in `buildFieldLights()` (`main.go:82`), alongside the
-  existing `none` and `serial` drivers.
 - Renders HUB active/inactive per [§4.3](#43-hub-active-state-manual-table-6-3),
-  deriving the practice alliance's state from `LightingState.AutoWinner`.
-- Renders the `ShiftWarning` pre-boundary window.
-- At teleop start, indicates which HUB goes inactive in Shift 1 — the manual
-  specifies the real HUB shows this alongside the Game Data transmission.
-- Must degrade safely: a DMX failure logs and continues; it must never block the
-  match loop.
+  driven by `arena.AutoWinner`.
+- Pulses the HUB about to go inactive during the pre-boundary window.
+- Runs the advantage sweep during the transition shift, which is how the real field
+  indicates the Shift 1 outcome alongside the Game Data transmission.
+- Must degrade safely: output is disabled when no address is configured, and a network
+  failure logs and continues without blocking the match loop.
 
-**Note:** the alternation rule currently lives only in comments and in upstream's
-`isShiftActive()`. It should be implemented once, in a tested helper, rather than
-being reimplemented inside each lighting driver.
+The alternation rule is implemented once, in `game.Hub.IsShiftActive`, and consumed by
+both the lighting and `hardware.HubActive` — never reimplemented per driver.
+
+**Relationship to `FieldLights`:** the existing `hardware.FieldLights` interface and
+its serial driver are untouched. They drive a separate Arduino trigger, not the HUB.
+The two coexist, as they do upstream.
 
 ### R5 — Timing fidelity
 
@@ -382,10 +382,11 @@ generations.
 
 1. Add an `AutoWinnerMode` to arena state, settable pre-match.
 
-   **Named by alliance (`random` / `red` / `blue`), not win/lose.** Arena state has no
-   concept of which alliance is practising until [R1](#r1--half-field-1v0-mode) lands,
-   so "win" would be undefined here. Phase 6 can relabel the same control in win/lose
-   terms once a live alliance exists. The capability is identical either way.
+   **Named by alliance (`random` / `red` / `blue`), permanently — not win/lose.** The
+   operator establishes their alliance by which driver station they attach to, so they
+   already know whether Red means win or lose. A win/lose label would require bioarena
+   to track a "practice alliance" that exists only to rename a control, and would be
+   wrong the moment someone runs a station on the other side.
 2. `assignAutoWinner()` (`field/arena.go:1112`) honours it; random resolves to a
    concrete alliance, never `AllianceNone`.
 3. Expose the selector in the match-play UI.
@@ -463,12 +464,20 @@ packet assembly; and change detection with a 1 s heartbeat so idle universes ref
 mid-match does not stall the arena. **Not yet verified against hardware** — no sACN node
 has been on the wire, so this is covered by unit tests only.
 
-### Phase 6 — Half-field mode
+### Phase 6 — Half-field convenience
 
-1. Named 1v0 mode selecting the live station; auto-bypass the rest.
-2. Surface the live alliance in the match-play UI.
+Rescoped down. The original plan added a named half-field mode carrying a "practice
+alliance", so the AUTO-winner control could be relabelled Win/Lose. That concept is
+dropped: the operator establishes their alliance by which driver station they attach
+to, and reads the selector as Red/Blue directly.
+
+What remains is convenience only — bypass stations with no driver station attached, so
+a single-robot match starts without six manual checkbox clicks.
 
 **Exit criteria:** a 1v0 match starts with no manual bypassing.
+
+**Deliberately not built:** a practice-alliance setting, a Win/Lose relabel, or a mode
+toggle. Each would add state describing something the physical setup already says.
 
 ### Incidental
 
@@ -517,9 +526,9 @@ what changes is how bytes reach the fixture, not what state the fixture is asked
 show. Revisit before starting Phase 5; an Open DMX USB would change both the driver
 design and its reliability characteristics on a Raspberry Pi.
 
-**Q3 — Is the practice robot always on Red?**
-Affects R1 and R2. A fixed alliance makes "win AUTO" a constant mapping; a
-selectable one requires an alliance control alongside the outcome selector.
+**~~Q3 — Is the practice robot always on Red?~~ MOOT.** The alliance follows the
+driver station the operator attaches to, so bioarena never needs to know. See
+[R1](#r1--half-field-1v0-mode).
 
 **~~Q4 — Should the HUB light render the AUTO period?~~ RESOLVED by upstream.**
 `isShiftActive` treats `ShiftAuto` and `ShiftPostMatch` as always active, so both HUBs
