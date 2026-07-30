@@ -33,6 +33,12 @@ UI for configuring event settings.
               Field
             </button>
           </li>
+          <li class="nav-item">
+            <button class="nav-link" id="leds-tab" data-bs-toggle="tab" data-bs-target="#leds" type="button"
+              role="tab">
+              LEDs
+            </button>
+          </li>
         </ul>
         <div class="tab-content">
           <div class="tab-pane" id="general" role="tabpanel">
@@ -191,6 +197,94 @@ UI for configuring event settings.
                     name="autoConfigureTeams" {{if .AutoConfigureTeams}} checked{{end}}>
                 </div>
               </div>
+            </fieldset>
+          </div>
+          <div class="tab-pane" id="leds" role="tabpanel">
+            <fieldset class="mb-4">
+              <legend>Hub LEDs</legend>
+              <p class="text-body-secondary">
+                Defaults match the standard arena: upstream's full-field layout of eight fixtures per alliance
+                across four sides of each goal, running every lighting sequence unmodified. Override below for a
+                practice field with simpler fixtures.
+              </p>
+              <div class="row mb-3">
+                <label class="col-lg-6 control-label" for="hubLedsAddress">
+                  sACN Receiver Address
+                </label>
+                <div class="col-lg-4">
+                  <input type="text" class="form-control" id="hubLedsAddress" name="hubLedsAddress"
+                    value="{{.HubLedsAddress}}" placeholder="e.g. 10.0.100.20">
+                  <small class="text-body-secondary">Leave blank to disable LED output.</small>
+                </div>
+              </div>
+              <div class="row mb-3">
+                <label class="col-lg-6 control-label" for="hubLedsFallback">
+                  Fixture Capability
+                </label>
+                <div class="col-lg-4">
+                  <select class="form-select" id="hubLedsFallback" name="hubLedsFallback">
+                    <option value="full" {{if eq .HubLedsFallback "full"}}selected{{end}}>
+                      Full &mdash; addressable fixtures, all sequences
+                    </option>
+                    <option value="solid" {{if eq .HubLedsFallback "solid"}}selected{{end}}>
+                      Solid &mdash; single-pixel fixtures; patterns become a solid colour
+                    </option>
+                    <option value="binary" {{if eq .HubLedsFallback "binary"}}selected{{end}}>
+                      Binary &mdash; no dimming; pulses become solid too
+                    </option>
+                  </select>
+                  <small class="text-body-secondary">
+                    Fill, sweep and rainbow sequences are meaningless on a fixture with one pixel; they would show
+                    whichever colour that pixel happened to be mid-animation. Solid replaces them with the alliance
+                    colour.
+                  </small>
+                </div>
+              </div>
+              <div class="row mb-3">
+                <label class="col-lg-6 control-label" for="hubLedsSimplified">
+                  Use Simplified Practice-Field Layout
+                </label>
+                <div class="col-lg-1 checkbox">
+                  <input type="checkbox" id="hubLedsSimplified" name="hubLedsSimplified"
+                    {{if .HubLedsSimplified}} checked{{end}}>
+                </div>
+                <div class="col-lg-5">
+                  <small class="text-body-secondary">
+                    One fixture per alliance Hub instead of eight. Unchecked keeps the standard arena layout.
+                  </small>
+                </div>
+              </div>
+              <div class="row mb-3">
+                <label class="col-lg-6 control-label" for="hubLedsRedUniverse">
+                  Red Hub Fixture &mdash; Universe / Start Address
+                </label>
+                <div class="col-lg-2">
+                  <input type="number" class="form-control" id="hubLedsRedUniverse" name="hubLedsRedUniverse"
+                    value="{{.HubLedsRedUniverse}}" min="1">
+                </div>
+                <div class="col-lg-2">
+                  <input type="number" class="form-control" id="hubLedsRedAddress" name="hubLedsRedAddress"
+                    value="{{.HubLedsRedAddress}}" min="1" max="512">
+                </div>
+              </div>
+              <div class="row mb-3">
+                <label class="col-lg-6 control-label" for="hubLedsBlueUniverse">
+                  Blue Hub Fixture &mdash; Universe / Start Address
+                </label>
+                <div class="col-lg-2">
+                  <input type="number" class="form-control" id="hubLedsBlueUniverse" name="hubLedsBlueUniverse"
+                    value="{{.HubLedsBlueUniverse}}" min="1">
+                </div>
+                <div class="col-lg-2">
+                  <input type="number" class="form-control" id="hubLedsBlueAddress" name="hubLedsBlueAddress"
+                    value="{{.HubLedsBlueAddress}}" min="1" max="512">
+                </div>
+              </div>
+              <p class="text-body-secondary">
+                Fixtures must sit at least 24 channels apart in a universe. The renderer always writes a 24-channel
+                block per fixture; a single-pixel unit reads the first three and ignores the rest, but a second
+                fixture placed inside that block would be overwritten. Invalid spacing is rejected on save.
+              </p>
             </fieldset>
           </div>
           <div class="row justify-content-center">

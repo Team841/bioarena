@@ -7,6 +7,7 @@ import (
 	"github.com/team841/bioarena/game"
 	"github.com/team841/bioarena/hardware"
 	"github.com/team841/bioarena/led"
+	"github.com/team841/bioarena/model"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -85,6 +86,75 @@ func TestUpdateHubLedsTransitionAdvantage(t *testing.T) {
 	redMode, blueMode := arena.Leds.GetModes()
 	assert.Equal(t, led.RedAdvantageMode, redMode)
 	assert.Equal(t, led.BlueMode, blueMode)
+}
+
+// With single-pixel fixtures the startup fill is meaningless, so the solid fallback
+// must replace it with each zone's own alliance colour before it reaches the controller.
+func TestHubLedFallbackSubstitutesPerPixelSequences(t *testing.T) {
+	arena := setupTestArena(t)
+	arena.MatchState = AutoPeriod
+	arena.MatchStartTime = time.Now()
+
+	arena.hubLedFallback = led.FallbackFull
+	arena.updateHubLeds(time.Now())
+	redMode, blueMode := arena.Leds.GetModes()
+	assert.Equal(t, led.RedStartupMode, redMode)
+	assert.Equal(t, led.BlueStartupMode, blueMode)
+
+	arena.hubLedFallback = led.FallbackSolid
+	arena.updateHubLeds(time.Now())
+	redMode, blueMode = arena.Leds.GetModes()
+	assert.Equal(t, led.RedMode, redMode)
+	assert.Equal(t, led.BlueMode, blueMode)
+}
+
+// Binary fixtures cannot dim, so the pre-deactivation pulse becomes solid.
+func TestHubLedBinaryFallbackFlattensPulse(t *testing.T) {
+	arena := setupTestArena(t)
+	arena.AutoWinner = hardware.AllianceRed
+	arena.MatchState = TeleopPeriod
+	arena.MatchStartTime = teleopOffset(107) // 2s before the Shift1 boundary
+
+	arena.hubLedFallback = led.FallbackSolid
+	arena.updateTeleopHubLeds(time.Now())
+	_, blueMode := arena.Leds.GetModes()
+	assert.Equal(t, led.BluePulseMode, blueMode)
+
+	arena.hubLedFallback = led.FallbackBinary
+	arena.updateTeleopHubLeds(time.Now())
+	_, blueMode = arena.Leds.GetModes()
+	assert.Equal(t, led.BlueMode, blueMode)
+}
+
+// Settings drive the controller, and a bad layout must not stop the arena loading.
+func TestApplyHubLedSettings(t *testing.T) {
+	arena := setupTestArena(t)
+
+	arena.applyHubLedSettings(&model.EventSettings{
+		HubLedsSimplified:   true,
+		HubLedsFallback:     "solid",
+		HubLedsRedUniverse:  1,
+		HubLedsRedAddress:   1,
+		HubLedsBlueUniverse: 1,
+		HubLedsBlueAddress:  25,
+	})
+	assert.Equal(t, led.FallbackSolid, arena.hubLedFallback)
+
+	// An overlapping layout is rejected and logged; the fallback still applies and the
+	// previous layout is kept rather than leaving the field half-configured.
+	arena.applyHubLedSettings(&model.EventSettings{
+		HubLedsSimplified:   true,
+		HubLedsFallback:     "binary",
+		HubLedsRedUniverse:  1,
+		HubLedsRedAddress:   1,
+		HubLedsBlueUniverse: 1,
+		HubLedsBlueAddress:  4,
+	})
+	assert.Equal(t, led.FallbackBinary, arena.hubLedFallback)
+
+	// An unrecognised fallback degrades to full rather than erroring out.
+	arena.applyHubLedSettings(&model.EventSettings{HubLedsFallback: "sparkly"})
+	assert.Equal(t, led.FallbackFull, arena.hubLedFallback)
 }
 
 // AUTO runs the startup fill on both HUBs.

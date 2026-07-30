@@ -18,12 +18,53 @@ import (
 	"github.com/team841/bioarena/game"
 	"github.com/team841/bioarena/hardware"
 	"github.com/team841/bioarena/led"
+	"github.com/team841/bioarena/model"
 )
 
 const (
 	hubLightWarningSec           = 3
 	hubLightScoringAssessmentSec = 3
 )
+
+// applyHubLedSettings pushes the stored Hub LED configuration into the controller.
+// Called on every settings load, so changes take effect without restarting bioarena.
+//
+// Configuration errors are logged and leave the previous layout in place rather than
+// returning: a bad fixture address should not stop the arena from loading.
+func (arena *Arena) applyHubLedSettings(settings *model.EventSettings) {
+	if err := arena.Leds.SetAddress(settings.HubLedsAddress); err != nil {
+		log.Printf("Hub LEDs: could not set address %q: %v", settings.HubLedsAddress, err)
+	}
+
+	fallback, err := led.ParseFallback(settings.HubLedsFallback)
+	if err != nil {
+		log.Printf("Hub LEDs: %v; falling back to full", err)
+	}
+	arena.hubLedFallback = fallback
+
+	if !settings.HubLedsSimplified {
+		arena.Leds.UseDefaultLayout()
+		return
+	}
+
+	err = arena.Leds.SetLayout(
+		[]led.FixtureSpec{{Universe: settings.HubLedsRedUniverse, StartAddress: settings.HubLedsRedAddress}},
+		[]led.FixtureSpec{{Universe: settings.HubLedsBlueUniverse, StartAddress: settings.HubLedsBlueAddress}},
+	)
+	if err != nil {
+		log.Printf("Hub LEDs: simplified layout rejected (%v); keeping previous layout", err)
+	}
+}
+
+// setHubLedModes applies the configured fallback and sends the modes to the controller.
+// Every mode change goes through here so a practice field's fixtures never receive a
+// sequence they cannot render.
+func (arena *Arena) setHubLedModes(redMode, blueMode led.Mode) {
+	arena.Leds.SetMode(
+		led.ApplyFallback(arena.hubLedFallback, redMode, led.RedMode),
+		led.ApplyFallback(arena.hubLedFallback, blueMode, led.BlueMode),
+	)
+}
 
 // redWonAuto reports whether the red alliance is the AUTO winner.
 func (arena *Arena) redWonAuto() bool {
@@ -40,19 +81,19 @@ func (arena *Arena) hubs() (*game.Hub, *game.Hub) {
 func (arena *Arena) updateHubLeds(currentTime time.Time) {
 	switch arena.MatchState {
 	case AutoPeriod:
-		arena.Leds.SetMode(led.RedStartupMode, led.BlueStartupMode)
+		arena.setHubLedModes(led.RedStartupMode, led.BlueStartupMode)
 	case PausePeriod:
-		arena.Leds.SetMode(led.RedMode, led.BlueMode)
+		arena.setHubLedModes(led.RedMode, led.BlueMode)
 	case TeleopPeriod:
 		arena.updateTeleopHubLeds(currentTime)
 	case PostMatch:
 		if arena.lastMatchState != PostMatch {
 			// Set the Hub LEDs to white at the end of the match, and then turn them off when the referees are supposed
 			// to assess tower climbs.
-			arena.Leds.SetMode(led.WhiteMode, led.WhiteMode)
+			arena.setHubLedModes(led.WhiteMode, led.WhiteMode)
 			go func() {
 				time.Sleep(hubLightScoringAssessmentSec * time.Second)
-				arena.Leds.SetMode(led.OffMode, led.OffMode)
+				arena.setHubLedModes(led.OffMode, led.OffMode)
 			}()
 		}
 	}
@@ -116,5 +157,5 @@ func (arena *Arena) updateTeleopHubLeds(currentTime time.Time) {
 			blueMode = led.BlueAdvantageMode
 		}
 	}
-	arena.Leds.SetMode(redMode, blueMode)
+	arena.setHubLedModes(redMode, blueMode)
 }

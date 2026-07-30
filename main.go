@@ -42,9 +42,6 @@ type Config struct {
 	FieldLightsPort        string           `yaml:"field_lights_port"`
 	FieldLightsBaud        int              `yaml:"field_lights_baud"`
 	FieldLightsCommand     string           `yaml:"field_lights_command"`
-	// HubLedsAddress is the sACN (E1.31) receiver address for the Hub LEDs. Blank
-	// disables output; the controller still runs its sequences but sends nothing.
-	HubLedsAddress string `yaml:"hub_leds_address"`
 	RedEStopPanel          EStopPanelConfig `yaml:"red_estop_panel"`
 	BlueEStopPanel         EStopPanelConfig `yaml:"blue_estop_panel"`
 }
@@ -146,13 +143,12 @@ func main() {
 
 	arena.FieldLights = buildFieldLights(cfg)
 
-	if err = arena.Leds.SetAddress(cfg.HubLedsAddress); err != nil {
-		log.Fatalf("hub LEDs: %v", err)
-	}
-	if cfg.HubLedsAddress == "" {
-		log.Println("WARNING: No hub_leds_address configured — Hub LED output disabled.")
+	// Hub LED configuration lives in the database, applied by LoadSettings above, so it
+	// survives a power cycle and is editable from the Settings page without a restart.
+	if arena.EventSettings.HubLedsAddress == "" {
+		log.Println("WARNING: No Hub LED address configured — Hub LED output disabled.")
 	} else {
-		log.Printf("Hub LEDs sending sACN to %s", cfg.HubLedsAddress)
+		log.Printf("Hub LEDs sending sACN to %s", arena.EventSettings.HubLedsAddress)
 	}
 
 	// On SIGTERM/SIGINT: disable all robots and wait one DS packet cycle before exiting

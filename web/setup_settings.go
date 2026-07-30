@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/team841/bioarena/field"
+	"github.com/team841/bioarena/led"
 	"github.com/team841/bioarena/model"
 )
 
@@ -63,6 +64,36 @@ func (web *Web) settingsPostHandler(w http.ResponseWriter, r *http.Request) {
 	eventSettings.FieldEStopPin, _ = strconv.Atoi(r.PostFormValue("fieldEStopPin"))
 	eventSettings.RedEStopPanelAddress = r.PostFormValue("redEStopPanelAddress")
 	eventSettings.BlueEStopPanelAddress = r.PostFormValue("blueEStopPanelAddress")
+
+	eventSettings.HubLedsAddress = r.PostFormValue("hubLedsAddress")
+	eventSettings.HubLedsSimplified = r.PostFormValue("hubLedsSimplified") == "on"
+	eventSettings.HubLedsFallback = r.PostFormValue("hubLedsFallback")
+	eventSettings.HubLedsRedUniverse, _ = strconv.Atoi(r.PostFormValue("hubLedsRedUniverse"))
+	eventSettings.HubLedsRedAddress, _ = strconv.Atoi(r.PostFormValue("hubLedsRedAddress"))
+	eventSettings.HubLedsBlueUniverse, _ = strconv.Atoi(r.PostFormValue("hubLedsBlueUniverse"))
+	eventSettings.HubLedsBlueAddress, _ = strconv.Atoi(r.PostFormValue("hubLedsBlueAddress"))
+
+	// Reject a layout the controller cannot render before it is saved, so a bad address
+	// surfaces as a form error rather than silently wrong colours on the field.
+	if eventSettings.HubLedsSimplified {
+		if _, err := led.ParseFallback(eventSettings.HubLedsFallback); err != nil {
+			web.renderSettings(w, r, err.Error())
+			return
+		}
+		probe := led.NewController()
+		err := probe.SetLayout(
+			[]led.FixtureSpec{{
+				Universe: eventSettings.HubLedsRedUniverse, StartAddress: eventSettings.HubLedsRedAddress,
+			}},
+			[]led.FixtureSpec{{
+				Universe: eventSettings.HubLedsBlueUniverse, StartAddress: eventSettings.HubLedsBlueAddress,
+			}},
+		)
+		if err != nil {
+			web.renderSettings(w, r, err.Error())
+			return
+		}
+	}
 	// Only update the admin password if a non-empty value was submitted.
 	// This prevents the settings form from inadvertently clearing the password.
 	if newPass := r.PostFormValue("adminPassword"); newPass != "" {

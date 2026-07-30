@@ -37,6 +37,16 @@ func TestEventSettingsReadWrite(t *testing.T) {
 			WarningRemainingDurationSec: 30,
 			CompanionAddress:            "",
 			CompanionPort:               0,
+
+			// Hub LEDs default to the standard arena: upstream's full-field layout,
+			// every sequence unmodified. The addresses below are only consulted when
+			// HubLedsSimplified is turned on.
+			HubLedsSimplified:   false,
+			HubLedsFallback:     "full",
+			HubLedsRedUniverse:  1,
+			HubLedsRedAddress:   1,
+			HubLedsBlueUniverse: 1,
+			HubLedsBlueAddress:  25,
 		},
 		*eventSettings,
 	)

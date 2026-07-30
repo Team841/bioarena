@@ -88,6 +88,44 @@ type EventSettings struct {
 	PauseDurationSec                 int
 	TeleopDurationSec                int
 	WarningRemainingDurationSec      int
+
+	// Hub LED settings. Stored here rather than in config.yaml so they survive a power
+	// cycle and can be changed from the Settings page without a restart.
+	//
+	// HubLedsSimplified selects the practice-field layout below instead of upstream's
+	// full-field one (eight fixtures per alliance across four sides of each goal).
+	// HubLedsFallback names how much the fixtures can render: "full", "solid", or
+	// "binary".
+	HubLedsAddress        string
+	HubLedsSimplified     bool
+	HubLedsFallback       string
+	HubLedsRedUniverse    int
+	HubLedsRedAddress     int
+	HubLedsBlueUniverse   int
+	HubLedsBlueAddress    int
+}
+
+// applyHubLedDefaults fills in Hub LED settings that a database predating them has no
+// value for. Without this an existing install shows zeroes on the Settings page and
+// cannot enable the simplified layout without first typing valid addresses. Values are
+// only supplied where the stored one is unset, so a configured field is never
+// overwritten; they persist on the next save.
+func (settings *EventSettings) applyHubLedDefaults() {
+	if settings.HubLedsFallback == "" {
+		settings.HubLedsFallback = "full"
+	}
+	if settings.HubLedsRedUniverse == 0 {
+		settings.HubLedsRedUniverse = 1
+	}
+	if settings.HubLedsRedAddress == 0 {
+		settings.HubLedsRedAddress = 1
+	}
+	if settings.HubLedsBlueUniverse == 0 {
+		settings.HubLedsBlueUniverse = 1
+	}
+	if settings.HubLedsBlueAddress == 0 {
+		settings.HubLedsBlueAddress = 25
+	}
 }
 
 func (database *Database) GetEventSettings() (*EventSettings, error) {
@@ -96,7 +134,9 @@ func (database *Database) GetEventSettings() (*EventSettings, error) {
 		return nil, err
 	}
 	if len(allEventSettings) == 1 {
-		return &allEventSettings[0], nil
+		settings := &allEventSettings[0]
+		settings.applyHubLedDefaults()
+		return settings, nil
 	}
 
 	// Database record doesn't exist yet; create it now.
@@ -118,6 +158,15 @@ func (database *Database) GetEventSettings() (*EventSettings, error) {
 		PauseDurationSec:            game.MatchTiming.PauseDurationSec,
 		TeleopDurationSec:           game.MatchTiming.TeleopDurationSec,
 		WarningRemainingDurationSec: game.MatchTiming.WarningRemainingDurationSec,
+
+		// Default to the standard arena: upstream's full-field fixture layout, running
+		// its sequences unchanged. A practice field opts out of both.
+		HubLedsSimplified:   false,
+		HubLedsFallback:     "full",
+		HubLedsRedUniverse:  1,
+		HubLedsRedAddress:   1,
+		HubLedsBlueUniverse: 1,
+		HubLedsBlueAddress:  25,
 	}
 
 	if err := database.eventSettingsTable.create(&eventSettings); err != nil {

@@ -57,6 +57,7 @@ type Arena struct {
 	Plc                  plc.Plc
 	FieldLights          hardware.FieldLights
 	Leds                 *led.Controller
+	hubLedFallback       led.Fallback
 	EStopPanels          []hardware.EStopPanel
 	FieldEStop           hardware.FieldEStopPanel
 	AutoWinner           hardware.Alliance
@@ -181,6 +182,8 @@ func (arena *Arena) LoadSettings() error {
 	if addr := settings.BlueEStopPanelAddress; addr != "" {
 		arena.EStopPanels = append(arena.EStopPanels, hardware.NewNetworkEStopPanel(addr))
 	}
+
+	arena.applyHubLedSettings(settings)
 
 	game.MatchTiming.WarmupDurationSec = settings.WarmupDurationSec
 	game.MatchTiming.AutoDurationSec = settings.AutoDurationSec
