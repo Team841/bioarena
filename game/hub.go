@@ -5,12 +5,14 @@
 // Shift structure for the 2026 Hub element.
 //
 // Mirrors upstream cheesy-arena's game/hub.go. The scoring half of that file -- Fuel
-// counting, per-shift tallies, scoring grace periods, and the shift-timing lookups
-// that serve them -- is deliberately omitted: bioarena is a practice field controller
-// and does not score. What remains is the rule deciding when a Hub is active, kept
-// structurally identical to upstream so the two files can be diffed directly.
+// counting, per-shift tallies, and the scoring grace periods serving them -- is
+// deliberately omitted: bioarena is a practice field controller and does not score.
+// What remains is the rule deciding when a Hub is active and the shift timing the
+// lighting needs, kept structurally identical to upstream so the files can be diffed.
 
 package game
+
+import "time"
 
 type Hub struct {
 	WonAuto bool
@@ -30,6 +32,46 @@ const (
 	ShiftPostMatch
 	ShiftCount
 )
+
+// GetCurrentShiftTiming returns the current Hub shift, the amount of time remaining in it, and its duration. If the
+// match is not in a valid shift, both durations are zero and the ok return value is false.
+func (hub *Hub) GetCurrentShiftTiming(matchStartTime, currentTime time.Time) (Shift, time.Duration, time.Duration, bool) {
+	shiftStartTime := matchStartTime
+	shiftEndTime := matchStartTime.Add(GetDurationToAutoEnd())
+	for _, shift := range []Shift{ShiftAuto, ShiftTransition, Shift1, Shift2, Shift3, Shift4, ShiftEndgame} {
+		shiftDuration := shiftEndTime.Sub(shiftStartTime)
+		if !currentTime.Before(shiftStartTime) && currentTime.Before(shiftEndTime) {
+			return shift, shiftEndTime.Sub(currentTime), shiftDuration, true
+		}
+		shiftStartTime = shiftEndTime
+		switch shift {
+		case ShiftAuto:
+			shiftStartTime = matchStartTime.Add(GetDurationToTeleopStart())
+			shiftEndTime = shiftStartTime.Add(time.Duration(MatchTiming.TransitionShiftDurationSec) * time.Second)
+		case ShiftTransition, Shift1, Shift2, Shift3:
+			shiftEndTime = shiftEndTime.Add(time.Duration(MatchTiming.ShiftDurationSec) * time.Second)
+		case Shift4:
+			shiftEndTime = matchStartTime.Add(GetDurationToTeleopEnd())
+		default:
+			shiftEndTime = shiftStartTime
+		}
+	}
+	return ShiftCount, 0, 0, false
+}
+
+// GetActiveShiftTiming returns the amount of time remaining in the current shift if the Hub is active and the duration
+// of the current shift. If the Hub is not active, the remaining time is zero. If the match is not in a valid shift,
+// both values are zero.
+func (hub *Hub) GetActiveShiftTiming(matchStartTime, currentTime time.Time) (time.Duration, time.Duration) {
+	shift, remaining, shiftDuration, ok := hub.GetCurrentShiftTiming(matchStartTime, currentTime)
+	if !ok {
+		return 0, 0
+	}
+	if hub.IsShiftActive(shift) {
+		return remaining, shiftDuration
+	}
+	return 0, shiftDuration
+}
 
 // IsShiftActive returns true if the Hub is active during the given shift.
 //

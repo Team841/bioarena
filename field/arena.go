@@ -16,6 +16,7 @@ import (
 
 	"github.com/team841/bioarena/game"
 	"github.com/team841/bioarena/hardware"
+	"github.com/team841/bioarena/led"
 	"github.com/team841/bioarena/model"
 	"github.com/team841/bioarena/network"
 	"github.com/team841/bioarena/plc"
@@ -55,6 +56,7 @@ type Arena struct {
 	networkSwitch        *network.Switch
 	Plc                  plc.Plc
 	FieldLights          hardware.FieldLights
+	Leds                 *led.Controller
 	EStopPanels          []hardware.EStopPanel
 	FieldEStop           hardware.FieldEStopPanel
 	AutoWinner           hardware.Alliance
@@ -98,6 +100,8 @@ func NewArena(dbPath string) (*Arena, error) {
 	arena.configureNotifiers()
 	arena.Plc = new(plc.FakePlc)
 	arena.FieldLights = &hardware.NoopFieldLights{}
+	// Output stays disabled until an sACN address is configured.
+	arena.Leds = led.NewController()
 	arena.EStopPanels = []hardware.EStopPanel{}
 	arena.FieldEStop = &hardware.NoopFieldEStopPanel{}
 
@@ -579,6 +583,10 @@ func (arena *Arena) Update() {
 		}
 		arena.lastLightingState = ls
 	}
+
+	// Advance the Hub LED sequences. Must run before lastMatchState is updated below,
+	// since the post-match sequence fires on the transition into PostMatch.
+	arena.updateHubLeds(time.Now())
 
 	// Handle field sensors/lights/actuators.
 	arena.handlePlcInputOutput()

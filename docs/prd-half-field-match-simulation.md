@@ -427,7 +427,7 @@ Deliberate, and not worth closing:
 
 | Divergence | Why |
 |---|---|
-| `game/hub.go` omits `ShiftCounts`, `UpdateState`, `GetShiftCount`, `GetTeleopActiveFuelCount`, `GetCurrentShiftTiming`, `GetActiveShiftTiming`, `getCurrentShift`, `getScoringGracePeriod` | All exist to count FUEL. Scoring is a [non-goal](#3-non-goals). |
+| `game/hub.go` omits `ShiftCounts`, `UpdateState`, `GetShiftCount`, `GetTeleopActiveFuelCount`, `getCurrentShift`, `getScoringGracePeriod` | All exist to count FUEL. Scoring is a [non-goal](#3-non-goals). `GetCurrentShiftTiming` and `GetActiveShiftTiming` were initially omitted too, then ported for Phase 5 — they are timing, not scoring. |
 | `IsShiftActive` exported; upstream's `isShiftActive` is not | bioarena's lighting drivers live outside `game/`. |
 | `MatchTiming` keeps `WarmupDurationSec` and a flat `TeleopDurationSec` | Warmup is a bioarena practice-field feature with no upstream counterpart, and is threaded through the match state machine. `GetTeleopDurationSec()` and a drift test reconcile the flat value with the shift breakdown. |
 | `game/match_status.go` has no upstream counterpart | bioarena-local. |
@@ -435,16 +435,33 @@ Deliberate, and not worth closing:
 
 ### Phase 5 — DMX HUB light driver
 
-1. New `hardware/dmx_lights.go` implementing `FieldLights`, opened over
-   `go.bug.st/serial` following the `serial_lights.go` pattern.
-2. Register a `case "dmx":` in `buildFieldLights()` (`main.go:82`), with config for
-   port, channel/address, and colour values.
-3. Render HUB active/inactive via the Phase 4 helper, plus the `ShiftWarning` window
-   and the teleop-start indication of which HUB goes dark in Shift 1.
-4. Failures log and continue — never block the match loop.
+**Done, as a port rather than a new driver.**
 
-**Exit criteria:** fixture changes state at every shift boundary; unplugging it
-mid-match does not stall the arena.
+1. `led/` is copied from upstream **byte-identical** — `git diff upstream/main -- led/`
+   is empty. It imports only `fmt`, `net`, and `time`, with no dependency on upstream's
+   scoring, so it transferred without a single edit. Upstream's `controller_test.go`
+   passes unmodified.
+2. `field/arena_leds.go` ports upstream's mode selection unchanged. The one adaptation
+   is the source of the AUTO result: upstream reads `WonAuto` off each alliance's
+   realtime score, which bioarena has no equivalent for, so the Hubs are constructed
+   from `arena.AutoWinner`.
+3. `game/hub.go` gains upstream's `GetCurrentShiftTiming` and `GetActiveShiftTiming`,
+   ported verbatim. These were initially omitted as scoring support; they are in fact
+   pure timing, and the lighting depends on them.
+4. `arena.Leds` is advanced from the match loop, before `lastMatchState` is updated so
+   the post-match sequence fires on the transition.
+5. Address comes from `hub_leds_address` in `config.yaml`. Blank disables output — the
+   controller still runs its sequences but sends nothing, so an unconfigured field
+   cannot stall the match loop.
+
+**What the port brings that was not in the original plan:** 17 display modes including
+the startup fill, the alliance advantage sweep during the transition shift, and the
+pre-deactivation pulse; a 16-fixture layout across four sides per goal; multi-universe
+packet assembly; and change detection with a 1 s heartbeat so idle universes refresh.
+
+**Exit criteria:** fixture changes state at every shift boundary; a network failure
+mid-match does not stall the arena. **Not yet verified against hardware** — no sACN node
+has been on the wire, so this is covered by unit tests only.
 
 ### Phase 6 — Half-field mode
 
@@ -467,8 +484,17 @@ mid-match does not stall the arena.
 driver stations are in use, so tag-30 handshake support and the UDP game-data path are
 in scope. See [R3](#r3--fms-game-data-to-driver-stations).
 
-**~~Q2 — DMX transport?~~ RESOLVED.** DMX over USB. See
+**~~Q2 — DMX transport?~~ RESOLVED: sACN over Ethernet.**
+Initially recorded as DMX over USB. Reversed after finding that upstream already
+implements exactly this use case — `led/controller.go` is headed *"E1.31 sACN (DMX over
+Ethernet) LED controller for the 2026 hub lights"* — which turns Phase 5 from a
+write-from-scratch into a port. It also fits the existing topology: the Pi at
+`10.0.100.5`, the field switch, and a network sACN node. See
 [R4](#r4--dmx-hub-light).
+
+**~~Q2a — Which USB DMX interface?~~ MOOT.** Superseded by the sACN decision. If a USB
+dongle is used at all it now sits downstream of an sACN node, outside bioarena's
+concern.
 
 **Q2a — Which USB DMX interface?**
 Still blocks the R4 driver implementation, because the three common options have

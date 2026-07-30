@@ -1,0 +1,120 @@
+// Copyright 2026 Team 254. All Rights Reserved.
+// Portions Copyright Team 841. All Rights Reserved.
+// Author: pat@patfairbank.com (Patrick Fairbank)
+//
+// Game-specific control of the 2026 Hub DMX lighting.
+//
+// Ported from upstream cheesy-arena's field/arena_leds.go. The mode selection is
+// unchanged; the only adaptation is the source of the AUTO result. Upstream reads
+// WonAuto off each alliance's realtime score, which bioarena does not have, so the
+// Hubs are constructed from arena.AutoWinner instead.
+
+package field
+
+import (
+	"log"
+	"time"
+
+	"github.com/team841/bioarena/game"
+	"github.com/team841/bioarena/hardware"
+	"github.com/team841/bioarena/led"
+)
+
+const (
+	hubLightWarningSec           = 3
+	hubLightScoringAssessmentSec = 3
+)
+
+// redWonAuto reports whether the red alliance is the AUTO winner.
+func (arena *Arena) redWonAuto() bool {
+	return arena.AutoWinner == hardware.AllianceRed
+}
+
+// hubs returns the red and blue Hubs for the current AUTO result.
+func (arena *Arena) hubs() (*game.Hub, *game.Hub) {
+	redWon := arena.redWonAuto()
+	return &game.Hub{WonAuto: redWon}, &game.Hub{WonAuto: !redWon}
+}
+
+// updateHubLeds updates Hub LEDs based on the current match state and active scoring shift.
+func (arena *Arena) updateHubLeds(currentTime time.Time) {
+	switch arena.MatchState {
+	case AutoPeriod:
+		arena.Leds.SetMode(led.RedStartupMode, led.BlueStartupMode)
+	case PausePeriod:
+		arena.Leds.SetMode(led.RedMode, led.BlueMode)
+	case TeleopPeriod:
+		arena.updateTeleopHubLeds(currentTime)
+	case PostMatch:
+		if arena.lastMatchState != PostMatch {
+			// Set the Hub LEDs to white at the end of the match, and then turn them off when the referees are supposed
+			// to assess tower climbs.
+			arena.Leds.SetMode(led.WhiteMode, led.WhiteMode)
+			go func() {
+				time.Sleep(hubLightScoringAssessmentSec * time.Second)
+				arena.Leds.SetMode(led.OffMode, led.OffMode)
+			}()
+		}
+	}
+
+	if err := arena.Leds.Update(); err != nil {
+		log.Printf("Failed to update hub LEDs: %s", err)
+	}
+}
+
+// updateTeleopHubLeds updates teleop LED modes using the active Hub shift, auto winner, and warning window.
+func (arena *Arena) updateTeleopHubLeds(currentTime time.Time) {
+	redHub, blueHub := arena.hubs()
+
+	shift, remaining, _, ok := redHub.GetCurrentShiftTiming(arena.MatchStartTime, currentTime)
+	if !ok {
+		return
+	}
+
+	redRemaining, _ := redHub.GetActiveShiftTiming(arena.MatchStartTime, currentTime)
+	blueRemaining, _ := blueHub.GetActiveShiftTiming(arena.MatchStartTime, currentTime)
+
+	redMode := led.OffMode
+	if redRemaining > 0 {
+		redMode = led.RedMode
+	}
+	blueMode := led.OffMode
+	if blueRemaining > 0 {
+		blueMode = led.BlueMode
+	}
+
+	// Pulse the LEDs when the Hub is about to go inactive.
+	if remaining <= time.Duration(hubLightWarningSec)*time.Second {
+		switch shift {
+		case game.ShiftTransition:
+			if arena.redWonAuto() {
+				redMode = led.RedPulseMode
+			} else {
+				blueMode = led.BluePulseMode
+			}
+		case game.Shift1, game.Shift3:
+			if arena.redWonAuto() {
+				blueMode = led.BluePulseMode
+			} else {
+				redMode = led.RedPulseMode
+			}
+		case game.Shift2:
+			if arena.redWonAuto() {
+				redMode = led.RedPulseMode
+			} else {
+				blueMode = led.BluePulseMode
+			}
+		case game.ShiftEndgame:
+			redMode = led.RedPulseMode
+			blueMode = led.BluePulseMode
+		default:
+		}
+	} else if shift == game.ShiftTransition {
+		if arena.redWonAuto() {
+			redMode = led.RedAdvantageMode
+		} else {
+			blueMode = led.BlueAdvantageMode
+		}
+	}
+	arena.Leds.SetMode(redMode, blueMode)
+}
