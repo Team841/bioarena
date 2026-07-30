@@ -35,7 +35,8 @@ teleop shift cycle exactly as it behaves in a real match:
   which shifts each HUB is dark. The operator knows whether that means winning or
   losing from the driver station they attached to.
 - Receive the same FMS Game Data string their robot code will see at a real event.
-- See a physical HUB light change state at the correct shift boundaries.
+- See a physical HUB light change state at the correct shift boundaries, on whatever
+  fixtures that practice field happens to have.
 
 The success criterion is **fidelity**: robot code and driver muscle memory developed
 on the practice field must transfer to a real field with no surprises.
@@ -66,12 +67,16 @@ cherry-pick.
 
 The REBUILT shift state machine is **already implemented and tested**:
 
-- `hardware/interfaces.go` — `MatchPhase`, `TeleopSubPhase`, `Alliance`,
-  `LightingState`, and the `FieldLights` driver interface.
-- `field/arena.go:1155` — `teleopSubPhase()` maps remaining teleop seconds to a shift.
-- `field/arena.go:1172` — `shiftWarning()` flags the 3 s pre-boundary window.
-- `field/arena.go:569` — fires `FieldLights.SetState()` on every state change.
-- `field/arena_hardware_test.go` — boundary tests for all six sub-phases.
+- `hardware/interfaces.go` — `MatchPhase`, `Alliance`, `LightingState`, and the
+  `FieldLights` driver interface.
+- `field/arena.go` — `teleopShift()` maps remaining teleop seconds to a shift, and
+  `shiftWarning()` flags the 3 s pre-boundary window.
+- `field/arena.go` — fires `FieldLights.SetState()` on every state change.
+- `field/arena_hardware_test.go` — boundary tests for all six shifts.
+
+> Written before the work in [§7](#7-implementation-plan). The sub-phase enum described
+> here has since been collapsed onto upstream's `game.Shift`; see
+> [Phase 4](#phase-4--hub-alternation-helper).
 
 Shift boundaries were verified against upstream and the game manual and are
 **correct** (see [§4](#4-verified-game-reference)). This PRD builds on that
@@ -86,6 +91,10 @@ foundation rather than replacing it.
   `ranking_fields.go`, `score_summary.go`).
 - Full 3v3 event operation — bioarena remains a practice-field controller.
 - Referee panels, audience display scoring overlays, or event rankings.
+- Reconfigurable **rendering** geometry. The pixel count per fixture and the four-sided
+  goal are compile-time constants throughout upstream's sequences; changing them means
+  forking those files and losing the byte-identical port. [R6](#r6--practice-field-fixture-configuration)
+  reconfigures the DMX **mapping** only, which is enough for fixtures with fewer pixels.
 
 ---
 
@@ -199,7 +208,7 @@ packetLength += 2 + gameDataLen
 
 Shift and sub-phase information is **not** part of the DS protocol. The driver's only
 in-match channel for shift state is the physical HUB light — which is why
-[R4](#r4-dmx-hub-light) matters for fidelity.
+[R4](#r4--hub-led-lighting) matters for fidelity.
 
 ---
 
@@ -287,7 +296,56 @@ The two coexist, as they do upstream.
 No change to existing period timing — [§4.1](#41-match-timing) and
 [§4.2](#42-shift-boundaries) are already correct and covered by
 `field/arena_hardware_test.go`. This requirement exists to pin them: any change to
-`MatchTiming` or `teleopSubPhase()` must be re-verified against the manual.
+`MatchTiming` or `teleopShift()` must be re-verified against the manual.
+
+### R6 — Practice-field fixture configuration
+
+Practice fields run far cheaper fixtures than the arena's. The lighting must be
+configurable to match, without diverging from the ported upstream behaviour on a field
+that does have the real hardware.
+
+- **Standard arena is the default.** Upstream's full-field layout — eight fixtures per
+  alliance across four sides of each goal — with every sequence unmodified. A practice
+  field opts out; a standard one changes nothing.
+- **Simplified layout, saved.** One fixture per alliance HUB, each with its own DMX
+  universe and start address.
+- **Selectable fallback behaviour** for fixtures that cannot render a sequence the
+  standard field uses.
+- **Persists across power cycles**, and applies without restarting bioarena.
+
+Configuration lives in `EventSettings` rather than `config.yaml`, on the **DMX Hub LEDs**
+section of the Settings page. A YAML value would silently override the database on every
+start, which defeats the persistence requirement.
+
+#### Fixture capability
+
+One setting, since a fixture that cannot render one per-pixel sequence cannot render any
+of them:
+
+| Capability | Behaviour |
+|---|---|
+| `full` | Upstream's sequences unchanged. Addressable fixtures with the full pixel count. |
+| `solid` | Per-pixel sequences — startup fill, advantage sweep, rainbow, side tests — become the zone's alliance colour. Pulses are kept: they vary brightness uniformly, which any dimmable fixture renders. |
+| `binary` | Additionally flattens pulses, for fixtures with no usable dimming. |
+
+`solid` is correct for single-pixel fixtures. A fill or sweep there shows whichever
+colour the first pixel happened to be mid-animation — a fade from black for the startup
+fill, a flicker for the sweep.
+
+`led.ApplyFallback` takes the zone's own colour as a parameter rather than deriving it
+from the mode. The side tests and rainbow are alliance-agnostic — the zone supplies their
+colour — so substituting them without knowing the zone would light the blue HUB red.
+
+#### Single-pixel fixtures need no renderer change
+
+`pixelsPerFixture` is a compile-time constant and every sequence is written against it,
+so the rendering geometry cannot be reconfigured. It does not need to be. The renderer
+always writes a 24-channel block from each fixture's start address, and a single-pixel
+RGB unit reads the first three and ignores the rest.
+
+The consequence is a spacing rule: **fixtures must sit at least 24 channels apart in a
+universe**, or an earlier fixture's write clobbers a later one's. Layouts are validated
+on save so this surfaces as a form error rather than silently wrong colours on the field.
 
 ---
 
@@ -311,6 +369,12 @@ What exists versus what this PRD requires:
 | ASCII team-ID parsing | ❌ Reads fixed `[5]byte`; new DS needs ~1500 | R3 |
 | UDP game-data bytes | ❌ `encodeControlPacket` returns fixed `[22]byte` | R3 |
 | DMX driver | ❌ No DMX/Art-Net anywhere in tree | R4 |
+| Configurable fixture layout | ❌ `defaultFixtureLayout` hardcoded, 8 fixtures per alliance | R6 |
+| Fixture capability fallback | ❌ Absent; every field would run the full sequences | R6 |
+
+This table records the state **before** the work in [§7](#7-implementation-plan), and is
+kept as the record of what was missing rather than updated as phases land. Current
+status is in the phase sections.
 
 ### Driver-station compatibility risk
 
@@ -433,8 +497,9 @@ Deliberate, and not worth closing:
 | `MatchTiming` keeps `WarmupDurationSec` and a flat `TeleopDurationSec` | Warmup is a bioarena practice-field feature with no upstream counterpart, and is threaded through the match state machine. `GetTeleopDurationSec()` and a drift test reconcile the flat value with the shift breakdown. |
 | `game/match_status.go` has no upstream counterpart | bioarena-local. |
 | `game/match_sounds.go` omits `UniqueMatchSounds`; `game/test_helpers.go` omits the scoring fixtures | Pre-existing strips tied to scoring removal. |
+| `led/override.go` has no upstream counterpart | Practice-field layout and capability overrides ([R6](#r6--practice-field-fixture-configuration)). Additive by design: the six ported files stay byte-identical, so upstream lighting changes remain a `git checkout upstream/main -- led/`. Keep local behaviour in this file rather than editing the ported ones. |
 
-### Phase 5 — DMX HUB light driver
+### Phase 5 — Hub LED driver (sACN)
 
 **Done, as a port rather than a new driver.**
 
@@ -489,6 +554,30 @@ confirmation while collapsing five clicks into one.
 **Deliberately not built:** a practice-alliance setting, a Win/Lose relabel, or a mode
 toggle. Each would add state describing something the physical setup already says.
 
+### Phase 7 — Practice-field fixture configuration
+
+**Done.** Implements [R6](#r6--practice-field-fixture-configuration).
+
+1. `led/override.go` — a bioarena addition to the ported package, holding
+   `SetLayout`, `UseDefaultLayout`, the `Fallback` tier, and `ApplyFallback`. Being in
+   the same package it reaches the unexported fixture list, so upstream's six files stay
+   byte-identical and `git diff upstream/main -- led/` still shows only additions.
+2. `EventSettings` gains the address, capability, simplified-layout flag, and per-HUB
+   universe/start address. Defaults are the standard arena.
+3. `Arena.applyHubLedSettings` runs on every settings load, so changes apply without a
+   restart. `Arena.setHubLedModes` routes every mode change through the fallback, so a
+   practice field's fixtures never receive a sequence they cannot render.
+4. The **DMX Hub LEDs** section on the Settings page. Layouts are validated on save.
+5. `hub_leds_address` is removed from `config.yaml`.
+
+**Backfill for existing databases.** Installs predating these columns store zeroes, which
+would render the form unusable and block enabling the simplified layout. Unset values are
+filled on read and persist on the next save; configured values are never overwritten.
+
+**Exit criteria:** a practice config saves, survives a process restart, and an
+overlapping layout is rejected. All three verified in the browser. **Not verified against
+hardware** — no sACN node or physical fixture has been on the wire.
+
 ### Incidental
 
 - README line 247 documents `field_lights_driver: "gpio"`, which
@@ -509,7 +598,7 @@ implements exactly this use case — `led/controller.go` is headed *"E1.31 sACN 
 Ethernet) LED controller for the 2026 hub lights"* — which turns Phase 5 from a
 write-from-scratch into a port. It also fits the existing topology: the Pi at
 `10.0.100.5`, the field switch, and a network sACN node. See
-[R4](#r4--dmx-hub-light).
+[R4](#r4--hub-led-lighting).
 
 **~~Q2a — Which USB DMX interface?~~ MOOT.** Superseded by the sACN decision. If a USB
 dongle is used at all it now sits downstream of an sACN node, outside bioarena's
@@ -551,8 +640,15 @@ it. Idle and the auto/teleop pause are not shifts and leave the HUB dark.
 
 ### Unit
 
-- `assignAutoWinner()` honours Win / Lose / Random; Random never yields
-  `AllianceNone`.
+- `assignAutoWinner()` honours the selected mode; Random never yields `AllianceNone`.
+- `SetLayout` rejects overlapping fixtures, a universe below 1, and a start address
+  leaving fewer than 24 channels; `UseDefaultLayout` restores all sixteen fixtures.
+- A single-fixture layout writes each alliance colour to the first three channels of its
+  start address — what a single-pixel unit reads.
+- `ApplyFallback` passes everything through on `full`, substitutes the **zone's own**
+  colour for per-pixel sequences on `solid` (so the blue zone never turns red), keeps
+  pulses on `solid`, and flattens them on `binary`.
+- Unset Hub LED settings backfill on read without overwriting configured values.
 - HUB alternation helper reproduces [Table 6-3](#43-hub-active-state-manual-table-6-3)
   for both AUTO outcomes across all seven timeframes.
 - Game Data is empty through AUTO and pause; becomes `R`/`B` at the teleop
@@ -573,6 +669,10 @@ it. Idle and the auto/teleop pause are not shifts and leave the HUB dark.
 - With a DS connected, `getGameSpecificMessage()` returns empty during AUTO and the
   expected character from teleop start.
 - DMX fixture changes state at each shift boundary; warning window fires 3 s early.
+- A practice config saves, survives a bioarena restart, and takes effect without one.
+- An overlapping layout is rejected on save with the spacing rule in the message.
+- On `solid`, a single-pixel fixture shows a steady alliance colour through AUTO and the
+  transition shift rather than the fill and sweep animations.
 - DMX transport failure mid-match logs an error and does not stall the match loop or
   affect DS packets.
 
