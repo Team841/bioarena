@@ -6,6 +6,10 @@ UI for managing teams.
 */}}
 {{define "title"}}Teams{{end}}
 {{define "body"}}
+<ul class="nav nav-pills mb-3">
+  <li class="nav-item"><a class="nav-link" href="/setup/settings">Settings</a></li>
+  <li class="nav-item"><a class="nav-link active" href="/setup/teams">Teams</a></li>
+</ul>
 <div class="row justify-content-center">
   {{if .ErrorMessage}}
   <div class="alert alert-danger alert-dismissible">
