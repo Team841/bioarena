@@ -2,6 +2,8 @@
 // Types are defined independently of field/ to avoid circular imports.
 package hardware
 
+import "github.com/team841/bioarena/game"
+
 // MatchPhase describes the current field state for hardware drivers.
 type MatchPhase int
 
@@ -22,27 +24,13 @@ const (
 	AllianceBlue
 )
 
-// TeleopSubPhase represents REBUILT 2026 teleop segments.
-// Only meaningful when Phase == PhaseTeleop.
-type TeleopSubPhase int
-
-const (
-	SubPhaseNone       TeleopSubPhase = iota
-	SubPhaseTransition // T=2:20–2:10, both HUBs active
-	SubPhaseShift1     // T=2:10–1:45, one HUB inactive (per AutoWinner)
-	SubPhaseShift2     // T=1:45–1:20, alternates from Shift1
-	SubPhaseShift3     // T=1:20–0:55, alternates from Shift2
-	SubPhaseShift4     // T=0:55–0:30, alternates from Shift3
-	SubPhaseEndGame    // T=0:30–0:00, both HUBs active
-)
-
 // LightingState carries all context a FieldLights driver needs.
-// SetState is called at every phase transition and sub-phase boundary.
+// SetState is called at every phase transition and shift boundary.
 type LightingState struct {
-	Phase          MatchPhase
-	TeleopSubPhase TeleopSubPhase // only meaningful when Phase == PhaseTeleop
-	AutoWinner     Alliance       // which alliance's HUB goes inactive first in Shift1
-	ShiftWarning   bool           // true during 3s window before next HUB deactivation
+	Phase        MatchPhase
+	Shift        game.Shift // spans the whole match; game.ShiftCount when not in one
+	AutoWinner   Alliance   // which alliance's HUB goes inactive first in Shift1
+	ShiftWarning bool       // true during 3s window before next HUB deactivation
 }
 
 // FieldLights controls field indicator lighting.

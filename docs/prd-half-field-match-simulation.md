@@ -106,16 +106,21 @@ Teleop decomposes as `TransitionShift(10) + 4 × Shift(25) + EndGame(30) = 140`.
 
 ### 4.2 Shift boundaries
 
-Expressed as **seconds remaining in teleop**, matching `teleopSubPhase()`:
+Expressed as **seconds remaining in teleop**, matching `teleopShift()`. Shift names are
+upstream's, from the ported `game.Shift` enum:
 
-| Remaining | Sub-phase | Window |
+| Remaining | Shift | Window |
 |---|---|---|
-| > 130 | `SubPhaseTransition` | T-2:20 → 2:10 |
-| > 105 | `SubPhaseShift1` | T-2:10 → 1:45 |
-| > 80 | `SubPhaseShift2` | T-1:45 → 1:20 |
-| > 55 | `SubPhaseShift3` | T-1:20 → 0:55 |
-| > 30 | `SubPhaseShift4` | T-0:55 → 0:30 |
-| ≤ 30 | `SubPhaseEndGame` | T-0:30 → 0:00 |
+| > 130 | `ShiftTransition` | T-2:20 → 2:10 |
+| > 105 | `Shift1` | T-2:10 → 1:45 |
+| > 80 | `Shift2` | T-1:45 → 1:20 |
+| > 55 | `Shift3` | T-1:20 → 0:55 |
+| > 30 | `Shift4` | T-0:55 → 0:30 |
+| ≤ 30 | `ShiftEndgame` | T-0:30 → 0:00 |
+
+Boundaries are derived from `ShiftDurationSec` and `EndgameDurationSec`, not hardcoded.
+`ShiftAuto` and `ShiftPostMatch` cover the rest of the match; anything that is not a
+shift — idle, the auto/teleop pause — reports `ShiftCount`.
 
 ### 4.3 HUB active state (Manual Table 6-3)
 
@@ -410,11 +415,23 @@ DMX drivers consume it.
   boundaries from these instead of the hardcoded 130/105/80/55/30, and a test guards
   the flat `TeleopDurationSec` against drifting from the shift breakdown.
 
-**Known divergence:** `hardware.TeleopSubPhase` and `game.Shift` remain separate enums
-bridged by `TeleopSubPhase.Shift()`. Collapsing them onto `game.Shift` would be closer
-to upstream still, but `game.Shift` covers the whole match (its zero value is
-`ShiftAuto`, where `SubPhaseNone` means "not in teleop"), so the swap changes the
-meaning of a zero-valued `LightingState`. Left as a follow-up.
+`hardware.TeleopSubPhase` has been **removed**; `LightingState.Shift` is `game.Shift`
+directly, so there is one shift enum with upstream's names and ordering. Following
+upstream, the shift spans the whole match rather than teleop alone: `ShiftAuto` during
+AUTO, `ShiftPostMatch` after, and `ShiftCount` for states that are not a shift. That
+makes `HubActive` a straight delegation to `IsShiftActive` with no mapping layer.
+
+### Remaining divergence from upstream
+
+Deliberate, and not worth closing:
+
+| Divergence | Why |
+|---|---|
+| `game/hub.go` omits `ShiftCounts`, `UpdateState`, `GetShiftCount`, `GetTeleopActiveFuelCount`, `GetCurrentShiftTiming`, `GetActiveShiftTiming`, `getCurrentShift`, `getScoringGracePeriod` | All exist to count FUEL. Scoring is a [non-goal](#3-non-goals). |
+| `IsShiftActive` exported; upstream's `isShiftActive` is not | bioarena's lighting drivers live outside `game/`. |
+| `MatchTiming` keeps `WarmupDurationSec` and a flat `TeleopDurationSec` | Warmup is a bioarena practice-field feature with no upstream counterpart, and is threaded through the match state machine. `GetTeleopDurationSec()` and a drift test reconcile the flat value with the shift breakdown. |
+| `game/match_status.go` has no upstream counterpart | bioarena-local. |
+| `game/match_sounds.go` omits `UniqueMatchSounds`; `game/test_helpers.go` omits the scoring fixtures | Pre-existing strips tied to scoring removal. |
 
 ### Phase 5 — DMX HUB light driver
 

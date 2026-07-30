@@ -3,6 +3,7 @@ package hardware
 import (
 	"testing"
 
+	"github.com/team841/bioarena/game"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -27,9 +28,9 @@ func TestNoopEStopPanelImplementsInterface(t *testing.T) {
 }
 
 func TestLightingStateEquality(t *testing.T) {
-	s1 := LightingState{Phase: PhaseTeleop, TeleopSubPhase: SubPhaseShift1, AutoWinner: AllianceRed, ShiftWarning: false}
-	s2 := LightingState{Phase: PhaseTeleop, TeleopSubPhase: SubPhaseShift1, AutoWinner: AllianceRed, ShiftWarning: false}
-	s3 := LightingState{Phase: PhaseTeleop, TeleopSubPhase: SubPhaseShift1, AutoWinner: AllianceRed, ShiftWarning: true}
+	s1 := LightingState{Phase: PhaseTeleop, Shift: game.Shift1, AutoWinner: AllianceRed, ShiftWarning: false}
+	s2 := LightingState{Phase: PhaseTeleop, Shift: game.Shift1, AutoWinner: AllianceRed, ShiftWarning: false}
+	s3 := LightingState{Phase: PhaseTeleop, Shift: game.Shift1, AutoWinner: AllianceRed, ShiftWarning: true}
 
 	assert.Equal(t, s1, s2)
 	assert.NotEqual(t, s1, s3)
@@ -92,12 +93,3 @@ func TestGpioFieldEStopPanel_ClearNoopWhileHeld(t *testing.T) {
 	assert.True(t, panel.Triggered(), "clear while held must be a no-op")
 }
 
-func TestTeleopSubPhaseConstants(t *testing.T) {
-	assert.Equal(t, TeleopSubPhase(0), SubPhaseNone)
-	assert.Equal(t, TeleopSubPhase(1), SubPhaseTransition)
-	assert.Equal(t, TeleopSubPhase(2), SubPhaseShift1)
-	assert.Equal(t, TeleopSubPhase(3), SubPhaseShift2)
-	assert.Equal(t, TeleopSubPhase(4), SubPhaseShift3)
-	assert.Equal(t, TeleopSubPhase(5), SubPhaseShift4)
-	assert.Equal(t, TeleopSubPhase(6), SubPhaseEndGame)
-}

@@ -1219,43 +1219,51 @@ func (arena *Arena) computeLightingState(matchTimeSec float64) hardware.Lighting
 		phase = hardware.PhaseIdle
 	}
 
-	var subPhase hardware.TeleopSubPhase
+	// Upstream models the shift as spanning the whole match rather than teleop alone,
+	// so AUTO and post-match map onto their own shifts and anything that is not a shift
+	// (idle, the auto/teleop pause) reports ShiftCount.
+	shift := game.ShiftCount
 	var warning bool
-	if arena.MatchState == TeleopPeriod {
+	switch arena.MatchState {
+	case AutoPeriod:
+		shift = game.ShiftAuto
+	case TeleopPeriod:
 		teleopStart := game.GetDurationToTeleopStart().Seconds()
 		remaining := int(float64(game.MatchTiming.TeleopDurationSec) - (matchTimeSec - teleopStart))
-		subPhase = teleopSubPhase(remaining)
+		shift = teleopShift(remaining)
 		warning = shiftWarning(remaining)
+	case PostMatch:
+		shift = game.ShiftPostMatch
 	}
 
 	return hardware.LightingState{
-		Phase:          phase,
-		TeleopSubPhase: subPhase,
-		AutoWinner:     arena.AutoWinner,
-		ShiftWarning:   warning,
+		Phase:        phase,
+		Shift:        shift,
+		AutoWinner:   arena.AutoWinner,
+		ShiftWarning: warning,
 	}
 }
 
-// teleopSubPhase returns the REBUILT 2026 sub-phase for the given remaining teleop
-// seconds. Boundaries are derived from the shift durations rather than hardcoded, so a
-// change to those constants moves the boundaries with them.
-func teleopSubPhase(remaining int) hardware.TeleopSubPhase {
+// teleopShift returns the REBUILT 2026 shift for the given remaining teleop seconds.
+// Boundaries are derived from the shift durations rather than hardcoded, so a change to
+// those constants moves the boundaries with them.
+func teleopShift(remaining int) game.Shift {
 	endgame := game.MatchTiming.EndgameDurationSec
 	shift := game.MatchTiming.ShiftDurationSec
 
 	switch {
-	case remaining > endgame+4*shift: // transition shift
-		return hardware.SubPhaseTransition
+	case remaining > endgame+4*shift:
+		return game.ShiftTransition
 	case remaining > endgame+3*shift:
-		return hardware.SubPhaseShift1
+		return game.Shift1
 	case remaining > endgame+2*shift:
-		return hardware.SubPhaseShift2
+		return game.Shift2
 	case remaining > endgame+shift:
-		return hardware.SubPhaseShift3
+		return game.Shift3
 	case remaining > endgame:
-		return hardware.SubPhaseShift4
+		return game.Shift4
 	default:
-		return hardware.SubPhaseEndGame
+		return game.ShiftEndgame
 	}
 }
 

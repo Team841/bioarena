@@ -3,32 +3,33 @@ package field
 import (
 	"testing"
 
+	"github.com/team841/bioarena/game"
 	"github.com/team841/bioarena/hardware"
 	"github.com/stretchr/testify/assert"
 )
 
-// --- teleopSubPhase ---
+// --- teleopShift ---
 
-func TestTeleopSubPhaseBoundaries(t *testing.T) {
+func TestTeleopShiftBoundaries(t *testing.T) {
 	cases := []struct {
 		remaining int
-		want      hardware.TeleopSubPhase
+		want      game.Shift
 	}{
-		{135, hardware.SubPhaseTransition}, // above transition window
-		{131, hardware.SubPhaseTransition},
-		{130, hardware.SubPhaseShift1}, // boundary: <=130 → Shift1
-		{106, hardware.SubPhaseShift1},
-		{105, hardware.SubPhaseShift2}, // boundary: <=105 → Shift2
-		{81, hardware.SubPhaseShift2},
-		{80, hardware.SubPhaseShift3}, // boundary: <=80 → Shift3
-		{56, hardware.SubPhaseShift3},
-		{55, hardware.SubPhaseShift4}, // boundary: <=55 → Shift4
-		{31, hardware.SubPhaseShift4},
-		{30, hardware.SubPhaseEndGame}, // boundary: <=30 → EndGame
-		{0, hardware.SubPhaseEndGame},
+		{135, game.ShiftTransition}, // above transition window
+		{131, game.ShiftTransition},
+		{130, game.Shift1}, // boundary: <=130 → Shift1
+		{106, game.Shift1},
+		{105, game.Shift2}, // boundary: <=105 → Shift2
+		{81, game.Shift2},
+		{80, game.Shift3}, // boundary: <=80 → Shift3
+		{56, game.Shift3},
+		{55, game.Shift4}, // boundary: <=55 → Shift4
+		{31, game.Shift4},
+		{30, game.ShiftEndgame}, // boundary: <=30 → EndGame
+		{0, game.ShiftEndgame},
 	}
 	for _, c := range cases {
-		assert.Equal(t, c.want, teleopSubPhase(c.remaining), "remaining=%d", c.remaining)
+		assert.Equal(t, c.want, teleopShift(c.remaining), "remaining=%d", c.remaining)
 	}
 }
 
@@ -68,22 +69,28 @@ func TestComputeLightingStatePhaseMapping(t *testing.T) {
 	arena := setupTestArena(t)
 	arena.AutoWinner = hardware.AllianceRed
 
+	// The shift spans the whole match, as upstream models it: AUTO and post-match have
+	// their own shifts, and states that are not a shift report ShiftCount.
 	arena.MatchState = PreMatch
 	ls := arena.computeLightingState(0)
 	assert.Equal(t, hardware.PhaseIdle, ls.Phase)
+	assert.Equal(t, game.ShiftCount, ls.Shift)
 
 	arena.MatchState = AutoPeriod
 	ls = arena.computeLightingState(3)
 	assert.Equal(t, hardware.PhaseAuto, ls.Phase)
+	assert.Equal(t, game.ShiftAuto, ls.Shift)
 	assert.Equal(t, hardware.AllianceRed, ls.AutoWinner)
 
 	arena.MatchState = PausePeriod
 	ls = arena.computeLightingState(18)
 	assert.Equal(t, hardware.PhasePause, ls.Phase)
+	assert.Equal(t, game.ShiftCount, ls.Shift)
 
 	arena.MatchState = PostMatch
 	ls = arena.computeLightingState(160)
 	assert.Equal(t, hardware.PhaseFinished, ls.Phase)
+	assert.Equal(t, game.ShiftPostMatch, ls.Shift)
 }
 
 // --- EStopPanel polling integration ---
@@ -245,7 +252,7 @@ func TestNoopFieldLightsIntegration(t *testing.T) {
 		{Phase: hardware.PhaseIdle},
 		{Phase: hardware.PhaseAuto},
 		{Phase: hardware.PhasePause},
-		{Phase: hardware.PhaseTeleop, TeleopSubPhase: hardware.SubPhaseShift1, AutoWinner: hardware.AllianceBlue},
+		{Phase: hardware.PhaseTeleop, Shift: game.Shift1, AutoWinner: hardware.AllianceBlue},
 		{Phase: hardware.PhaseFinished},
 	}
 	for _, s := range states {
