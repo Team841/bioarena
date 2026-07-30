@@ -66,6 +66,12 @@ const clearMatch = function () {
   websocket.send("clearMatch");
 };
 
+// Bypasses every station with no team registered, so a 1v0 practice match can start
+// without ticking five checkboxes. Occupied stations are left alone.
+const bypassEmptyStations = function () {
+  websocket.send("bypassEmptyStations");
+};
+
 // Selects how the AUTO result is decided for the next match. Rejected by the server
 // once a match is underway, since the winner drives both the HUB lighting and the game
 // data already sent to driver stations.

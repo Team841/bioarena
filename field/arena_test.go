@@ -26,6 +26,50 @@ func TestGameDataForAutoWinner(t *testing.T) {
 	assert.Equal(t, "", arena.gameDataForAutoWinner())
 }
 
+func TestBypassEmptyStations(t *testing.T) {
+	arena := setupTestArena(t)
+	assert.Nil(t, arena.Database.CreateTeam(&model.Team{Id: 254}))
+	assert.Nil(t, arena.assignTeam(254, "R1"))
+
+	count := arena.BypassEmptyStations()
+	assert.Equal(t, 5, count)
+
+	// The occupied station is untouched; the five empty ones are bypassed.
+	assert.False(t, arena.AllianceStations["R1"].Bypass.Load(), "occupied station was bypassed")
+	for _, station := range []string{"R2", "R3", "B1", "B2", "B3"} {
+		assert.True(t, arena.AllianceStations[station].Bypass.Load(), "station %s not bypassed", station)
+	}
+
+	// Idempotent: nothing left to bypass on a second call.
+	assert.Equal(t, 0, arena.BypassEmptyStations())
+}
+
+// An operator bypass of an occupied station must survive the call, and the count must
+// only reflect stations newly bypassed.
+func TestBypassEmptyStationsPreservesManualBypass(t *testing.T) {
+	arena := setupTestArena(t)
+	assert.Nil(t, arena.Database.CreateTeam(&model.Team{Id: 254}))
+	assert.Nil(t, arena.assignTeam(254, "R1"))
+	arena.AllianceStations["R1"].Bypass.Store(true)
+	arena.AllianceStations["B3"].Bypass.Store(true)
+
+	assert.Equal(t, 4, arena.BypassEmptyStations(), "already-bypassed B3 should not be counted")
+	assert.True(t, arena.AllianceStations["R1"].Bypass.Load(), "manual bypass was cleared")
+}
+
+// With one robot registered and linked, bypassing the empties is enough to start.
+func TestBypassEmptyStationsEnablesOneRobotStart(t *testing.T) {
+	arena := setupTestArena(t)
+	assert.Nil(t, arena.Database.CreateTeam(&model.Team{Id: 254}))
+	assert.Nil(t, arena.assignTeam(254, "R1"))
+	arena.AllianceStations["R1"].DsConn = &DriverStationConnection{TeamId: 254}
+	arena.AllianceStations["R1"].DsConn.RobotLinked = true
+
+	assert.NotNil(t, arena.checkCanStartMatch(), "empty stations should block before bypassing")
+	arena.BypassEmptyStations()
+	assert.Nil(t, arena.checkCanStartMatch(), "should be startable once empties are bypassed")
+}
+
 func TestParseAutoWinnerMode(t *testing.T) {
 	for name, expected := range map[string]AutoWinnerMode{
 		"random": AutoWinnerRandom,

@@ -55,6 +55,7 @@ function buildDom() {
     <button id="btnStart" disabled></button>
     <button id="btnAbort" disabled></button>
     <button id="btnClear" disabled></button>
+    <button id="btnBypassEmpty"></button>
     <input type="checkbox" id="muteMatchSounds">
     <strong id="matchName"></strong>
     <span id="testMatchNameWrap" style="display:none"></span>

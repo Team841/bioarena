@@ -125,6 +125,32 @@ func TestMatchPlayWebsocketCommands(t *testing.T) {
 	assert.Equal(t, field.PreMatch, web.arena.MatchState)
 }
 
+func TestMatchPlayWebsocketBypassEmptyStations(t *testing.T) {
+	web := setupTestWeb(t)
+	web.arena.Database.CreateTeam(&model.Team{Id: 254})
+
+	server, wsUrl := web.startTestServer()
+	defer server.Close()
+	conn, _, err := gorillawebsocket.DefaultDialer.Dial(wsUrl+"/match_play/websocket", nil)
+	assert.Nil(t, err)
+	defer conn.Close()
+	ws := websocket.NewTestWebsocket(conn)
+	readWebsocketMultiple(t, ws, 4)
+
+	ws.Write("registerTeams", map[string]int{
+		"Red1": 254, "Red2": 0, "Red3": 0, "Blue1": 0, "Blue2": 0, "Blue3": 0,
+	})
+	readWebsocketType(t, ws, "matchLoad")
+
+	ws.Write("bypassEmptyStations", nil)
+	readWebsocketType(t, ws, "arenaStatus")
+
+	assert.False(t, web.arena.AllianceStations["R1"].Bypass.Load(), "occupied station was bypassed")
+	for _, station := range []string{"R2", "R3", "B1", "B2", "B3"} {
+		assert.True(t, web.arena.AllianceStations[station].Bypass.Load(), "station %s not bypassed", station)
+	}
+}
+
 func TestMatchPlayWebsocketSetAutoWinnerMode(t *testing.T) {
 	web := setupTestWeb(t)
 

@@ -675,6 +675,25 @@ func (arena *Arena) assignTeam(teamId int, station string) error {
 	return nil
 }
 
+// BypassEmptyStations sets Bypass on every station with no team assigned, leaving
+// occupied stations untouched. This is the one-click form of what an operator running a
+// 1v0 practice match would otherwise do five times by hand.
+//
+// Deliberately an explicit action rather than something applied automatically on match
+// load: an unbypassed empty station blocking the start is a confirmation step, and
+// removing it silently would also suppress the block when a station is empty by
+// mistake. Returns the number of stations newly bypassed.
+func (arena *Arena) BypassEmptyStations() int {
+	var count int
+	for _, allianceStation := range arena.AllianceStations {
+		if allianceStation.Team == nil && !allianceStation.Bypass.Load() {
+			allianceStation.Bypass.Store(true)
+			count++
+		}
+	}
+	return count
+}
+
 // Returns the next match of the same type that is currently loaded, or nil if there are no more matches.
 func (arena *Arena) getNextMatch(excludeCurrent bool) (*model.Match, error) {
 	if arena.CurrentMatch.Type == model.Test {

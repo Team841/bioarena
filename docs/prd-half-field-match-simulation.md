@@ -471,10 +471,20 @@ alliance", so the AUTO-winner control could be relabelled Win/Lose. That concept
 dropped: the operator establishes their alliance by which driver station they attach
 to, and reads the selector as Red/Blue directly.
 
-What remains is convenience only — bypass stations with no driver station attached, so
-a single-robot match starts without six manual checkbox clicks.
+What remains is convenience only — bypass stations with no team registered, so a
+single-robot match starts without six manual checkbox clicks.
 
-**Exit criteria:** a 1v0 match starts with no manual bypassing.
+**Done.** A **Bypass Empty** button in match play, backed by
+`Arena.BypassEmptyStations()`, which sets `Bypass` on every station with no team and
+leaves occupied stations untouched.
+
+**An explicit action, not automatic.** The first attempt auto-bypassed empty stations
+on team assignment and match reset. It broke ten existing tests, and the pattern showed
+why: the suite deliberately pins the invariant that *an unbypassed empty station blocks
+the match start until the operator bypasses it*. That is a confirmation step. Removing
+it silently would also suppress the block when a station is empty **by mistake** — a
+mis-typed team number would no longer stop the start. The button keeps the
+confirmation while collapsing five clicks into one.
 
 **Deliberately not built:** a practice-alliance setting, a Win/Lose relabel, or a mode
 toggle. Each would add state describing something the physical setup already says.

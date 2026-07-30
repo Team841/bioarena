@@ -175,6 +175,12 @@ func (web *Web) matchPlayWebsocketHandler(w http.ResponseWriter, r *http.Request
 			}
 			testMatchCounter++
 			log.Printf("Loading test match #%d", testMatchCounter)
+		case "bypassEmptyStations":
+			count := web.arena.BypassEmptyStations()
+			log.Printf("Bypassed %d empty station(s)", count)
+			if err = ws.WriteNotifier(web.arena.ArenaStatusNotifier); err != nil {
+				log.Println(err)
+			}
 		case "setAutoWinnerMode":
 			name, ok := data.(string)
 			if !ok {
