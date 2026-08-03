@@ -5,8 +5,15 @@ cheesy-arena.exe
 bioarena
 bioarena-pi
 bioarena.exe
+bioarena_debug.exe
 /estop-panel
 /estop-panel-pi
+
+# Node dependencies for the JS test suite
+node_modules/
+
+# Runtime database, created on first start
+event.db
 
 # Claude Code editor config
 .claude/
