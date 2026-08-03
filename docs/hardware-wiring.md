@@ -160,7 +160,7 @@ flowchart LR
 > The 12 V circuit GND and the Pi GND must remain separate at all times. Connecting them defeats the isolation and may damage the Pi.
 
 > **Button type — NO, not NC.**
-> Use **NO (normally open)** buttons: contacts open when released, close when pressed. The README incorrectly states "NC (normally-closed)" for this wiring; the code logic (`LOW = pressed`) requires NO contacts with internal pull-up.
+> Use **NO (normally open)** buttons: contacts open when released, close when pressed. The code logic (`LOW = pressed`) requires NO contacts with an internal pull-up.
 
 ---
 

@@ -516,9 +516,10 @@ Deliberate, and not worth closing:
    pure timing, and the lighting depends on them.
 4. `arena.Leds` is advanced from the match loop, before `lastMatchState` is updated so
    the post-match sequence fires on the transition.
-5. Address comes from `hub_leds_address` in `config.yaml`. Blank disables output — the
-   controller still runs its sequences but sends nothing, so an unconfigured field
-   cannot stall the match loop.
+5. Blank address disables output — the controller still runs its sequences but sends
+   nothing, so an unconfigured field cannot stall the match loop. The address initially
+   came from `hub_leds_address` in `config.yaml`; [Phase 7](#phase-7--practice-field-fixture-configuration)
+   moved it to the database.
 
 **What the port brings that was not in the original plan:** 17 display modes including
 the startup fill, the alliance advantage sweep during the transition shift, and the

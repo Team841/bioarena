@@ -20,14 +20,22 @@ Run this on your development machine (not on the Pi):
 ./build-pi.sh
 ```
 
-This cross-compiles an ARM binary named `bioarena`.
+This cross-compiles two ARM binaries: `bioarena-pi` for the field controller and
+`estop-panel-pi` for the e-stop panel Pis. The `-pi` suffix keeps them from shadowing a
+local build. Running the script also prints the full deploy sequence for both.
 
 **Copy files to the Pi**
 
 ```bash
-scp bioarena pi@<PI_IP>:~/bioarena/
+scp bioarena-pi pi@<PI_IP>:~/bioarena/bioarena
 scp -r static templates pi@<PI_IP>:~/bioarena/
 scp bioarena.service pi@<PI_IP>:~/
+```
+
+Then make it executable on the Pi:
+
+```bash
+chmod +x ~/bioarena/bioarena
 ```
 
 **Install the systemd service (run on the Pi)**
@@ -253,22 +261,40 @@ To change match timing, go to **Setup > Settings** and adjust the duration field
 
 Network credentials (AP address, AP password, switch address, switch password) are also set in the Settings page and stored in the local database.
 
-## Extending
+## Field hardware
 
-Two hardware interfaces are reserved for future physical field hardware.
+**Hub LEDs (DMX over Ethernet)**
 
-**Field lights**
+The 2026 Hub lighting runs E1.31 sACN, ported from upstream cheesy-arena. It is
+configured from **Arena → LEDs → DMX Hub LEDs** in the web UI and stored in the
+database, so it survives a restart. A blank address disables output.
 
-Implement the `FieldLights` interface to drive field LEDs (e.g., via GPIO):
+Practice fields with cheaper fixtures can override the layout — one fixture per alliance
+Hub instead of eight — and select a fixture capability so per-pixel sequences degrade to
+a solid colour. See
+[docs/prd-half-field-match-simulation.md](docs/prd-half-field-match-simulation.md) for
+the addressing rules.
+
+**Field lights (serial)**
+
+A separate, simpler interface for an Arduino-driven light or sound cue, independent of
+the Hub LEDs:
 
 ```go
 type FieldLights interface {
-    SetColor(r, g, b uint8)
-    Off()
+    SetState(state LightingState) error
 }
 ```
 
-Set `field_lights_driver: "gpio"` in your build configuration to activate.
+Configured in `config.yaml`. Supported `field_lights_driver` values are `none` (the
+default) and `serial`:
+
+```yaml
+field_lights_driver: "serial"
+field_lights_port: "/dev/ttyUSB0"
+field_lights_baud: 9600
+field_lights_command: "START\n"
+```
 
 **E-stop panel**
 
