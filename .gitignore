@@ -24,3 +24,7 @@ Rules/
 # Runtime-generated directories
 db/
 logs/
+
+# Python bytecode from docs/console.py
+__pycache__/
+*.pyc
