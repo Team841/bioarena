@@ -201,6 +201,11 @@ func (sw *Switch) runConfigCommand(command string) (string, error) {
 	// stock driver-station port commands end in "no shutdown", which became
 	// "no shutdownend" and was rejected by IOS. The failure is invisible: a Telnet read
 	// timeout is treated as success, so the port cycling silently did nothing.
+	//
+	// Upstream cannot hit this: it has no driver-station port commands, and both of its
+	// callers build strings ending in a newline. The guard is still worth sending back,
+	// since the precondition is unstated and the failure mode is silent. Tracked in
+	// docs/upstream-divergences.md.
 	if command != "" && !strings.HasSuffix(command, "\n") {
 		command += "\n"
 	}

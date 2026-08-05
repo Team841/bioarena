@@ -491,6 +491,8 @@ Output: `bioarena` (ARM, statically linked, ready to copy to the Pi).
 
 - [docs/hardware-wiring.md](docs/hardware-wiring.md) — field hardware wiring, opto-isolation, e-stop panel assembly.
 - [docs/prd-half-field-match-simulation.md](docs/prd-half-field-match-simulation.md) — requirements for 1v0 half-field REBUILT 2026 simulation: AUTO outcome selection, FMS Game Data, DMX HUB light.
+- [docs/upstream-divergences.md](docs/upstream-divergences.md) — where this fork differs from cheesy-arena, which differences are candidates to send upstream, and which files are kept byte-identical.
+- [docs/console.py](docs/console.py) — serial console for the field switch, standard library only.
 
 ## Contributing
 
