@@ -221,7 +221,17 @@ journalctl -u bioarena -f
 ```
 
 Per-team driver-station packet logs are written to `logs/` on the Pi, one CSV per team
-per match. They are not served over HTTP; copy them off when you need them:
+per match. Browse and download them from any device on the field network:
+
+```
+http://10.0.100.5:8080/logs/
+```
+
+The listing has no authentication, matching how `/static/` is served — anyone on the
+field network can read them. They sit outside `static/` only so the deploy step does not
+copy them to the Pi.
+
+Or pull them off over SSH:
 
 ```bash
 scp pi@10.0.100.5:~/bioarena/logs/\*.csv ./

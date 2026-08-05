@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -86,6 +87,22 @@ func NewWeb(arena *field.Arena) *Web {
 // Starts the webserver and blocks, waiting on requests. Does not return until the application exits.
 func (web *Web) ServeWebInterface(port int) {
 	http.Handle("/static/", http.StripPrefix("/static/", addNoCacheHeader(http.FileServer(http.Dir("static/")))))
+
+	// Driver-station packet logs, served exactly like static/: no authentication, and
+	// directory listing on so an operator can browse and pull a match's logs from a
+	// phone on the field network. They live outside static/ so they are not swept up by
+	// the deploy step, but they are deliberately just as reachable.
+	//
+	// Created up front so the listing is an empty page rather than a 404 before the
+	// first match of the day.
+	if err := os.MkdirAll(filepath.Join(model.BaseDir, field.LogsDir), 0755); err != nil {
+		log.Printf("Could not create %s directory: %v", field.LogsDir, err)
+	}
+	http.Handle(
+		"/logs/",
+		http.StripPrefix("/logs/", addNoCacheHeader(http.FileServer(http.Dir(filepath.Join(model.BaseDir, field.LogsDir))))),
+	)
+
 	http.Handle("/", web.newHandler())
 	log.Printf("Serving HTTP requests on port %d", port)
 

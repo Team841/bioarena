@@ -17,13 +17,15 @@ import (
 	"github.com/team841/bioarena/network"
 )
 
-// logsDir diverges from upstream, which writes to static/logs so the files are
-// downloadable from the web UI without a handler. bioarena stripped the match review
-// pages that linked to them, so nothing here served that purpose -- but the directory
-// was still web-served and listable without authentication, and it rode along in the
-// `scp -r static` deploy step, pushing the dev machine's accumulated test-match logs
-// to the Pi on every deploy.
-const logsDir = "logs"
+// LogsDir holds the per-team driver-station packet logs.
+//
+// Upstream writes these under static/, which makes them downloadable for free but also
+// means the deploy step's `scp -r static` copies every accumulated log to the Pi. Moving
+// them out keeps deploys clean; the web package serves this directory separately on
+// /logs/, so they remain browsable and downloadable exactly as before.
+//
+// Exported for that handler -- see web.ServeWebInterface.
+const LogsDir = "logs"
 
 type TeamMatchLog struct {
 	logger     *log.Logger
@@ -33,14 +35,14 @@ type TeamMatchLog struct {
 
 // Creates a file to log to for the given match and team.
 func NewTeamMatchLog(teamId int, match *model.Match, wifiStatus *network.TeamWifiStatus) (*TeamMatchLog, error) {
-	err := os.MkdirAll(filepath.Join(model.BaseDir, logsDir), 0755)
+	err := os.MkdirAll(filepath.Join(model.BaseDir, LogsDir), 0755)
 	if err != nil {
 		return nil, err
 	}
 
 	filename := fmt.Sprintf(
 		"%s/%s_%s_Match_%s_%d.csv",
-		filepath.Join(model.BaseDir, logsDir),
+		filepath.Join(model.BaseDir, LogsDir),
 		time.Now().Format("20060102150405"),
 		match.Type.String(),
 		match.ShortName,
