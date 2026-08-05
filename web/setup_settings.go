@@ -60,6 +60,22 @@ func (web *Web) settingsPostHandler(w http.ResponseWriter, r *http.Request) {
 	eventSettings.ApChannel, _ = strconv.Atoi(r.PostFormValue("apChannel"))
 	eventSettings.SwitchAddress = r.PostFormValue("switchAddress")
 	eventSettings.SwitchPassword = r.PostFormValue("switchPassword")
+	// Interface names differ per switch model, so these are operator-editable rather
+	// than hardcoded: the defaults target FastEthernet, but a Gigabit switch needs
+	// GigabitEthernet or every match load fails on an invalid interface range.
+	//
+	// Only assigned when the field is actually present in the submission. A POST that
+	// omits them -- a partial form, or an older cached page -- leaves them untouched
+	// rather than silently clearing the switch configuration. Submitting the field empty
+	// is still meaningful and disables the port cycling.
+	for field, target := range map[string]*string{
+		"switchDSPortUpCommands":   &eventSettings.SwitchDSPortUpCommands,
+		"switchDSPortDownCommands": &eventSettings.SwitchDSPortDownCommands,
+	} {
+		if values, ok := r.PostForm[field]; ok && len(values) > 0 {
+			*target = normalizeSwitchCommands(values[0])
+		}
+	}
 
 	eventSettings.FieldEStopPin, _ = strconv.Atoi(r.PostFormValue("fieldEStopPin"))
 	eventSettings.RedEStopPanelAddress = r.PostFormValue("redEStopPanelAddress")
@@ -259,6 +275,16 @@ func (web *Web) clearDbHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, "/setup/settings", 303)
+}
+
+// normalizeSwitchCommands prepares a textarea's contents for the switch driver, which
+// writes them straight into the telnet stream. Browsers submit CRLF line endings, which
+// IOS renders as stray blank lines, and an all-whitespace box should mean "skip this
+// step" rather than sending a lone newline.
+func normalizeSwitchCommands(value string) string {
+	value = strings.ReplaceAll(value, "\r\n", "\n")
+	value = strings.ReplaceAll(value, "\r", "\n")
+	return strings.TrimSpace(value)
 }
 
 func (web *Web) renderSettings(w http.ResponseWriter, r *http.Request, errorMessage string) {

@@ -172,3 +172,45 @@ func mockTelnet(t *testing.T, port int, command1 *string, command2 *string) {
 	}()
 	time.Sleep(100 * time.Millisecond) // Give it some time to open the socket.
 }
+
+// The stock driver-station port commands do not end in a newline, so "end" was appended
+// to the last line and IOS rejected "no shutdownend". A Telnet read timeout counts as
+// success, so the port cycling failed silently on every match load.
+func TestConfigCommandTerminatesLastLine(t *testing.T) {
+	sw := NewSwitch(
+		"127.0.0.1",
+		"password",
+		"interface range FastEthernet0/1-6\nno shutdown",
+		"interface range FastEthernet0/1-6\nshutdown",
+	)
+	sw.port = 9080
+	sw.configBackoffDuration = time.Millisecond
+	sw.configPauseDuration = time.Millisecond
+
+	var command1, command2 string
+	mockTelnetSingleWithResponse(t, sw.port, "", &command1)
+	_, err := sw.runConfigCommand(sw.dsPortDownCommands)
+	assert.Nil(t, err)
+	assert.Contains(t, command1, "shutdown\nend\n")
+	assert.NotContains(t, command1, "shutdownend")
+
+	sw.port++
+	mockTelnetSingleWithResponse(t, sw.port, "", &command2)
+	_, err = sw.runConfigCommand(sw.dsPortUpCommands)
+	assert.Nil(t, err)
+	assert.Contains(t, command2, "no shutdown\nend\n")
+	assert.NotContains(t, command2, "no shutdownend")
+}
+
+// A command already ending in a newline must not gain a second one.
+func TestConfigCommandDoesNotDoubleTerminate(t *testing.T) {
+	sw := NewSwitch("127.0.0.1", "password", "", "")
+	sw.port = 9082
+
+	var command string
+	mockTelnetSingleWithResponse(t, sw.port, "", &command)
+	_, err := sw.runConfigCommand("interface Vlan10\nno ip address\n")
+	assert.Nil(t, err)
+	assert.Contains(t, command, "no ip address\nend\n")
+	assert.NotContains(t, command, "no ip address\n\nend")
+}

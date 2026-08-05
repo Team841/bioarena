@@ -151,6 +151,34 @@ UI for configuring event settings.
                 <label class="col-lg-6 control-label">Switch Password</label>
                 <div class="col-lg-6">
                   <input type="password" class="form-control" name="switchPassword" value="{{.SwitchPassword}}">
+                  <small class="text-body-secondary">
+                    Must match the switch's <em>enable</em> password as well as the VTY line password &mdash;
+                    bioarena sends this one value for both.
+                  </small>
+                </div>
+              </div>
+              <div class="row mb-3">
+                <label class="col-lg-6 control-label" for="switchDSPortDownCommands">
+                  Driver Station Ports &mdash; Down
+                </label>
+                <div class="col-lg-6">
+                  <textarea class="form-control" id="switchDSPortDownCommands" name="switchDSPortDownCommands"
+                    rows="2" spellcheck="false">{{.SwitchDSPortDownCommands}}</textarea>
+                </div>
+              </div>
+              <div class="row mb-3">
+                <label class="col-lg-6 control-label" for="switchDSPortUpCommands">
+                  Driver Station Ports &mdash; Up
+                </label>
+                <div class="col-lg-6">
+                  <textarea class="form-control" id="switchDSPortUpCommands" name="switchDSPortUpCommands"
+                    rows="2" spellcheck="false">{{.SwitchDSPortUpCommands}}</textarea>
+                  <small class="text-body-secondary">
+                    Run in global configuration mode to shut the wired station ports before a VLAN
+                    reconfiguration and bring them back after. Interface names are switch-specific: the defaults
+                    target <code>FastEthernet0/1-6</code>, but a Gigabit switch such as a Catalyst 3560-CX needs
+                    <code>GigabitEthernet0/1-6</code>. Leave blank to skip the port cycling entirely.
+                  </small>
                 </div>
               </div>
 

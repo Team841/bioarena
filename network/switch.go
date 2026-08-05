@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/team841/bioarena/model"
 	"net"
@@ -196,6 +197,13 @@ func (sw *Switch) runCommand(command string) (string, error) {
 // Logs into the switch via Telnet and runs the given command in global configuration mode. Reads the output
 // and returns it as a string.
 func (sw *Switch) runConfigCommand(command string) (string, error) {
+	// Terminate the caller's last line. Without this "end" is appended to it -- the
+	// stock driver-station port commands end in "no shutdown", which became
+	// "no shutdownend" and was rejected by IOS. The failure is invisible: a Telnet read
+	// timeout is treated as success, so the port cycling silently did nothing.
+	if command != "" && !strings.HasSuffix(command, "\n") {
+		command += "\n"
+	}
 	return sw.runCommand(fmt.Sprintf("config terminal\n%send\n", command))
 }
 

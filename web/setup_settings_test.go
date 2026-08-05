@@ -156,8 +156,13 @@ func TestSetupSettingsFieldTabRemovedFields(t *testing.T) {
 	assert.Equal(t, 200, recorder.Code)
 	body := recorder.Body.String()
 	assert.NotContains(t, body, "apPassword")
-	assert.NotContains(t, body, "switchDSPortUpCommands")
-	assert.NotContains(t, body, "switchDSPortDownCommands")
+
+	// The driver-station port commands are exposed: their interface names are
+	// switch-specific, and a Gigabit switch cannot use the FastEthernet defaults.
+	// TestSetupSettingsOmittedFieldBehavior covers the case where they are not
+	// submitted at all, which must still leave them unchanged.
+	assert.Contains(t, body, "switchDSPortUpCommands")
+	assert.Contains(t, body, "switchDSPortDownCommands")
 }
 
 func TestSetupSettingsOmittedFieldBehavior(t *testing.T) {
@@ -194,4 +199,20 @@ func (web *Web) postFileHttpResponse(path string, paramName string, file *bytes.
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	web.newHandler().ServeHTTP(recorder, req)
 	return recorder
+}
+
+func TestNormalizeSwitchCommands(t *testing.T) {
+	// Browsers submit CRLF; the switch driver writes these bytes straight to Telnet.
+	assert.Equal(
+		t,
+		"interface range GigabitEthernet0/1-6\nno shutdown",
+		normalizeSwitchCommands("interface range GigabitEthernet0/1-6\r\nno shutdown\r\n"),
+	)
+
+	// A whitespace-only box means "skip the port cycling", not "send a newline".
+	assert.Equal(t, "", normalizeSwitchCommands("   \r\n  \n "))
+	assert.Equal(t, "", normalizeSwitchCommands(""))
+
+	// Lone CR is normalised too.
+	assert.Equal(t, "a\nb", normalizeSwitchCommands("a\rb"))
 }
