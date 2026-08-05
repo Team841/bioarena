@@ -27,15 +27,19 @@ local build. Running the script also prints the full deploy sequence for both.
 **Copy files to the Pi**
 
 ```bash
-scp bioarena-pi pi@<PI_IP>:~/bioarena/bioarena
+scp bioarena-pi pi@<PI_IP>:~/bioarena/
 scp -r static templates pi@<PI_IP>:~/bioarena/
 scp bioarena.service pi@<PI_IP>:~/
 ```
 
+Keep the `bioarena-pi` filename — `bioarena.service` runs
+`/home/pi/bioarena/bioarena-pi`, so renaming it on copy leaves the service unable to
+start.
+
 Then make it executable on the Pi:
 
 ```bash
-chmod +x ~/bioarena/bioarena
+chmod +x ~/bioarena/bioarena-pi
 ```
 
 **Install the systemd service (run on the Pi)**
@@ -45,6 +49,14 @@ sudo mv ~/bioarena.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable bioarena
 sudo systemctl start bioarena
+```
+
+The service file is **moved**, not copied, so it ends up at
+`/etc/systemd/system/bioarena.service` and will not be found in `~/bioarena/`. Confirm
+it is installed with:
+
+```bash
+systemctl cat bioarena
 ```
 
 The service automatically assigns `10.0.100.5/24` to `eth0` on startup.
