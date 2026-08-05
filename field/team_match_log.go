@@ -17,7 +17,13 @@ import (
 	"github.com/team841/bioarena/network"
 )
 
-const logsDir = "static/logs"
+// logsDir diverges from upstream, which writes to static/logs so the files are
+// downloadable from the web UI without a handler. bioarena stripped the match review
+// pages that linked to them, so nothing here served that purpose -- but the directory
+// was still web-served and listable without authentication, and it rode along in the
+// `scp -r static` deploy step, pushing the dev machine's accumulated test-match logs
+// to the Pi on every deploy.
+const logsDir = "logs"
 
 type TeamMatchLog struct {
 	logger     *log.Logger

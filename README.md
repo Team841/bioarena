@@ -214,8 +214,23 @@ sudo systemctl status bioarena
 
 ### Viewing logs
 
+Service output:
+
 ```bash
 journalctl -u bioarena -f
+```
+
+Per-team driver-station packet logs are written to `logs/` on the Pi, one CSV per team
+per match. They are not served over HTTP; copy them off when you need them:
+
+```bash
+scp pi@10.0.100.5:~/bioarena/logs/\*.csv ./
+```
+
+The directory grows with every match. Clear it periodically:
+
+```bash
+ssh pi@10.0.100.5 "rm -f ~/bioarena/logs/*.csv"
 ```
 
 ### Running a practice match
