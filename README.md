@@ -7,7 +7,7 @@ A Raspberry Pi service for running FRC practice sessions. Controls up to 6 robot
 - Raspberry Pi 4 (armv7 / 32-bit Raspberry Pi OS recommended)
 - [Go 1.23+](https://golang.org/dl/) on your build machine
 - Vivid-Hosting VH-113 field access point (running OpenWRT)
-- Cisco Catalyst 3500-series managed switch
+- Layer 3 managed switch with the IOS DHCP server (Catalyst 3560-CX or similar; see [Step 2](#step-2--configure-the-managed-switch))
 - Static IP assigned to Pi (recommend `10.0.100.5`)
 
 ## Install
@@ -86,7 +86,7 @@ FRC Driver Station software is hardcoded to contact its FMS at `10.0.100.5` on p
 
 ```
                         ┌─────────────────────────────────────┐
-                        │   Cisco 3500 Managed Switch          │
+                        │   Cisco L3 Managed Switch            │
                         │                                       │
           ┌─────────────┤ Trunk port        6 x access ports   │
           │             │                   (one per station)   │
@@ -131,26 +131,69 @@ static ip_address=10.0.100.5/24
 
 Do not put the Pi on a robot subnet (`10.TE.AM.x`). Use a dedicated management subnet such as `10.0.100.0/24`.
 
-### Step 2 — Configure the Cisco 3500 switch
+### Step 2 — Configure the managed switch
 
-The switch must support VLANs. Bioarena configures it automatically over Telnet (port 23). You must:
+Bioarena reconfigures the switch over Telnet at every match load. You do the one-time
+setup by hand; bioarena does the per-match VLAN and DHCP work.
 
-1. Enable Telnet access with a password.
-2. Create VLANs 10, 20, 30, 40, 50, 60 (one per alliance station).
-3. Set the Pi's port as a trunk carrying all VLANs.
-4. Set each robot's port as an access port in the correct VLAN.
+**Switch requirements.** Bioarena issues six concurrent SVIs with IP addresses and six
+DHCP pools, so the switch must be Layer 3 capable with the IOS DHCP server — a
+3550/3560/3750-class unit. A 2960 will not work: it allows only one active SVI, and the
+LAN Lite images have no DHCP server.
 
-The switch address and password are set in the Bioarena web UI under Settings > Network.
+One-time setup:
+
+1. Enable Telnet on the VTY lines with a password (`transport input telnet`). Recent IOS
+   images ship SSH-only or with the lines unconfigured.
+2. **Set the enable password to the same value as the VTY password.** Bioarena has a
+   single password field and sends it for both. Different passwords fail silently: it
+   authenticates to the VTY line, never reaches privileged mode, and every configuration
+   command is discarded with no error.
+3. Create VLANs 10, 20, 30, 40, 50, 60 (one per alliance station).
+4. Set the Pi's port as a trunk carrying all VLANs.
+5. Set each robot's port as an access port in the correct VLAN.
+6. Enable `ip routing`.
+
+The switch address and password are set in the web UI under **Arena → Settings**.
+
+> **Bioarena will not touch the switch or the AP unless network security is enabled**,
+> and that flag is read from `config.yaml` on every start — setting it in the web UI is
+> overwritten on the next restart. Set `network_security_enabled: true` in
+> `config.yaml` on the Pi and restart the service. Symptom if you miss it: no errors, no
+> switch activity, nothing at all.
 
 #### First-time switch setup via console cable
 
-A console cable (USB to RJ45) is required for initial configuration. Connect it to the switch's `CONSOLE` port, then open a terminal emulator at 9600 baud, 8N1.
+A USB-to-RJ45 console cable is required. Connect it to the switch's port labelled
+`CONSOLE` — on most units it is on the rear and physically identical to the Ethernet
+ports. If the switch also has a USB console socket, unplug anything in it: on many Cisco
+models an occupied USB console **disables the RJ45 console** silently.
 
-From a Pi over SSH you can use Python if minicom is unavailable:
+[docs/console.py](docs/console.py) opens an interactive session using only the Python standard
+library, so it needs no packages. That matters on older Raspbian releases, whose apt
+repositories have moved to `archive.debian.org` and can no longer install `screen` or
+`minicom` without repointing the sources list.
 
 ```bash
-python3 ~/console.py   # see console.py script in this repo's docs
+scp docs/console.py pi@10.0.100.5:~/
 ```
+
+```bash
+ssh pi@10.0.100.5
+python3 ~/console.py            # /dev/ttyUSB0 at 9600 8N1; Ctrl-] to exit
+python3 ~/console.py --list     # if unsure which device the cable is
+```
+
+Cisco's own USB console ports enumerate as `/dev/ttyACM0` rather than `/dev/ttyUSB0`.
+
+Press Enter a few times after connecting — the console prints nothing until it receives
+input, which is the most common reason a working cable looks dead. If you get garbage
+characters instead of a prompt, the cable is fine and the baud rate is wrong; try
+`-b 115200`.
+
+If you see nothing at all through a full power cycle of the switch, the problem is not
+the cable. A switch whose fans spin but whose `SYST` LED never lights is not booting, and
+there is nothing on the console to talk to.
 
 When prompted by the setup wizard, assign the switch a static management IP on the field management subnet. Each site uses `10.X.100.3/24` where `X` is the site number:
 
