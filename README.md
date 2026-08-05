@@ -26,6 +26,13 @@ local build. Running the script also prints the full deploy sequence for both.
 
 **Copy files to the Pi**
 
+If bioarena is already installed, stop it first — Linux refuses to overwrite a running
+executable, and `scp` reports that as a bare `Failure`:
+
+```bash
+ssh pi@<PI_IP> "sudo systemctl stop bioarena"
+```
+
 ```bash
 scp bioarena-pi pi@<PI_IP>:~/bioarena/
 scp -r static templates pi@<PI_IP>:~/bioarena/
