@@ -7,6 +7,7 @@ A Raspberry Pi service for running FRC practice sessions. Controls up to 6 robot
 - Raspberry Pi 4 (armv7 / 32-bit Raspberry Pi OS recommended)
 - [Go 1.23+](https://golang.org/dl/) on your build machine
 - Vivid-Hosting VH-113 field access point (running OpenWRT)
+- Vivid-Hosting VH-109 radio on each robot
 - Layer 3 managed switch with the IOS DHCP server (Catalyst 3560-CX or similar; see [Step 2](#step-2--configure-the-managed-switch))
 - Static IP assigned to Pi (recommend `10.0.100.5`)
 
@@ -80,23 +81,26 @@ This section is the most important part of the physical field setup. Read it car
 
 ### Why this network layout matters
 
-FRC Driver Station software is hardcoded to contact its FMS at `10.0.100.5` on ports `1750` (TCP) and `1121`/`1160` (UDP). The Pi must live at that address on the wired field network. Each robot lives on its own team-number-derived subnet isolated by a VLAN. The access point handles wireless; the switch enforces isolation.
+FRC Driver Station software is hardcoded to contact its FMS at `10.0.100.5` on ports `1750` (TCP) and `1121`/`1160` (UDP). The Pi must live at that address on the wired field network. Each team lives on its own team-number-derived subnet isolated by a VLAN, with the driver station laptop wired into that VLAN and the robot joining it over WiFi. The access point handles the wireless side; the switch enforces isolation and routes each team subnet to the FMS.
 
 ### Topology
+
+This mirrors a competition field: **driver station laptops are wired**, **robots are
+wireless** through their own radios.
 
 ```
                         ┌─────────────────────────────────────┐
                         │   Cisco L3 Managed Switch            │
                         │                                       │
-          ┌─────────────┤ Trunk port        6 x access ports   │
-          │             │                   (one per station)   │
+          ┌─────────────┤ Access ports      6 x access ports   │
+          │             │ (Pi, AP)          (one per station)   │
           │             └──────────────────────┬────────────────┘
-          │                                    │ (wired robot connections)
-    ┌─────┴──────┐                      ┌──────┴──────┐
-    │ Raspberry  │                      │  Robots      │
-    │ Pi 4       │                      │  (RoboRIO)   │
-    │ 10.0.100.5 │                      │  10.TE.AM.xx │
-    └─────┬──────┘                      └─────────────┘
+          │                                    │ (wired)
+    ┌─────┴──────┐                      ┌──────┴─────────────┐
+    │ Raspberry  │                      │  DS Laptops        │
+    │ Pi 4       │                      │  (one per station) │
+    │ 10.0.100.5 │                      │  10.TE.AM.5        │
+    └─────┬──────┘                      └────────────────────┘
           │
           │ (HTTP to AP, Telnet to switch)
           │
@@ -105,14 +109,18 @@ FRC Driver Station software is hardcoded to contact its FMS at `10.0.100.5` on p
     │ VH-113 AP        │
     │ (OpenWRT)        │
     └─────┬────────────┘
-          │ (WiFi — one SSID per team)
+          │ (WiFi — one SSID per team, named for the team number)
           │
     ┌─────┴──────────────┐
-    │  DS Laptops        │
-    │  (one per station) │
-    │  10.TE.AM.5        │
+    │  Robot radios      │
+    │  (VH-109)          │
+    │  10.TE.AM.xx       │
     └────────────────────┘
 ```
+
+Each station's laptop and its robot land on the same VLAN and team subnet — the laptop
+over its wired port, the robot over WiFi. Sharing a subnet is what lets the driver
+station find the roboRIO by mDNS, which does not cross subnet boundaries.
 
 ### Step 1 — Assign a static IP to the Pi
 
@@ -151,7 +159,9 @@ One-time setup:
    command is discarded with no error.
 3. Create VLANs 10, 20, 30, 40, 50, 60 (one per alliance station).
 4. Set the Pi's port as a trunk carrying all VLANs.
-5. Set each robot's port as an access port in the correct VLAN.
+5. Set each driver station's port as an access port in the correct VLAN. These are the
+   ports bioarena shuts and reopens around a VLAN reconfiguration, so they must match
+   the interface range in the driver-station port commands below.
 6. Enable `ip routing`.
 
 The switch address and password are set in the web UI under **Arena → Settings**.
@@ -224,9 +234,15 @@ When a match loads, the controller pushes DHCP pool and IP configurations for ea
 
 ### Step 3 — Configure the field access point
 
-The AP must run the Vivid-Hosting OpenWRT firmware with the REST API enabled. Bioarena communicates over HTTP. Set the AP address and password in Settings > Network.
+The AP must run the Vivid-Hosting OpenWRT firmware with the REST API enabled. Bioarena communicates over HTTP. Set the AP address and password under **Arena → Settings**.
 
-When a match loads, the controller pushes one SSID + WPA2 key per team (six total). Driver Station laptops connect to their team's SSID and land on the correct VLAN.
+When a match loads, the controller pushes one SSID + WPA2 key per team (six total). The
+SSID is the team number and the key is that team's WPA key from its record under
+**Teams** — so each robot's VH-109 radio, provisioned for its team as it would be for a
+competition, joins the correct VLAN with no field-side changes.
+
+A team with no WPA key set is provisioned with an empty one. Set it on the team record
+before the robot will associate.
 
 ### Step 4 — Verify Pi reachability
 
