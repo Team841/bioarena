@@ -55,6 +55,12 @@ func defaultConfig() *Config {
 		HttpPort:           8080,
 		FieldLightsBaud:    9600,
 		FieldLightsCommand: "START\n",
+
+		// On unless config.yaml says otherwise. A key absent from the file leaves this
+		// default in place, so a Pi carrying an older config.yaml still configures the
+		// field rather than silently doing nothing. Setting it false explicitly turns it
+		// off for bench testing.
+		NetworkSecurityEnabled: true,
 	}
 }
 

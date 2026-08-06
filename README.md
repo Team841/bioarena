@@ -167,10 +167,12 @@ One-time setup:
 The switch address and password are set in the web UI under **Arena → Settings**.
 
 > **Bioarena will not touch the switch or the AP unless network security is enabled.**
-> The shipped `config.yaml` sets `network_security_enabled: true`, but the flag is read
-> from that file on every start and written into the database — so changing it in the web
-> UI is overwritten on the next restart, and a Pi carrying an older `config.yaml` stays
-> off. Symptom: no errors, no switch activity, nothing at all.
+> It defaults to on, including when the key is absent from `config.yaml`. Set
+> `network_security_enabled: false` to turn it off for bench testing without network
+> hardware; the symptom is no errors, no switch activity, nothing at all.
+>
+> The flag is read from `config.yaml` on every start and written into the database, so
+> changing it in the web UI is overwritten on the next restart.
 
 #### First-time switch setup via console cable
 

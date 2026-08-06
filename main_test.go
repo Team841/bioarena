@@ -82,3 +82,27 @@ func TestBuildFieldLightsUnknownDriverPanics(t *testing.T) {
 		assert.NotPanics(t, func() { buildFieldLights(cfg) }, "driver=%q should not panic", driver)
 	}
 }
+
+// Network security is on unless the file explicitly disables it. A Pi carrying an older
+// config.yaml with the key absent must still configure the field, since the alternative
+// is the switch and AP silently going unconfigured with no error to explain it.
+func TestLoadConfigNetworkSecurityDefaultsOn(t *testing.T) {
+	// Absent file.
+	cfg, err := loadConfig(filepath.Join(t.TempDir(), "nonexistent.yaml"))
+	assert.Nil(t, err)
+	assert.True(t, cfg.NetworkSecurityEnabled)
+
+	// File present, key absent.
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	assert.Nil(t, os.WriteFile(path, []byte("http_port: 9090\n"), 0644))
+	cfg, err = loadConfig(path)
+	assert.Nil(t, err)
+	assert.True(t, cfg.NetworkSecurityEnabled, "absent key should leave the default on")
+
+	// Explicitly disabled for bench testing.
+	path = filepath.Join(t.TempDir(), "config.yaml")
+	assert.Nil(t, os.WriteFile(path, []byte("network_security_enabled: false\n"), 0644))
+	cfg, err = loadConfig(path)
+	assert.Nil(t, err)
+	assert.False(t, cfg.NetworkSecurityEnabled, "explicit false must override the default")
+}
