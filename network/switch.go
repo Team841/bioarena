@@ -42,6 +42,7 @@ type Switch struct {
 	password              string
 	dsPortUpCommands      string
 	dsPortDownCommands    string
+	dnsServer             string
 	mutex                 sync.Mutex
 	configBackoffDuration time.Duration
 	configPauseDuration   time.Duration
@@ -50,13 +51,14 @@ type Switch struct {
 
 var ServerIpAddress = "10.0.100.5" // The DS will try to connect to this address only.
 
-func NewSwitch(address, password, dsPortUpCommands, dsPortDownCommands string) *Switch {
+func NewSwitch(address, password, dsPortUpCommands, dsPortDownCommands, dnsServer string) *Switch {
 	return &Switch{
 		address:               address,
 		port:                  switchTelnetPort,
 		password:              password,
 		dsPortUpCommands:      dsPortUpCommands,
 		dsPortDownCommands:    dsPortDownCommands,
+		dnsServer:             dnsServer,
 		configBackoffDuration: switchConfigBackoffDurationSec * time.Second,
 		configPauseDuration:   switchConfigPauseDurationSec * time.Second,
 		Status:                "UNKNOWN",
@@ -99,12 +101,22 @@ func (sw *Switch) ConfigureTeamEthernet(teams [6]*model.Team) error {
 			return
 		}
 		teamPartialIp := fmt.Sprintf("%d.%d", team.Id/100, team.Id%100)
+
+		// Omitted entirely when unconfigured. Handing out a resolver the team subnet
+		// cannot reach makes every lookup wait for a timeout instead of failing fast,
+		// which is worse than having no DNS at all.
+		dnsServerCommand := ""
+		if sw.dnsServer != "" {
+			dnsServerCommand = fmt.Sprintf("dns-server %s\n", sw.dnsServer)
+		}
+
 		addTeamVlansCommand += fmt.Sprintf(
 			"ip dhcp excluded-address 10.%s.1 10.%s.19\n"+
 				"ip dhcp excluded-address 10.%s.200 10.%s.254\n"+
 				"ip dhcp pool dhcp%d\n"+
 				"network 10.%s.0 255.255.255.0\n"+
 				"default-router 10.%s.%d\n"+
+				"%s"+
 				"lease 7\n"+
 				"interface Vlan%d\nip address 10.%s.%d 255.255.255.0\n",
 			teamPartialIp,
@@ -115,6 +127,7 @@ func (sw *Switch) ConfigureTeamEthernet(teams [6]*model.Team) error {
 			teamPartialIp,
 			teamPartialIp,
 			switchTeamGatewayAddress,
+			dnsServerCommand,
 			vlan,
 			teamPartialIp,
 			switchTeamGatewayAddress,

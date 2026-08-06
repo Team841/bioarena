@@ -12,10 +12,15 @@ warning_remaining_seconds: 30
 # HTTP port for the web interface.
 http_port: 8080
 
-# Set to true to configure the Wi-Fi AP and Ethernet switch for each match.
-# Requires AP address, AP password, and switch address set via the web UI.
-# Leave false for bench testing without network hardware.
-network_security_enabled: false
+# Configure the Wi-Fi AP and Ethernet switch on each match load.
+# Requires the AP and switch addresses and passwords set under Arena > Settings.
+#
+# This is the only place the flag is read: it is written into the database on every
+# startup, so changing it in the web UI is overwritten on the next restart.
+#
+# Set false for bench testing without network hardware. Nothing then contacts the
+# switch or the AP -- with no errors, which reads as the network silently not working.
+network_security_enabled: true
 
 # Field lights driver.
 # "none"   — no lights output (default for bench testing).

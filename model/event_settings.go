@@ -39,6 +39,10 @@ type EventSettings struct {
 	SwitchPassword                   string
 	SwitchDSPortUpCommands           string
 	SwitchDSPortDownCommands         string
+	// SwitchDnsServer is handed to team subnets in the per-match DHCP pools. Blank omits
+	// the option entirely, which is correct for a field with no upstream resolver: a
+	// DNS server clients cannot reach makes lookups time out rather than fail fast.
+	SwitchDnsServer string
 	RedEStopPanelAddress             string
 	BlueEStopPanelAddress            string
 	FieldEStopPin                    int

@@ -15,7 +15,7 @@ import (
 )
 
 func TestConfigureSwitch(t *testing.T) {
-	sw := NewSwitch("127.0.0.1", "password", "", "")
+	sw := NewSwitch("127.0.0.1", "password", "", "", "")
 	assert.Equal(t, "UNKNOWN", sw.Status)
 	sw.port = 9050
 	sw.configBackoffDuration = time.Millisecond
@@ -87,7 +87,7 @@ func TestConfigureSwitch(t *testing.T) {
 }
 
 func TestGetStationForTeamId(t *testing.T) {
-	sw := NewSwitch("127.0.0.1", "password", "", "")
+	sw := NewSwitch("127.0.0.1", "password", "", "", "")
 	sw.port = 9060
 
 	ciscoArpOutput := "password\nenable\npassword\nterminal length 0\n" +
@@ -119,7 +119,7 @@ func TestGetStationForTeamId(t *testing.T) {
 	assert.Equal(t, "", station)
 
 	// Returns "" when switch address is empty.
-	emptySw := NewSwitch("", "password", "", "")
+	emptySw := NewSwitch("", "password", "", "", "")
 	station, err = emptySw.GetStationForTeamId(254)
 	assert.Nil(t, err)
 	assert.Equal(t, "", station)
@@ -182,6 +182,7 @@ func TestConfigCommandTerminatesLastLine(t *testing.T) {
 		"password",
 		"interface range FastEthernet0/1-6\nno shutdown",
 		"interface range FastEthernet0/1-6\nshutdown",
+		"",
 	)
 	sw.port = 9080
 	sw.configBackoffDuration = time.Millisecond
@@ -204,7 +205,7 @@ func TestConfigCommandTerminatesLastLine(t *testing.T) {
 
 // A command already ending in a newline must not gain a second one.
 func TestConfigCommandDoesNotDoubleTerminate(t *testing.T) {
-	sw := NewSwitch("127.0.0.1", "password", "", "")
+	sw := NewSwitch("127.0.0.1", "password", "", "", "")
 	sw.port = 9082
 
 	var command string
@@ -213,4 +214,31 @@ func TestConfigCommandDoesNotDoubleTerminate(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Contains(t, command, "no ip address\nend\n")
 	assert.NotContains(t, command, "no ip address\n\nend")
+}
+
+// The DHCP pools carry a DNS server only when one is configured. An unreachable
+// resolver makes every lookup wait for a timeout, so blank must omit the option rather
+// than emit an empty or placeholder value.
+func TestConfigureSwitchDnsServer(t *testing.T) {
+	// Configured: the option appears in the pool, after default-router.
+	sw := NewSwitch("127.0.0.1", "password", "", "", "10.0.100.5")
+	sw.port = 9090
+	sw.configBackoffDuration = time.Millisecond
+	sw.configPauseDuration = time.Millisecond
+
+	var command1, command2 string
+	mockTelnet(t, sw.port, &command1, &command2)
+	assert.Nil(t, sw.ConfigureTeamEthernet([6]*model.Team{{Id: 841}, nil, nil, nil, nil, nil}))
+	assert.Contains(t, command2, "default-router 10.8.41.4\ndns-server 10.0.100.5\nlease 7\n")
+
+	// Blank: no dns-server line at all, and the surrounding pool is unchanged.
+	swNoDns := NewSwitch("127.0.0.1", "password", "", "", "")
+	swNoDns.port = 9092
+	swNoDns.configBackoffDuration = time.Millisecond
+	swNoDns.configPauseDuration = time.Millisecond
+
+	mockTelnet(t, swNoDns.port, &command1, &command2)
+	assert.Nil(t, swNoDns.ConfigureTeamEthernet([6]*model.Team{{Id: 841}, nil, nil, nil, nil, nil}))
+	assert.NotContains(t, command2, "dns-server")
+	assert.Contains(t, command2, "default-router 10.8.41.4\nlease 7\n")
 }

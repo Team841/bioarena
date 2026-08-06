@@ -60,6 +60,7 @@ func (web *Web) settingsPostHandler(w http.ResponseWriter, r *http.Request) {
 	eventSettings.ApChannel, _ = strconv.Atoi(r.PostFormValue("apChannel"))
 	eventSettings.SwitchAddress = r.PostFormValue("switchAddress")
 	eventSettings.SwitchPassword = r.PostFormValue("switchPassword")
+	eventSettings.SwitchDnsServer = strings.TrimSpace(r.PostFormValue("switchDnsServer"))
 	// Interface names differ per switch model, so these are operator-editable rather
 	// than hardcoded: the defaults target FastEthernet, but a Gigabit switch needs
 	// GigabitEthernet or every match load fails on an invalid interface range.

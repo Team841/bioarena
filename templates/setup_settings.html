@@ -158,6 +158,20 @@ UI for configuring event settings.
                 </div>
               </div>
               <div class="row mb-3">
+                <label class="col-lg-6 control-label" for="switchDnsServer">
+                  Team Subnet DNS Server
+                </label>
+                <div class="col-lg-6">
+                  <input type="text" class="form-control" id="switchDnsServer" name="switchDnsServer"
+                    value="{{.SwitchDnsServer}}" placeholder="leave blank for none">
+                  <small class="text-body-secondary">
+                    Handed to driver stations and robots in each team's DHCP lease. Leave blank unless the field
+                    has an upstream resolver: a DNS server the team subnet cannot reach makes every lookup wait
+                    for a timeout rather than fail immediately.
+                  </small>
+                </div>
+              </div>
+              <div class="row mb-3">
                 <label class="col-lg-6 control-label" for="switchDSPortDownCommands">
                   Driver Station Ports &mdash; Down
                 </label>

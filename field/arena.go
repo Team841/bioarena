@@ -160,6 +160,7 @@ func (arena *Arena) LoadSettings() error {
 	arena.networkSwitch = network.NewSwitch(
 		settings.SwitchAddress, settings.SwitchPassword,
 		settings.SwitchDSPortUpCommands, settings.SwitchDSPortDownCommands,
+		settings.SwitchDnsServer,
 	)
 
 	if settings.FieldEStopPin != 0 {
