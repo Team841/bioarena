@@ -167,12 +167,13 @@ One-time setup:
 The switch address and password are set in the web UI under **Arena → Settings**.
 
 > **Bioarena will not touch the switch or the AP unless network security is enabled.**
-> It defaults to on, including when the key is absent from `config.yaml`. Set
-> `network_security_enabled: false` to turn it off for bench testing without network
-> hardware; the symptom is no errors, no switch activity, nothing at all.
+> Off means no errors, no switch activity, nothing at all — so if the field appears
+> inert, check this first.
 >
-> The flag is read from `config.yaml` on every start and written into the database, so
-> changing it in the web UI is overwritten on the next restart.
+> It defaults to on. `config.yaml` seeds it on a first run only; from then on the
+> checkbox under **Arena → Settings** is authoritative and survives restarts. Turn it off
+> there for bench testing, or when a switch fails mid-session and you want to keep
+> running matches.
 
 #### First-time switch setup via console cable
 

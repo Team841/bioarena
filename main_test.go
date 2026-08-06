@@ -106,3 +106,17 @@ func TestLoadConfigNetworkSecurityDefaultsOn(t *testing.T) {
 	assert.Nil(t, err)
 	assert.False(t, cfg.NetworkSecurityEnabled, "explicit false must override the default")
 }
+
+// Network security is seeded from config.yaml only when the database is being created.
+// After that the Settings page is authoritative, so an operator who turns the field
+// configuration off mid-session -- when a switch fails, say -- does not have it silently
+// re-enabled by the next restart.
+func TestIsFirstRun(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "event.db")
+
+	assert.True(t, isFirstRun(dbPath), "no database file yet")
+
+	assert.Nil(t, os.WriteFile(dbPath, []byte{}, 0644))
+	assert.False(t, isFirstRun(dbPath), "an existing database must not be re-seeded")
+}

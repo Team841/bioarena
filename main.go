@@ -109,12 +109,24 @@ func buildFieldLights(cfg *Config) hardware.FieldLights {
 	}
 }
 
+// isFirstRun reports whether the event database has yet to be created. Settings that the
+// operator is expected to change from the web UI are seeded from config.yaml only then,
+// so a later edit is not reverted by the next restart.
+func isFirstRun(dbPath string) bool {
+	_, err := os.Stat(dbPath)
+	return errors.Is(err, os.ErrNotExist)
+}
+
 // Main entry point for the application.
 func main() {
 	cfg, err := loadConfig(configPath)
 	if err != nil {
 		log.Fatalln("Error loading config.yaml:", err)
 	}
+
+	// Determined before the arena opens the database and creates the settings record.
+	// Decides which settings config.yaml is allowed to seed.
+	firstRun := isFirstRun(eventDbPath)
 
 	arena, err := field.NewArena(eventDbPath)
 	if err != nil {
@@ -137,9 +149,18 @@ func main() {
 	arena.EventSettings.PauseDurationSec = cfg.PauseDurationSec
 	arena.EventSettings.TeleopDurationSec = cfg.TeleopDurationSec
 	arena.EventSettings.WarningRemainingDurationSec = cfg.WarningRemainingDurationSec
-	arena.EventSettings.NetworkSecurityEnabled = cfg.NetworkSecurityEnabled
 	arena.EventSettings.RedEStopPanelAddress = cfg.RedEStopPanel.Host
 	arena.EventSettings.BlueEStopPanelAddress = cfg.BlueEStopPanel.Host
+
+	// Network security is seeded from config.yaml only when the database is being
+	// created. Unlike the settings above it is operationally useful to change mid-event
+	// -- turning the field configuration off when a switch fails, for instance -- so the
+	// Settings page is authoritative once the field has been set up. Re-seeding it on
+	// every start would silently revert that on the next restart.
+	if firstRun {
+		arena.EventSettings.NetworkSecurityEnabled = cfg.NetworkSecurityEnabled
+	}
+
 	if err = arena.Database.UpdateEventSettings(arena.EventSettings); err != nil {
 		log.Fatalln("Error saving config to DB:", err)
 	}

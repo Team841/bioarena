@@ -121,6 +121,13 @@ UI for configuring event settings.
                   <input type="checkbox" id="networkSecurityEnabled"
                     name="networkSecurityEnabled" {{if .NetworkSecurityEnabled}} checked{{end}}>
                 </div>
+                <div class="col-lg-5">
+                  <small class="text-body-secondary">
+                    Configures the AP and switch on every match load. Turn it off to run matches without touching
+                    network hardware &mdash; useful on a bench, or if the switch fails mid-session. Saved here and
+                    kept across restarts.
+                  </small>
+                </div>
               </div>
               <div class="row mb-3">
                 <label class="col-lg-6 control-label">AP Address</label>
