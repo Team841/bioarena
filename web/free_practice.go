@@ -93,6 +93,18 @@ func (web *Web) freePracticeWebsocketHandler(w http.ResponseWriter, r *http.Requ
 				log.Println(err)
 			}
 
+		case "disableField":
+			web.arena.DisableField()
+			if err = ws.WriteNotifier(web.arena.ArenaStatusNotifier); err != nil {
+				log.Println(err)
+			}
+
+		case "enableField":
+			web.arena.EnableField()
+			if err = ws.WriteNotifier(web.arena.ArenaStatusNotifier); err != nil {
+				log.Println(err)
+			}
+
 		case "setSlot":
 			args := struct {
 				Station string

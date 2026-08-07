@@ -508,6 +508,27 @@ Match timing defaults (2026 REBUILT):
 | Pause   | 3 s      |
 | Teleop  | 140 s    |
 
+### Running free practice
+
+Free practice has no timers: registered robots are drivable continuously until the
+operator stops them. Register each station first — the team's SSID and its VLAN subnet are
+created on registration, so a driver station plugged in beforehand has nothing to get an
+address from.
+
+Three controls, and the difference between the last two matters:
+
+| Control | Effect |
+|---------|--------|
+| **ENABLE FIELD** | Starts free practice, or resumes robots after a halt |
+| **DISABLE FIELD** | Halts all robot operation. Teams stay registered, SSIDs stay up, team subnets stay configured, driver stations stay connected. **ENABLE FIELD** resumes immediately |
+| **Reset Field** | Clears every slot, drops all SSIDs and team subnets, disconnects every driver station, and returns to setup |
+
+Reach for **DISABLE FIELD** between runs. **Reset Field** is for ending the session or
+starting over — after it, every station has to be registered again, and laptops re-request
+an address, which takes up to one DHCP lease unless the port is unplugged and replugged.
+
+Per-station E-stops remain functional throughout and are independent of both.
+
 ### Ports used by the service
 
 | Port | Protocol | Purpose                          |
@@ -655,6 +676,28 @@ The runtime database is BoltDB in `event.db`, created on first start and not tra
 Standard Go: tabs, `CamelCase` for exported names, `camelCase` otherwise, and short
 domain-named packages matching the directories above. Run `gofmt` before submitting.
 
+**First-time setup**
+
+Node LTS is required for the JavaScript tests, which the pre-push hook runs:
+
+```bash
+winget install OpenJS.NodeJS.LTS
+```
+
+Then, in a new terminal so the updated `PATH` is picked up:
+
+```bash
+npm install
+```
+
+```bash
+git config core.hooksPath .githooks
+```
+
+That last line enables [.githooks/pre-push](.githooks/pre-push), which runs both test
+suites and refuses the push if either fails. Git stores `core.hooksPath` per clone, so
+every clone needs it once.
+
 **Run Go tests**
 
 ```bash
@@ -685,7 +728,7 @@ if (typeof module !== "undefined") {
 Client-side behaviour cannot be caught by the Go tests, so any change to a `.js` file
 needs Jest coverage of its state transitions — what a handler does when the server reports
 an empty slot versus an occupied one, whether a user-typed value survives a status push,
-and so on. Both suites must pass before committing.
+and so on. Both suites must pass before committing; the pre-push hook enforces it.
 
 **Run locally (no robots)**
 

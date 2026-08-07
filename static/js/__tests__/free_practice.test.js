@@ -13,7 +13,18 @@ global.CheesyWebsocket = class {
 };
 global.websocket = new global.CheesyWebsocket();
 
-const { handleArenaStatus } = require("../free_practice.js");
+const {
+  handleArenaStatus,
+  enableField,
+  disableField,
+  exitFreePractice,
+  setWebsocket,
+} = require("../free_practice.js");
+
+const sentMessages = [];
+setWebsocket({
+  send: (type, data) => sentMessages.push({ type, data }),
+});
 
 // ---- helpers ----------------------------------------------------------------
 
@@ -25,7 +36,8 @@ function buildDom() {
       <div id="fpModeLabel" class="fp-mode-label">FREE PRACTICE SETUP</div>
     </div>
     <button id="enterBtn"></button>
-    <button id="exitBtn" class="d-none"></button>
+    <button id="disableBtn" class="d-none"></button>
+    <button id="resetBtn" class="d-none"></button>
     <div id="reconfiguringOverlay" class="d-none"></div>
     <span id="apStatus" data-status=""></span>
     <span id="swStatus" data-status=""></span>
@@ -51,10 +63,16 @@ function emptyStatus(overrides = {}) {
   STATIONS.forEach((s) => {
     stations[s] = overrides[s] ?? { Team: null, DsConn: null, EStop: false };
   });
+  // Keys naming a station configure that station; anything else overrides a top-level
+  // field, so a test can set MatchState or FieldDisabled without restating the rest.
+  const topLevel = { ...overrides };
+  STATIONS.forEach((s) => delete topLevel[s]);
   return {
     MatchState: FreePracticeState,
     FreePracticeReconfiguring: false,
+    FieldDisabled: false,
     AllianceStations: stations,
+    ...topLevel,
   };
 }
 
@@ -64,7 +82,65 @@ function occupiedStation(teamId, wpaKey = "") {
 
 // ---- tests ------------------------------------------------------------------
 
-beforeEach(buildDom);
+beforeEach(() => {
+  buildDom();
+  sentMessages.length = 0;
+});
+
+describe("field controls", () => {
+  test("shows ENABLE FIELD alone in setup", () => {
+    handleArenaStatus(emptyStatus({ MatchState: 0 }));
+    expect($("#enterBtn").hasClass("d-none")).toBe(false);
+    expect($("#disableBtn").hasClass("d-none")).toBe(true);
+    expect($("#resetBtn").hasClass("d-none")).toBe(true);
+    expect($("#fpModeLabel").text()).toBe("FREE PRACTICE SETUP");
+  });
+
+  test("shows DISABLE FIELD and Reset Field on a live field", () => {
+    handleArenaStatus(emptyStatus());
+    expect($("#enterBtn").hasClass("d-none")).toBe(true);
+    expect($("#disableBtn").hasClass("d-none")).toBe(false);
+    expect($("#resetBtn").hasClass("d-none")).toBe(false);
+    expect($("#fpModeLabel").text()).toBe("FREE PRACTICE ENABLED");
+    expect($("#fpModeBanner").hasClass("fp-mode-enabled")).toBe(true);
+  });
+
+  // A halted field is not the live state and not setup: robots are stopped, but the
+  // teams, SSIDs, and subnets are all still there to resume with.
+  test("offers ENABLE FIELD and Reset Field on a halted field", () => {
+    handleArenaStatus(emptyStatus({ FieldDisabled: true }));
+    expect($("#enterBtn").hasClass("d-none")).toBe(false);
+    expect($("#disableBtn").hasClass("d-none")).toBe(true);
+    expect($("#resetBtn").hasClass("d-none")).toBe(false);
+    expect($("#fpModeLabel").text()).toBe("FREE PRACTICE — FIELD DISABLED");
+    expect($("#fpModeBanner").hasClass("fp-mode-enabled")).toBe(false);
+  });
+
+  test("DISABLE FIELD halts robots without resetting the field", () => {
+    disableField();
+    expect(sentMessages).toEqual([{ type: "disableField", data: undefined }]);
+  });
+
+  test("Reset Field exits free practice", () => {
+    exitFreePractice();
+    expect(sentMessages).toEqual([{ type: "exitFreePractice", data: undefined }]);
+  });
+
+  // The same button in two places: entering free practice from setup, resuming robots on
+  // a halted field. The server rejects enterFreePractice outside PreMatch, so sending the
+  // wrong one on a halted field would fail with an error the operator cannot act on.
+  test("ENABLE FIELD enters free practice from setup", () => {
+    handleArenaStatus(emptyStatus({ MatchState: 0 }));
+    enableField();
+    expect(sentMessages).toEqual([{ type: "enterFreePractice", data: undefined }]);
+  });
+
+  test("ENABLE FIELD resumes robots on a halted field", () => {
+    handleArenaStatus(emptyStatus({ FieldDisabled: true }));
+    enableField();
+    expect(sentMessages).toEqual([{ type: "enableField", data: undefined }]);
+  });
+});
 
 describe("handleArenaStatus — Match Play button", () => {
   test("disables the Match Play button when free practice is active", () => {

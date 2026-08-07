@@ -214,6 +214,35 @@ func TestFreePracticeUpdateEnablesRobots(t *testing.T) {
 	assert.NoError(t, arena.EnterFreePractice())
 	// With no reconfiguration in progress, enabled should be true (not reconfiguring).
 	assert.False(t, arena.freePracticeReconfiguring.Load())
+	assert.True(t, arena.freePracticeEnabled())
+}
+
+// Either condition alone withholds field-enable: a slot change in progress, or the
+// operator having pressed DISABLE FIELD.
+func TestFreePracticeEnabledConditions(t *testing.T) {
+	for _, testCase := range []struct {
+		reconfiguring bool
+		disabled      bool
+		enabled       bool
+	}{
+		{false, false, true},
+		{true, false, false},
+		{false, true, false},
+		{true, true, false},
+	} {
+		arena := setupTestArena(t)
+		assert.NoError(t, arena.EnterFreePractice())
+		arena.freePracticeReconfiguring.Store(testCase.reconfiguring)
+		arena.fieldDisabled.Store(testCase.disabled)
+		assert.Equal(
+			t,
+			testCase.enabled,
+			arena.freePracticeEnabled(),
+			"reconfiguring=%v disabled=%v",
+			testCase.reconfiguring,
+			testCase.disabled,
+		)
+	}
 }
 
 func TestFreePracticeUpdateDisabledDuringReconfig(t *testing.T) {

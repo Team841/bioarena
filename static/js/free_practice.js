@@ -4,12 +4,30 @@
 
 var websocket;
 
+// Tracks whether the field is already in free practice, so that ENABLE FIELD can mean
+// "make the field live" in both places it appears. The server rejects enterFreePractice
+// outside PreMatch, so the choice has to be made here.
+let inFreePracticeMode = false;
+
 // -- WebSocket command senders --
 
 const enterFreePractice = function () {
   websocket.send("enterFreePractice");
 };
 
+// ENABLE FIELD: enters free practice from setup, or resumes robot operation on a field
+// the operator has halted.
+const enableField = function () {
+  websocket.send(inFreePracticeMode ? "enableField" : "enterFreePractice");
+};
+
+// DISABLE FIELD: halts robot operation. Teams stay registered, SSIDs and team subnets
+// stay up, driver stations stay connected.
+const disableField = function () {
+  websocket.send("disableField");
+};
+
+// Reset Field: clears every slot, drops all SSIDs and team subnets, returns to setup.
 const exitFreePractice = function () {
   websocket.send("exitFreePractice");
 };
@@ -45,16 +63,25 @@ const clearFieldEStop = function () {
 const handleArenaStatus = function (data) {
   // FreePracticeState is injected as a JS constant by the HTML template.
   const inFreePractice = data.MatchState === FreePracticeState;
+  const halted = Boolean(data.FieldDisabled);
+  inFreePracticeMode = inFreePractice;
 
-  // Update the mode banner.
-  const inSetup = !inFreePractice;
+  // Update the mode banner. A halted field is not the live green state -- robots are not
+  // drivable -- but it is not setup either, so it says so.
+  const live = inFreePractice && !halted;
   const banner = $("#fpModeBanner");
-  banner.toggleClass("fp-mode-setup", inSetup).toggleClass("fp-mode-enabled", inFreePractice);
-  $("#fpModeLabel").text(inFreePractice ? "FREE PRACTICE ENABLED" : "FREE PRACTICE SETUP");
+  banner.toggleClass("fp-mode-setup", !live).toggleClass("fp-mode-enabled", live);
+  let label = "FREE PRACTICE SETUP";
+  if (inFreePractice) {
+    label = halted ? "FREE PRACTICE — FIELD DISABLED" : "FREE PRACTICE ENABLED";
+  }
+  $("#fpModeLabel").text(label);
 
-  // Toggle UI sections based on current state.
-  $("#enterBtn").toggleClass("d-none", inFreePractice);
-  $("#exitBtn").toggleClass("d-none", !inFreePractice);
+  // ENABLE FIELD appears in setup and on a halted field; DISABLE FIELD only when robots
+  // are live. Reset Field stays available throughout free practice.
+  $("#enterBtn").toggleClass("d-none", live);
+  $("#disableBtn").toggleClass("d-none", !live);
+  $("#resetBtn").toggleClass("d-none", !inFreePractice);
 
   // Disable the Match Play link while free practice is running.
   // The server also redirects /match_play → /free_practice?warn=1, so this
@@ -172,7 +199,18 @@ $(function () {
 
 // Export for Jest unit tests. No-op in the browser (module is undefined).
 if (typeof module !== "undefined") {
-  module.exports = { handleArenaStatus, clearFieldEStop };
+  module.exports = {
+    handleArenaStatus,
+    clearFieldEStop,
+    enableField,
+    disableField,
+    exitFreePractice,
+    // The page assigns the websocket in its ready handler, which does not run under
+    // jsdom. Tests that exercise a command sender supply their own here.
+    setWebsocket: function (ws) {
+      websocket = ws;
+    },
+  };
 }
 
 // -- Team-not-in-DB modal --

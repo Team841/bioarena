@@ -85,6 +85,7 @@ type Arena struct {
 	ethernetConfigGeneration  uint64       // increments per request; stale requests are dropped
 	ethernetApplyMutex        sync.Mutex   // serialises wired reconfigurations
 	fieldEStopActive          atomic.Bool  // latched when GPIO field e-stop fires; cleared by ClearFieldEStop()
+	fieldDisabled             atomic.Bool  // operator halt: robots disabled, field networking untouched
 	stationDetectorOverride   stationDetector // nil in production; injected in tests
 }
 
@@ -555,9 +556,9 @@ func (arena *Arena) Update() {
 			}()
 		}
 	case FreePractice:
-		// No timer logic. Grant field-enable to all stations unless a slot change is in progress.
+		// No timer logic; stations are granted field-enable continuously.
 		auto = false
-		enabled = !arena.freePracticeReconfiguring.Load()
+		enabled = arena.freePracticeEnabled()
 	}
 
 	// Send a match tick notification if passing an integer second threshold or if the match state changed.
@@ -1047,14 +1048,45 @@ func (arena *Arena) EnterFreePractice() error {
 	if arena.MatchState != PreMatch {
 		return fmt.Errorf("cannot enter free practice while a match is in progress or results are pending")
 	}
+	arena.fieldDisabled.Store(false)
 	arena.MatchState = FreePractice
 	arena.ArenaStatusNotifier.Notify()
 	return nil
 }
 
-// ExitFreePractice clears all slots, resets AP, and returns to PreMatch.
-// Robots are disabled before any slot is cleared, ensuring they are never
-// briefly enabled-but-disconnected during the transition.
+// DisableField halts robot operation while leaving the field otherwise as it is: teams
+// stay registered, SSIDs stay up, team subnets stay configured, and driver stations stay
+// connected. It is the control an operator reaches for to stop the field between runs,
+// and EnableField resumes without anyone re-registering or re-connecting.
+//
+// Use ExitFreePractice instead to take the whole field down.
+func (arena *Arena) DisableField() {
+	arena.fieldDisabled.Store(true)
+	arena.ArenaStatusNotifier.Notify()
+}
+
+// EnableField resumes robot operation after DisableField.
+func (arena *Arena) EnableField() {
+	arena.fieldDisabled.Store(false)
+	arena.ArenaStatusNotifier.Notify()
+}
+
+// IsFieldDisabled reports whether the operator has halted robot operation.
+func (arena *Arena) IsFieldDisabled() bool {
+	return arena.fieldDisabled.Load()
+}
+
+// freePracticeEnabled reports whether stations should be granted field-enable in free
+// practice: not mid-reconfiguration, and not halted by the operator.
+func (arena *Arena) freePracticeEnabled() bool {
+	return !arena.freePracticeReconfiguring.Load() && !arena.fieldDisabled.Load()
+}
+
+// ExitFreePractice resets the field: every slot cleared, the AP emptied, the team subnets
+// torn down, and the arena returned to PreMatch. Robots are disabled before any slot is
+// cleared, ensuring they are never briefly enabled-but-disconnected during the transition.
+//
+// This is the heavy option. DisableField halts robots without disturbing any of it.
 func (arena *Arena) ExitFreePractice() error {
 	if arena.MatchState != FreePractice {
 		return fmt.Errorf("not in free practice mode (state=%d)", arena.MatchState)
@@ -1090,6 +1122,7 @@ func (arena *Arena) ExitFreePractice() error {
 	arena.configureTeamEthernet(emptyTeams)
 
 	arena.freePracticeReconfiguring.Store(false)
+	arena.fieldDisabled.Store(false)
 	arena.MatchState = PreMatch
 	arena.ArenaStatusNotifier.Notify()
 	return nil

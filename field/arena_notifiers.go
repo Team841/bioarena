@@ -73,6 +73,7 @@ func (arena *Arena) generateArenaStatusMessage() any {
 		PlcArmorBlockStatuses     map[string]bool
 		GpioFieldEStopActive      bool
 		FreePracticeReconfiguring bool
+		FieldDisabled             bool
 	}{
 		arena.CurrentMatch.Id,
 		stationViews,
@@ -85,6 +86,7 @@ func (arena *Arena) generateArenaStatusMessage() any {
 		arena.Plc.GetArmorBlockStatuses(),
 		arena.fieldEStopActive.Load(),
 		arena.freePracticeReconfiguring.Load(),
+		arena.fieldDisabled.Load(),
 	}
 }
 

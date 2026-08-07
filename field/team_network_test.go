@@ -149,6 +149,63 @@ func TestFreePracticeSkipsTeamEthernetWhenSecurityDisabled(t *testing.T) {
 	assert.Equal(t, 0, fake.applyCount())
 }
 
+// DISABLE FIELD halts robots and nothing else: teams stay registered, the AP keeps its
+// SSIDs, and the team subnets stay configured, so ENABLE FIELD resumes without anyone
+// re-registering or re-connecting.
+func TestDisableFieldLeavesNetworkingIntact(t *testing.T) {
+	arena, fake := setupTeamNetworkTestArena(t)
+	assert.NoError(t, arena.EnterFreePractice())
+	assert.NoError(t, arena.SetFreePracticeSlot("R1", 841, "key"))
+	assert.Equal(t, 841, fake.lastApplied(t)[0].Id)
+
+	appliedBefore := fake.applyCount()
+	arena.DisableField()
+
+	assert.True(t, arena.IsFieldDisabled())
+	assert.Equal(t, FreePractice, arena.MatchState, "the field stays in free practice")
+	assert.NotNil(t, arena.AllianceStations["R1"].Team, "the team stays registered")
+	assert.Equal(t, appliedBefore, fake.applyCount(), "the wired network is not touched")
+
+	arena.EnableField()
+	assert.False(t, arena.IsFieldDisabled())
+	assert.Equal(t, appliedBefore, fake.applyCount(), "resuming does not reconfigure either")
+	assert.Equal(t, 841, arena.AllianceStations["R1"].Team.Id)
+}
+
+// Reset Field is the heavy option, and remains so.
+func TestResetFieldTearsEverythingDown(t *testing.T) {
+	arena, fake := setupTeamNetworkTestArena(t)
+	assert.NoError(t, arena.EnterFreePractice())
+	assert.NoError(t, arena.SetFreePracticeSlot("R1", 841, "key"))
+	assert.Equal(t, 841, fake.lastApplied(t)[0].Id)
+
+	assert.NoError(t, arena.ExitFreePractice())
+	assert.Equal(t, PreMatch, arena.MatchState)
+	assert.Nil(t, arena.AllianceStations["R1"].Team)
+	assert.Eventually(
+		t,
+		func() bool { return fake.lastApplied(t) == [6]*model.Team{} },
+		2*time.Second,
+		5*time.Millisecond,
+		"reset should tear the subnets down",
+	)
+}
+
+// A halt must not survive into the next session, in either direction.
+func TestFieldDisableClearedOnEnterAndExit(t *testing.T) {
+	arena, _ := setupTeamNetworkTestArena(t)
+	assert.NoError(t, arena.EnterFreePractice())
+	arena.DisableField()
+	assert.NoError(t, arena.ExitFreePractice())
+	assert.False(t, arena.IsFieldDisabled(), "reset should clear the halt")
+
+	assert.NoError(t, arena.EnterFreePractice())
+	arena.DisableField()
+	assert.NoError(t, arena.ExitFreePractice())
+	assert.NoError(t, arena.EnterFreePractice())
+	assert.False(t, arena.IsFieldDisabled(), "entering free practice should start live")
+}
+
 // Registering teams one at a time queues a configuration per registration. Whichever
 // goroutine reached the hardware last used to decide the field's state, which need not be
 // the most recent team list; superseded requests must drop out instead.
