@@ -314,9 +314,11 @@ subinterface and no DHCP scope, so VLANs 50 and 60 stay dark on their own.
   frames from the driver station laptops still land in VLAN 1 — they get no lease, while
   the field badge stays green and the switch reports no error. If a station gets no
   address, check its PVID before anything else.
-- **Save the configuration or lose it on the next power cycle.** Changes take effect
-  immediately but live in RAM until written from *System Tools → Save Config*. A field
-  that worked all evening and comes up flat the next morning was never saved.
+- **Back the configuration up, because the only lockout recovery wipes it.** Settings
+  persist on *Apply* — there is no separate save-to-flash step on this firmware — but the
+  pinhole reset takes the entire VLAN configuration with it, and it is the sole way back
+  in from a management-VLAN mistake. Export from *System Tools → Backup and Restore* once
+  the field works and keep the file with the repo.
 - **There is no console port.** The only way in is over the network. Take the switch's own
   port out of the management VLAN and the sole recovery is the pinhole factory reset,
   which drops the entire VLAN configuration with it. Leave port 1 untagged in VLAN 1 while
@@ -327,6 +329,17 @@ subinterface and no DHCP scope, so VLANs 50 and 60 stay dark on their own.
 - **Leave Switch Address blank** under **Arena → Settings**. There is nothing to Telnet.
   The badge reads `DISABLED` (blue) rather than red, which is the honest state — no switch
   configured, as opposed to a switch that cannot be reached.
+
+**Restoring the Richmond switch**
+
+[docs/richmond/config.cfg](docs/richmond/config.cfg) is a backup of the
+working TL-SG108E: hostname `RichmondSwitch`, VLANs `Red1`, `Red2`, `Red3`, `Blue1`, and
+the port and PVID assignments above. Upload it from *System Tools → Backup and Restore*
+after a factory reset rather than re-entering the VLAN tables by hand.
+
+Re-export it whenever the port map changes. A backup that no longer matches the field is
+worse than none, because it restores cleanly and then fails in ways that look like
+cabling.
 
 ### Step 3 — Configure the field access point
 
