@@ -2,9 +2,17 @@
 # Cross-compile bioarena for Raspberry Pi 4.
 # Run from the repo root on any machine with Go 1.22+ installed.
 #
-# Targets the 32-bit Raspberry Pi OS (armv7l / armhf), which is the default
-# OS image for most Pi 4 installations.  If your Pi runs the 64-bit image
-# (uname -m returns aarch64) change GOARCH to arm64 and remove GOARM.
+# Targets 64-bit Raspberry Pi OS (aarch64), which is what Trixie and Bookworm
+# install by default.  Confirm with "uname -m" on the Pi:
+#
+#   aarch64   ARCH=arm64                     (the default below)
+#   armv7l    ARCH=arm  with GOARM=7 set     (32-bit images, including Buster)
+#
+# Override without editing this file:
+#   ARCH=arm GOARM=7 ./build-pi.sh
+#
+# A binary built for the wrong one does not fail usefully -- the kernel refuses
+# to run it and reports "cannot execute binary file: Exec format error".
 #
 # Output: bioarena-pi  estop-panel-pi  (Linux/ARM binaries, copy to the Pi)
 # Note: outputs use a "-pi" suffix so they never shadow a local Windows build.
@@ -14,11 +22,21 @@ set -euo pipefail
 OUTPUT="bioarena-pi"
 PANEL_OUTPUT="estop-panel-pi"
 
-echo "Building bioarena for linux/arm (armv7 / 32-bit Raspberry Pi OS)..."
-GOOS=linux GOARCH=arm GOARM=7 go build -o "$OUTPUT" .
+ARCH="${ARCH:-arm64}"
+GOARM="${GOARM:-}"
+export GOOS=linux GOARCH="$ARCH"
+if [ "$ARCH" = "arm" ]; then
+	export GOARM="${GOARM:-7}"
+	DESCRIPTION="linux/arm (armv7 / 32-bit Raspberry Pi OS)"
+else
+	DESCRIPTION="linux/arm64 (aarch64 / 64-bit Raspberry Pi OS)"
+fi
 
-echo "Building estop-panel for linux/arm..."
-GOOS=linux GOARCH=arm GOARM=7 go build -o "$PANEL_OUTPUT" ./cmd/estop-panel
+echo "Building bioarena for $DESCRIPTION..."
+go build -o "$OUTPUT" .
+
+echo "Building estop-panel for $DESCRIPTION..."
+go build -o "$PANEL_OUTPUT" ./cmd/estop-panel
 
 echo "Done: $OUTPUT  $PANEL_OUTPUT"
 echo ""
@@ -69,6 +87,14 @@ echo "Useful service commands (run on any Pi):"
 echo "  sudo systemctl status bioarena   # check it's running"
 echo "  sudo journalctl -u bioarena -f   # tail live logs"
 echo "  sudo systemctl restart bioarena  # restart after a new deploy"
+echo ""
+echo "Trixie/Bookworm note (team_network_driver: local):"
+echo "  NetworkManager claims the VLAN subinterfaces and can strip their addresses."
+echo "  Install the drop-in once per field Pi:"
+echo "       scp docs/99-bioarena-unmanaged.conf pi@<PI_IP>:~/"
+echo "       # then on the Pi:"
+echo "       sudo mv ~/99-bioarena-unmanaged.conf /etc/NetworkManager/conf.d/"
+echo "       sudo systemctl reload NetworkManager"
 echo ""
 echo "Network note:"
 echo "  Main Pi:        10.0.100.5/24  (eth0, set by bioarena.service)"

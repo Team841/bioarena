@@ -4,7 +4,9 @@ A Raspberry Pi service for running FRC practice sessions. Controls up to 6 robot
 
 ## Requirements
 
-- Raspberry Pi 4 (armv7 / 32-bit Raspberry Pi OS recommended)
+- Raspberry Pi 4 running 64-bit Raspberry Pi OS (Trixie or Bookworm). 32-bit images work
+  too — see [Raspberry Pi OS releases](#raspberry-pi-os-releases) for the one build flag
+  that changes
 - [Go 1.23+](https://golang.org/dl/) on your build machine
 - Vivid-Hosting VH-113 field access point (running OpenWRT)
 - Vivid-Hosting VH-109 radio on each robot
@@ -24,6 +26,16 @@ Run this on your development machine (not on the Pi):
 This cross-compiles two ARM binaries: `bioarena-pi` for the field controller and
 `estop-panel-pi` for the e-stop panel Pis. The `-pi` suffix keeps them from shadowing a
 local build. Running the script also prints the full deploy sequence for both.
+
+It targets 64-bit (`aarch64`) by default. On a 32-bit image, build with:
+
+```bash
+ARCH=arm GOARM=7 ./build-pi.sh
+```
+
+Check which you need with `uname -m` on the Pi: `aarch64` for the default, `armv7l` for
+the override. The wrong one does not fail informatively — the Pi reports
+`cannot execute binary file: Exec format error`.
 
 **Copy files to the Pi**
 
@@ -130,7 +142,24 @@ The Pi must have `10.0.100.5` on the interface connected to the switch. The syst
 ExecStartPre=/sbin/ip addr add 10.0.100.5/24 dev eth0
 ```
 
-If you need a permanent static IP (survives reboots without the service), edit `/etc/dhcpcd.conf` on the Pi:
+For a permanent static IP that survives reboots without the service, the method depends on
+the OS release.
+
+**Trixie and Bookworm** use NetworkManager. Name the connection bound to the field NIC —
+`nmcli connection show` lists them, typically `Wired connection 1`:
+
+```bash
+sudo nmcli connection modify "Wired connection 1" ipv4.method manual ipv4.addresses 10.0.100.5/24
+```
+
+```bash
+sudo nmcli connection up "Wired connection 1"
+```
+
+Leave the gateway and DNS unset. The field network has no route off itself, and a default
+route pointing into it would send the Pi's own internet traffic nowhere.
+
+**Buster and other dhcpcd releases** edit `/etc/dhcpcd.conf` instead:
 
 ```
 interface eth0
@@ -745,7 +774,49 @@ Open `http://localhost:8080`. No network hardware is required for testing.
 ./build-pi.sh
 ```
 
-Output: `bioarena` (ARM, statically linked, ready to copy to the Pi).
+Output: `bioarena-pi` and `estop-panel-pi` (ARM, statically linked, ready to copy to the
+Pi). Add `ARCH=arm GOARM=7` for a 32-bit image.
+
+### Raspberry Pi OS releases
+
+Bioarena needs systemd, `ip(8)`, and — for `team_network_driver: local` — dnsmasq. All
+three are present on every current release, so the OS choice comes down to what else it
+changes.
+
+| | Trixie / Bookworm | Buster and earlier |
+|---|---|---|
+| Build flag | `./build-pi.sh` (arm64) | `ARCH=arm GOARM=7 ./build-pi.sh` |
+| Static IP | `nmcli` (NetworkManager) | `/etc/dhcpcd.conf` |
+| VLAN subinterfaces | Need the NetworkManager drop-in below | Nothing extra |
+| apt | Works | End of life; repositories moved to `archive.debian.org` |
+
+**The NetworkManager drop-in is required for `team_network_driver: local`.**
+NetworkManager claims every interface that appears, including the VLAN subinterfaces
+bioarena creates on each match load. Left managed, it starts a DHCP client on each one and
+can strip the gateway address bioarena just assigned — so a station loses its subnet
+seconds after being registered, which reads as a flaky field rather than a configuration
+problem.
+
+```bash
+scp docs/99-bioarena-unmanaged.conf pi@10.0.100.5:~/
+```
+
+On the Pi:
+
+```bash
+sudo mv ~/99-bioarena-unmanaged.conf /etc/NetworkManager/conf.d/
+```
+
+```bash
+sudo systemctl reload NetworkManager
+```
+
+Edit the interface pattern inside if the field NIC is not `eth0`.
+
+**Verify the GPIO chip name** if you use e-stop panels or GPIO field lights. Both default
+to `gpiochip0`, which is correct for a Pi 4 today, but chip numbering has moved between
+kernel versions and hardware generations. Confirm on the Pi with `gpiodetect`, and set
+`gpio_chip` in `estop-panel.yaml` if it differs.
 
 ## Documentation
 
@@ -753,6 +824,8 @@ Output: `bioarena` (ARM, statically linked, ready to copy to the Pi).
 - [docs/prd-half-field-match-simulation.md](docs/prd-half-field-match-simulation.md) — requirements for 1v0 half-field REBUILT 2026 simulation: AUTO outcome selection, FMS Game Data, DMX HUB light.
 - [docs/upstream-divergences.md](docs/upstream-divergences.md) — where this fork differs from cheesy-arena, which differences are candidates to send upstream, and which files are kept byte-identical.
 - [docs/console.py](docs/console.py) — serial console for the field switch, standard library only.
+- [docs/99-bioarena-unmanaged.conf](docs/99-bioarena-unmanaged.conf) — NetworkManager drop-in keeping it away from the VLAN subinterfaces, required on Trixie and Bookworm with `team_network_driver: local`.
+- [docs/richmond/config.cfg](docs/richmond/config.cfg) — TL-SG108E backup for the Richmond lab field.
 
 ## Contributing
 
