@@ -8,7 +8,7 @@ A Raspberry Pi service for running FRC practice sessions. Controls up to 6 robot
 - [Go 1.23+](https://golang.org/dl/) on your build machine
 - Vivid-Hosting VH-113 field access point (running OpenWRT)
 - Vivid-Hosting VH-109 radio on each robot
-- Layer 3 managed switch with the IOS DHCP server (Catalyst 3560-CX or similar; see [Step 2](#step-2--configure-the-managed-switch))
+- Layer 3 managed switch with the IOS DHCP server (Catalyst 3560-CX or similar; see [Step 2](#step-2--configure-the-managed-switch)) — or any VLAN-capable Layer 2 switch, with the Pi doing the routing and DHCP instead (see [Team networks on the Pi](#team-networks-on-the-pi-layer-2-switches))
 - Static IP assigned to Pi (recommend `10.0.100.5`)
 
 ## Install
@@ -234,6 +234,99 @@ VLAN assignments (fixed, managed automatically):
 | Blue 3  | 60   |
 
 When a match loads, the controller pushes DHCP pool and IP configurations for each team's subnet over Telnet.
+
+#### Team networks on the Pi (Layer 2 switches)
+
+Everything above assumes a Layer 3 switch. If yours cannot route — a 3500XL, a TP-Link
+smart switch, anything with one SVI and no DHCP server — the Pi can do that work instead.
+Set in `config.yaml`:
+
+```yaml
+team_network_driver: local
+local_network:
+  trunk_interface: eth0
+```
+
+On every match load bioarena then rebuilds, on the Pi:
+
+- `eth0.10` … `eth0.60` — one 802.1Q subinterface per station, each holding `10.TE.AM.4`,
+  the same gateway address the switch would have handed out
+- `/etc/dnsmasq.d/bioarena.conf` — one DHCP scope per station, `.20`–`.199`, seven-day
+  lease, identical to the switch's pools
+- `net.ipv4.ip_forward=1` — the Pi routes between the team subnets and the FMS address
+
+Team addressing does not change. Only the switch's job does: carry VLANs 10–60 tagged on
+the Pi's port, and put each driver station port in its station's VLAN as an access port.
+No routing, no DHCP, no SVIs.
+
+**One-time setup on the Pi**
+
+```bash
+sudo apt install dnsmasq
+sudo touch /etc/dnsmasq.d/bioarena.conf
+sudo chown pi /etc/dnsmasq.d/bioarena.conf
+```
+
+The service needs to run `ip`, `sysctl`, and `systemctl restart dnsmasq`. `CAP_NET_ADMIN`
+in `bioarena.service` covers the first two but not the restart, so either run the service
+as root, or grant that one command:
+
+```bash
+echo 'pi ALL=(root) NOPASSWD: /bin/systemctl restart dnsmasq' | sudo tee /etc/sudoers.d/bioarena-dnsmasq
+```
+
+**Trade-offs.** Station detection still works — it reads the Pi's own ARP table rather
+than the switch's, and reports the same stations. The switch address and password under
+**Arena → Settings** go unused. All six teams' traffic now crosses the Pi's single NIC, so
+this is a practice-field arrangement, not a competition one.
+
+#### Half field on a Layer 2 switch
+
+The Richmond lab build: four driver stations (R1, R2, R3, B1) on a TP-Link TL-SG108E,
+with `team_network_driver: local` above.
+
+Both the Pi and the AP are trunks. The VH-113 tags each team's SSID onto that team's
+VLAN, so VLANs 10–60 have to reach it — an access port there leaves every robot
+associated to WiFi and unable to reach anything.
+
+| Port | Role | Membership | PVID |
+|------|------|------------|------|
+| 1 | Pi | untagged 1, tagged 10–60 | 1 |
+| 2 | VH-113 AP | untagged 1, tagged 10–60 | 1 |
+| 3 | R1 driver station | untagged 10 | 10 |
+| 4 | R2 driver station | untagged 20 | 20 |
+| 5 | R3 driver station | untagged 30 | 30 |
+| 6 | B1 driver station | untagged 40 | 40 |
+| 7–8 | spare (laptop, future station) | untagged 1 | 1 |
+
+Carry all six VLANs on the two trunks even though 50 and 60 have nowhere to go yet. It
+costs nothing, and adding B2 later is then one PVID change on port 7 rather than editing
+trunk membership on two ports.
+
+Bioarena still thinks in six stations: B2 and B3 need **BYP** checked in Match Play or the
+match will not start. Nothing else needs configuring — a station with no team gets no
+subinterface and no DHCP scope, so VLANs 50 and 60 stay dark on their own.
+
+**TL-SG108E footguns**
+
+- **PVID is a separate page, and it defaults to 1.** Membership is set under *802.1Q VLAN*;
+  the port's own VLAN is set under *802.1Q PVID Setting*. Set membership only and untagged
+  frames from the driver station laptops still land in VLAN 1 — they get no lease, while
+  the field badge stays green and the switch reports no error. If a station gets no
+  address, check its PVID before anything else.
+- **Save the configuration or lose it on the next power cycle.** Changes take effect
+  immediately but live in RAM until written from *System Tools → Save Config*. A field
+  that worked all evening and comes up flat the next morning was never saved.
+- **There is no console port.** The only way in is over the network. Take the switch's own
+  port out of the management VLAN and the sole recovery is the pinhole factory reset,
+  which drops the entire VLAN configuration with it. Leave port 1 untagged in VLAN 1 while
+  you work.
+- **It ships on 192.168.0.1 with `admin`/`admin`.** That collides with the usual home
+  router range, which is often the network you are setting it up from. Configure it on an
+  isolated link, or move it off `192.168.0.x` before it ever joins one.
+- **Leave Switch Address blank** under **Arena → Settings**. There is nothing to Telnet.
+  The badge reads `DISABLED` (blue) rather than red, which is the honest state — no switch
+  configured, as opposed to a switch that cannot be reached.
 
 ### Step 3 — Configure the field access point
 

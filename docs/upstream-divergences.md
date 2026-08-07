@@ -88,6 +88,7 @@ Deliberate, specific to a practice field, and not appropriate to send upstream.
 | `web/web.go` | Serves `/logs/` with directory listing and no authentication. | Restores the browse-and-download behaviour lost by moving the directory, deliberately matching how `/static/` is served. |
 | `model`, `web`, `templates` | Driver-station port commands (`SwitchDSPortUpCommands` / `DownCommands`) exist and are operator-editable. | A bioarena addition with no upstream equivalent. Interface names are switch-specific. |
 | `field/`, `hardware/`, `cmd/estop-panel` | GPIO and network e-stop panels, free practice mode, half-field conveniences. | Practice-field hardware and workflow with no upstream counterpart. |
+| `network/team_network.go`, `network/local_network.go` | `TeamNetwork` interface with a second implementation that applies the team subnets on the Pi (VLAN subinterfaces plus dnsmasq) instead of on a Layer 3 switch. `Arena.networkSwitch` becomes `Arena.teamNetwork`. | Upstream fields have competition switches. This exists so a practice field can run on a Layer 2 switch, and it puts all six teams' traffic across the Pi's single NIC — an acceptable trade for a practice field and not for a real one. |
 
 ---
 

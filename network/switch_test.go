@@ -86,6 +86,14 @@ func TestConfigureSwitch(t *testing.T) {
 	)
 }
 
+// An unset switch address means no switch, not a broken one. Dialing it on every match
+// load fails and pins the badge red, which reads as a fault rather than an absence.
+func TestConfigureSwitchWithoutAddress(t *testing.T) {
+	sw := NewSwitch("", "password", "", "", "")
+	assert.Nil(t, sw.ConfigureTeamEthernet([6]*model.Team{{Id: 841}, nil, nil, nil, nil, nil}))
+	assert.Equal(t, "DISABLED", sw.Status)
+}
+
 func TestGetStationForTeamId(t *testing.T) {
 	sw := NewSwitch("127.0.0.1", "password", "", "", "")
 	sw.port = 9060

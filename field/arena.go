@@ -53,7 +53,8 @@ type Arena struct {
 	Database             *model.Database
 	EventSettings        *model.EventSettings
 	accessPoint          network.AccessPoint
-	networkSwitch        *network.Switch
+	teamNetwork          network.TeamNetwork
+	localNetworkConfig   *network.LocalNetworkConfig
 	Plc                  plc.Plc
 	FieldLights          hardware.FieldLights
 	Leds                 *led.Controller
@@ -134,6 +135,16 @@ func NewArena(dbPath string) (*Arena, error) {
 }
 
 // Loads or reloads the event settings upon initial setup or change.
+// SetLocalTeamNetwork moves the per-match team networks off a Layer 3 switch and onto
+// this host: VLAN subinterfaces and dnsmasq instead of Telnet. The switch address and
+// password under Arena > Settings go unused once this is set.
+//
+// Call it before LoadSettings; LoadSettings is what builds the implementation, and it
+// runs again on every settings save.
+func (arena *Arena) SetLocalTeamNetwork(config network.LocalNetworkConfig) {
+	arena.localNetworkConfig = &config
+}
+
 func (arena *Arena) LoadSettings() error {
 	settings, err := arena.Database.GetEventSettings()
 	if err != nil {
@@ -157,11 +168,19 @@ func (arena *Arena) LoadSettings() error {
 		settings.NetworkSecurityEnabled,
 		accessPointWifiStatuses,
 	)
-	arena.networkSwitch = network.NewSwitch(
-		settings.SwitchAddress, settings.SwitchPassword,
-		settings.SwitchDSPortUpCommands, settings.SwitchDSPortDownCommands,
-		settings.SwitchDnsServer,
-	)
+	if arena.localNetworkConfig != nil {
+		// The DNS server is a per-field setting either way, so it stays in the database
+		// and is applied over whatever config.yaml supplied at startup.
+		localConfig := *arena.localNetworkConfig
+		localConfig.DnsServer = settings.SwitchDnsServer
+		arena.teamNetwork = network.NewLocalNetwork(localConfig)
+	} else {
+		arena.teamNetwork = network.NewSwitch(
+			settings.SwitchAddress, settings.SwitchPassword,
+			settings.SwitchDSPortUpCommands, settings.SwitchDSPortDownCommands,
+			settings.SwitchDnsServer,
+		)
+	}
 
 	if settings.FieldEStopPin != 0 {
 		panel, err := hardware.NewGpioFieldEStopPanel("gpiochip0", settings.FieldEStopPin)
@@ -754,7 +773,7 @@ func (arena *Arena) setupNetwork(teams [6]*model.Team, isPreload bool) {
 			log.Printf("Failed to configure team WiFi: %s", err.Error())
 		}
 		go func() {
-			if err := arena.networkSwitch.ConfigureTeamEthernet(teams); err != nil {
+			if err := arena.teamNetwork.ConfigureTeamEthernet(teams); err != nil {
 				log.Printf("Failed to configure team Ethernet: %s", err.Error())
 			}
 		}()
@@ -1344,7 +1363,7 @@ func (arena *Arena) autoAssignTeam(teamId int) string {
 	}
 
 	// Try to detect the physical station via the switch VLAN/ARP table.
-	var detector stationDetector = arena.networkSwitch
+	var detector stationDetector = arena.teamNetwork
 	if arena.stationDetectorOverride != nil {
 		detector = arena.stationDetectorOverride
 	}

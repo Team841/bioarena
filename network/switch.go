@@ -65,11 +65,24 @@ func NewSwitch(address, password, dsPortUpCommands, dsPortDownCommands, dnsServe
 	}
 }
 
+func (sw *Switch) GetStatus() string {
+	return sw.Status
+}
+
 // Sets up wired networks for the given set of teams.
 func (sw *Switch) ConfigureTeamEthernet(teams [6]*model.Team) error {
 	// Make sure multiple configurations aren't being set at the same time.
 	sw.mutex.Lock()
 	defer sw.mutex.Unlock()
+
+	// With no address there is nothing to configure. Without this the Telnet dial fails
+	// on every match load and pins the badge red, which reads as a broken switch rather
+	// than an absent one. GetStationForTeamId already guards the same way.
+	if sw.address == "" {
+		sw.Status = "DISABLED"
+		return nil
+	}
+
 	sw.Status = "CONFIGURING"
 
 	// Shut down DS ethernet ports to prevent conflicts during VLAN reconfiguration.

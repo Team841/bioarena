@@ -79,7 +79,7 @@ func (arena *Arena) generateArenaStatusMessage() any {
 		arena.MatchState,
 		arena.checkCanStartMatch() == nil,
 		arena.accessPoint.Status,
-		arena.networkSwitch.Status,
+		arena.teamNetwork.GetStatus(),
 		arena.Plc.IsHealthy(),
 		arena.Plc.GetFieldEStop(),
 		arena.Plc.GetArmorBlockStatuses(),
