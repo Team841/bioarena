@@ -1,0 +1,40 @@
+#!/bin/sh
+# Blocks a push whose tests do not pass.
+#
+# Both suites matter: the Go tests cannot reach client-side behaviour, and Jest cannot
+# reach the arena. A change that breaks either one is a change that breaks the field.
+#
+# Enable in a fresh clone with:
+#   git config core.hooksPath .githooks
+
+set -u
+
+repo_root=$(git rev-parse --show-toplevel) || exit 1
+cd "$repo_root" || exit 1
+
+fail() {
+	echo "" >&2
+	echo "pre-push: $1" >&2
+	echo "pre-push: push aborted." >&2
+	exit 1
+}
+
+echo "pre-push: go test ./..."
+if ! go test ./...; then
+	fail "Go tests failed."
+fi
+
+if ! command -v npm >/dev/null 2>&1; then
+	fail "npm not found. Install Node LTS (winget install OpenJS.NodeJS.LTS) and reopen the terminal."
+fi
+
+if [ ! -d node_modules ]; then
+	fail "node_modules is missing. Run: npm install"
+fi
+
+echo "pre-push: npm run test:js"
+if ! npm run test:js --silent; then
+	fail "JavaScript tests failed."
+fi
+
+echo "pre-push: all tests passed."

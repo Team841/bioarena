@@ -1,0 +1,6 @@
+# Shell scripts must keep LF endings even when checked out on Windows. A CRLF after the
+# shebang makes the interpreter itself unfindable -- "/bin/sh^M: bad interpreter" -- which
+# breaks the pre-push hook and build-pi.sh in a way that reads as a missing shell.
+*.sh text eol=lf
+.githooks/* text eol=lf
+docs/console.py text eol=lf
