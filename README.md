@@ -15,6 +15,55 @@ A Raspberry Pi service for running FRC practice sessions. Controls up to 6 robot
 
 ## Install
 
+### Preparing a fresh Pi image
+
+Flash with Raspberry Pi Imager and open its customisation panel (the gear icon, or
+`Ctrl+Shift+X`) **before writing**. Several things are far easier to set there than after
+first boot.
+
+- **Name the user `pi`.** Bookworm and later no longer create it by default, and every
+  path in this project assumes it: `/home/pi/bioarena`, `User=pi` in `bioarena.service`,
+  and every `scp` target below. Any other name means editing the service file and every
+  path in it.
+- **Enable SSH.** A fresh image has it off, so without this the first boot needs a
+  keyboard and monitor.
+- **Set the keyboard layout and locale.** A mismatched layout is why keys like `|` end up
+  missing when you are working at the Pi directly.
+- **Set the WiFi credentials** if the Pi needs to reach the internet before it joins the
+  field network. It does — dnsmasq has to be installed while it still has a route out.
+
+After first boot, in this order:
+
+1. Install dnsmasq, while the Pi still has internet:
+
+   ```bash
+   sudo apt install dnsmasq
+   ```
+
+2. Install the NetworkManager drop-in and set the static field address — see
+   [Raspberry Pi OS releases](#raspberry-pi-os-releases) and
+   [Step 1](#step-1--assign-a-static-ip-to-the-pi).
+3. Copy the binary, assets, and service file (below), plus `config.yaml`. Carry `event.db`
+   across too if you want the previous field's settings, teams, and admin password;
+   without it the first start creates a fresh database with the default password.
+4. Confirm the GPIO chip name with `gpiodetect` if you use e-stop panels or GPIO lights.
+
+Two things that will look like faults and are not:
+
+**SSH host key mismatch.** A reimaged Pi generates new host keys, so `ssh` and `scp` refuse
+to connect at the same address. Clear the stale entry:
+
+```bash
+ssh-keygen -R 10.0.100.5
+```
+
+Addresses are tracked separately, so repeat it for whatever address you used before the Pi
+moved onto the field network.
+
+**Wrong timestamps in the logs.** The Pi has no real-time clock. On a field with no route
+to the internet it restores the last known time from `fake-hwclock` at boot, so journal
+entries and match logs can be days behind until it next sees an NTP server.
+
 **Build the Pi binary**
 
 Run this on your development machine (not on the Pi):
@@ -308,13 +357,30 @@ sudo touch /etc/dnsmasq.d/bioarena.conf
 sudo chown pi /etc/dnsmasq.d/bioarena.conf
 ```
 
-The service needs to run `ip`, `sysctl`, and `systemctl restart dnsmasq`. `CAP_NET_ADMIN`
-in `bioarena.service` covers the first two but not the restart, so either run the service
-as root, or grant that one command:
+The service runs `ip`, `sysctl`, and `systemctl restart dnsmasq`. `AmbientCapabilities=CAP_NET_ADMIN`
+in `bioarena.service` covers the first two — the kernel grants `CAP_NET_ADMIN` holders the
+same access as root under `/proc/sys/net`, so `ip_forward` is writable — but not the
+restart, which systemd authorises over D-Bus.
 
-```bash
-echo 'pi ALL=(root) NOPASSWD: /bin/systemctl restart dnsmasq' | sudo tee /etc/sudoers.d/bioarena-dnsmasq
+Simplest fix, and the one to use unless you have a reason not to: run the service as root
+by removing `User=pi` from `bioarena.service`.
+
+For something narrower, authorise that one unit for the `pi` user in
+`/etc/polkit-1/rules.d/50-bioarena-dnsmasq.rules`:
+
+```javascript
+polkit.addRule(function (action, subject) {
+  if (action.id == "org.freedesktop.systemd1.manage-units" &&
+      action.lookup("unit") == "dnsmasq.service" &&
+      subject.user == "pi") {
+    return polkit.Result.YES;
+  }
+});
 ```
+
+Polkit, not sudo: bioarena invokes `systemctl` directly, so a `sudoers` entry would never
+be consulted. The JavaScript rule format needs polkit 0.106 or newer, which Trixie and
+Bookworm have and Buster does not.
 
 **Trade-offs.** Station detection still works — it reads the Pi's own ARP table rather
 than the switch's, and reports the same stations. The switch address and password under
