@@ -28,3 +28,7 @@ logs/
 # Python bytecode from docs/console.py
 __pycache__/
 *.pyc
+
+# Agent instructions, kept local rather than tracked
+AGENTS.md
+CLAUDE.md

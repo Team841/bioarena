@@ -631,11 +631,39 @@ The field runs normally without panel Pis; missing panels log a warning and retu
 
 ## Development
 
+Go 1.23+ — see `go.mod`.
+
+**Repository layout**
+
+| Path | Contents |
+|------|----------|
+| `main.go` | Entry point: loads `config.yaml`, builds the arena, starts the web server |
+| `field/` | Arena state machine, driver station connections, match flow, free practice |
+| `game/` | Scoring and match timing rules |
+| `network/` | Access point, switch, and local team network drivers |
+| `hardware/`, `plc/`, `led/` | Field hardware: e-stop panels, lights, sACN output |
+| `web/`, `templates/`, `static/` | HTTP handlers, HTML templates, client-side assets |
+| `model/` | BoltDB datastore and record types |
+| `websocket/` | WebSocket plumbing for live UI updates |
+| `cmd/estop-panel/` | Separate binary for the alliance e-stop panel Pis |
+| `docs/` | Wiring, upstream divergences, serial console, site configurations |
+
+The runtime database is BoltDB in `event.db`, created on first start and not tracked.
+
+**Style**
+
+Standard Go: tabs, `CamelCase` for exported names, `camelCase` otherwise, and short
+domain-named packages matching the directories above. Run `gofmt` before submitting.
+
 **Run Go tests**
 
 ```bash
 go test ./...
 ```
+
+Tests are `*_test.go` files co-located with the package they cover. Target one with
+`go test ./field -run TestName`. Prefer table-driven tests where a behaviour has several
+cases.
 
 **Run JavaScript tests**
 
@@ -653,6 +681,11 @@ if (typeof module !== "undefined") {
   module.exports = { myFunction };
 }
 ```
+
+Client-side behaviour cannot be caught by the Go tests, so any change to a `.js` file
+needs Jest coverage of its state transitions — what a handler does when the server reports
+an empty slot versus an occupied one, whether a user-typed value survives a status push,
+and so on. Both suites must pass before committing.
 
 **Run locally (no robots)**
 
@@ -681,10 +714,13 @@ Output: `bioarena` (ARM, statically linked, ready to copy to the Pi).
 ## Contributing
 
 - Open a [GitHub issue](https://github.com/Team254/cheesy-arena/issues) for bugs or feature requests.
-- Send a pull request with a clear summary and `go test ./...` results.
-- Include screenshots for any UI changes.
+- Send a pull request with a clear summary.
+- Include test notes: the exact commands run, for example `go test ./...` and
+  `npm run test:js`.
+- Include screenshots for any change to `web/`, `templates/`, or `static/`.
 
-Commit messages use short imperative sentences, e.g. `Fix driver station TCP reads`.
+Commit messages use short imperative sentences, e.g. `Fix driver station TCP reads`, and
+often carry an issue or PR number in parentheses: `Fix driver station TCP reads (#258)`.
 
 ## License
 
