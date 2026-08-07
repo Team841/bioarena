@@ -81,6 +81,9 @@ type Arena struct {
 
 	freePracticeReconfiguring atomic.Bool  // true while AP is being reconfigured for a slot change
 	freePracticeReconfigMu    sync.Mutex   // serialises concurrent SetFreePracticeSlot calls
+	ethernetConfigMutex       sync.Mutex   // guards ethernetConfigGeneration
+	ethernetConfigGeneration  uint64       // increments per request; stale requests are dropped
+	ethernetApplyMutex        sync.Mutex   // serialises wired reconfigurations
 	fieldEStopActive          atomic.Bool  // latched when GPIO field e-stop fires; cleared by ClearFieldEStop()
 	stationDetectorOverride   stationDetector // nil in production; injected in tests
 }
@@ -772,12 +775,44 @@ func (arena *Arena) setupNetwork(teams [6]*model.Team, isPreload bool) {
 		if err := arena.accessPoint.ConfigureTeamWifi(teams); err != nil {
 			log.Printf("Failed to configure team WiFi: %s", err.Error())
 		}
-		go func() {
-			if err := arena.teamNetwork.ConfigureTeamEthernet(teams); err != nil {
-				log.Printf("Failed to configure team Ethernet: %s", err.Error())
-			}
-		}()
 	}
+	arena.configureTeamEthernet(teams)
+}
+
+// configureTeamEthernet applies the wired configuration in the background, since a switch
+// takes seconds to reconfigure and the caller is usually servicing a web request.
+//
+// A later call supersedes an earlier one that has not reached the hardware yet. Without
+// that, registering teams one at a time queues a configuration per registration, and
+// whichever goroutine happens to acquire the hardware last decides what the field ends up
+// with -- which need not be the most recent team list.
+func (arena *Arena) configureTeamEthernet(teams [6]*model.Team) {
+	if !arena.EventSettings.NetworkSecurityEnabled {
+		return
+	}
+
+	arena.ethernetConfigMutex.Lock()
+	arena.ethernetConfigGeneration++
+	generation := arena.ethernetConfigGeneration
+	arena.ethernetConfigMutex.Unlock()
+
+	go func() {
+		// One application at a time, so that a superseded request drops out before
+		// touching the hardware rather than after.
+		arena.ethernetApplyMutex.Lock()
+		defer arena.ethernetApplyMutex.Unlock()
+
+		arena.ethernetConfigMutex.Lock()
+		superseded := generation != arena.ethernetConfigGeneration
+		arena.ethernetConfigMutex.Unlock()
+		if superseded {
+			return
+		}
+
+		if err := arena.teamNetwork.ConfigureTeamEthernet(teams); err != nil {
+			log.Printf("Failed to configure team Ethernet: %s", err.Error())
+		}
+	}()
 }
 
 // Returns nil if the match can be started, and an error otherwise.
@@ -1050,6 +1085,10 @@ func (arena *Arena) ExitFreePractice() error {
 		// Continue regardless — we are exiting free practice.
 	}
 
+	// Tear the team subnets down too, so no station is left routable to a team that has
+	// gone home.
+	arena.configureTeamEthernet(emptyTeams)
+
 	arena.freePracticeReconfiguring.Store(false)
 	arena.MatchState = PreMatch
 	arena.ArenaStatusNotifier.Notify()
@@ -1104,6 +1143,11 @@ func (arena *Arena) SetFreePracticeSlot(station string, teamId int, wpaKey strin
 
 	arena.freePracticeReconfiguring.Store(false)
 
+	// The wired side too: without it a free practice slot gets an SSID but no VLAN
+	// subinterface and no DHCP scope, so a driver station plugged into that station's
+	// port never receives an address.
+	arena.configureTeamEthernet(teams)
+
 	// Best-effort: persist the WPA key back to the team record in the database.
 	if dbTeam, dbErr := arena.Database.GetTeamById(teamId); dbErr == nil && dbTeam != nil && dbTeam.WpaKey != wpaKey {
 		dbTeam.WpaKey = wpaKey
@@ -1153,6 +1197,7 @@ func (arena *Arena) ClearFreePracticeSlot(station string) error {
 	}
 
 	arena.freePracticeReconfiguring.Store(false)
+	arena.configureTeamEthernet(teams)
 	arena.ArenaStatusNotifier.Notify()
 	return nil
 }

@@ -22,8 +22,15 @@ const (
 	localDhcpPoolFirst = 20
 	localDhcpPoolLast  = 199
 
-	// The switch issues "lease 7", which IOS reads as seven days.
-	localDhcpLease = "7d"
+	// Five minutes, so a laptop moved between stations corrects itself within a couple of
+	// renewals rather than holding a dead address. Deliberately shorter than the switch's
+	// "lease 7" (seven days): the switch can force a renewal by bouncing the station's
+	// port, and this host cannot -- the laptop's carrier is to the switch, not to us -- so
+	// lease length is the only self-correction available here.
+	//
+	// Safe against reconfiguration churn because stations that do not change are never
+	// touched, so their renewals cannot be starved by another station being registered.
+	localDhcpLease = "5m"
 
 	localDefaultTrunkInterface  = "eth0"
 	localDefaultDnsmasqConfPath = "/etc/dnsmasq.d/bioarena.conf"
@@ -63,6 +70,16 @@ type LocalNetwork struct {
 	mutex  sync.Mutex
 	Status string
 
+	// applied is the team per station as this host is currently configured, by team
+	// number, with 0 for an empty station. Only meaningful once synced is true.
+	applied [6]int
+
+	// synced records whether the host's state is known. False at startup -- subinterfaces
+	// left by a previous run of the service outlive the process -- and after any failure,
+	// either of which makes the next configuration a full reconciliation rather than a
+	// difference.
+	synced bool
+
 	// Seams for testing. runCommand reports combined output alongside the error, since
 	// distinguishing "no such device" from a real failure depends on the text.
 	runCommand   func(name string, args ...string) (string, error)
@@ -93,60 +110,103 @@ func (ln *LocalNetwork) GetStatus() string {
 	return ln.Status
 }
 
-// ConfigureTeamEthernet rebuilds every station's VLAN subinterface and DHCP scope for the
-// given teams.
+// ConfigureTeamEthernet brings the host's VLAN subinterfaces and DHCP scopes into line
+// with the given teams.
+//
+// Only the stations that changed are touched. A station whose team is unchanged keeps its
+// subinterface, its address, and its clients' leases -- which matters because registering
+// one station must not disturb a robot being driven from another. An unchanged set of
+// teams does nothing at all.
 func (ln *LocalNetwork) ConfigureTeamEthernet(teams [6]*model.Team) error {
 	// Match the switch's guarantee that two configurations never overlap; match load can
 	// fire this repeatedly as stations are registered.
 	ln.mutex.Lock()
 	defer ln.mutex.Unlock()
+
+	desired := teamIds(teams)
+	full := !ln.synced
+
+	if !full && desired == ln.applied {
+		ln.Status = "ACTIVE"
+		return nil
+	}
+
 	ln.Status = "CONFIGURING"
 
 	// Routing between the team subnets and the FMS is this host's job now, so it has to
 	// forward. Set here rather than once at startup because a sysctl written by hand does
 	// not survive a reboot, and this is the cheapest place to be certain of it.
 	if _, err := ln.runCommand("sysctl", "-w", "net.ipv4.ip_forward=1"); err != nil {
-		ln.Status = "ERROR"
-		return fmt.Errorf("enabling IP forwarding: %w", err)
+		return ln.fail(fmt.Errorf("enabling IP forwarding: %w", err))
 	}
 
-	// Tear all six down before building any up. A team that has left the field must not
-	// keep its subnet, and a team that moved stations must not end up addressed on two
-	// VLANs at once -- which would make it reachable by a route the switch no longer
-	// carries, and is the sort of thing that only shows up mid-match.
-	for _, vlan := range vlanForStation {
-		if err := ln.removeStation(vlan); err != nil {
-			ln.Status = "ERROR"
-			return err
-		}
-	}
+	// changed reports the stations to rebuild. On a full reconciliation that is all of
+	// them, because the host's state is unknown: subinterfaces left by a previous run of
+	// the service outlive the process, and a station that looks empty may not be.
+	changed := func(i int) bool { return full || desired[i] != ln.applied[i] }
 
-	for i, team := range teams {
-		if team == nil {
+	// Every removal before any addition. A team moving between stations must not be
+	// addressed on two VLANs at once, and that can happen in either direction, so
+	// per-station remove-then-add is not enough.
+	for i, vlan := range vlanForStation {
+		if !changed(i) {
 			continue
 		}
-		if err := ln.configureStation(team, vlanForStation[i]); err != nil {
-			ln.Status = "ERROR"
-			return err
+		if err := ln.removeStation(vlan); err != nil {
+			return ln.fail(err)
+		}
+	}
+
+	for i, vlan := range vlanForStation {
+		if !changed(i) || teams[i] == nil {
+			continue
+		}
+		if err := ln.configureStation(teams[i], vlan); err != nil {
+			return ln.fail(err)
 		}
 	}
 
 	if err := ln.writeFile(ln.config.DnsmasqConfPath, []byte(ln.dnsmasqConfig(teams))); err != nil {
-		ln.Status = "ERROR"
-		return fmt.Errorf("writing %s: %w", ln.config.DnsmasqConfPath, err)
+		return ln.fail(fmt.Errorf("writing %s: %w", ln.config.DnsmasqConfPath, err))
 	}
 
 	// A restart, not a reload. On SIGHUP dnsmasq re-reads /etc/hosts and its lease file
 	// but not its configuration, so a reload would leave the previous match's ranges
 	// serving addresses on subnets that no longer exist -- silently, and only for the
 	// teams unlucky enough to ask for a lease at the wrong moment.
+	//
+	// This does not disturb the stations that did not change: DHCP is stateless between
+	// requests, the lease file survives the restart, and the restart is far shorter than
+	// a client's retry interval.
 	if _, err := ln.runCommand("systemctl", "restart", ln.config.DnsmasqService); err != nil {
-		ln.Status = "ERROR"
-		return fmt.Errorf("restarting %s: %w", ln.config.DnsmasqService, err)
+		return ln.fail(fmt.Errorf("restarting %s: %w", ln.config.DnsmasqService, err))
 	}
 
+	ln.applied = desired
+	ln.synced = true
 	ln.Status = "ACTIVE"
 	return nil
+}
+
+// fail marks the configuration as failed. The host is left partly configured, so the
+// recorded state is no longer trustworthy and the next call reconciles in full.
+func (ln *LocalNetwork) fail(err error) error {
+	ln.synced = false
+	ln.Status = "ERROR"
+	return err
+}
+
+// teamIds reduces the teams to their numbers, with 0 for an empty station. Comparing
+// numbers rather than pointers keeps an unrelated edit to a team record -- a WPA key
+// changed from the Teams page, say -- from counting as a network change.
+func teamIds(teams [6]*model.Team) [6]int {
+	var ids [6]int
+	for i, team := range teams {
+		if team != nil {
+			ids[i] = team.Id
+		}
+	}
+	return ids
 }
 
 // removeStation deletes a station's subinterface, tolerating its absence.

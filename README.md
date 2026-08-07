@@ -251,9 +251,21 @@ On every match load bioarena then rebuilds, on the Pi:
 
 - `eth0.10` … `eth0.60` — one 802.1Q subinterface per station, each holding `10.TE.AM.4`,
   the same gateway address the switch would have handed out
-- `/etc/dnsmasq.d/bioarena.conf` — one DHCP scope per station, `.20`–`.199`, seven-day
-  lease, identical to the switch's pools
+- `/etc/dnsmasq.d/bioarena.conf` — one DHCP scope per station, `.20`–`.199`, matching the
+  switch's pool bounds
 - `net.ipv4.ip_forward=1` — the Pi routes between the team subnets and the FMS address
+
+Only stations whose team actually changed are touched; an unchanged team list does
+nothing at all. Registering one station therefore does not disturb a robot being driven
+from another, which is what makes this usable in free practice, where teams come and go
+while others are on the field. The first configuration after a restart rebuilds
+everything, since subinterfaces left by the previous run outlive the process.
+
+Leases are five minutes, deliberately shorter than the switch's seven days. The switch can
+force a laptop to re-request by bouncing its port; the Pi cannot, because the laptop's
+carrier is to the switch rather than to us. A short lease is the only self-correction
+available, so a laptop moved between stations picks up its new subnet within a couple of
+renewals instead of holding a dead address.
 
 Team addressing does not change. Only the switch's job does: carry VLANs 10–60 tagged on
 the Pi's port, and put each driver station port in its station's VLAN as an access port.
@@ -307,6 +319,26 @@ Bioarena still thinks in six stations: B2 and B3 need **BYP** checked in Match P
 match will not start. Nothing else needs configuring — a station with no team gets no
 subinterface and no DHCP scope, so VLANs 50 and 60 stay dark on their own.
 
+**First-time TL-SG108E configuration**
+
+Do this on an isolated link, before the switch touches any other network — it ships on an
+address that collides with the usual home router range.
+
+1. Laptop straight into any port, nothing else connected. Give the laptop a static
+   `192.168.0.100/24`; the switch runs no DHCP server. Browse to `http://192.168.0.1` and
+   log in with `admin`/`admin`. Recent firmware forces a password change here.
+2. **VLAN → 802.1Q VLAN** — enable it and create the station VLANs, with the membership in
+   the table above. Ports 1, 2, 7 and 8 stay untagged in VLAN 1.
+3. **VLAN → 802.1Q PVID Setting** — a different page. Set ports 3–6 to their station VLAN.
+4. **System → IP Setting** — static `10.0.100.3/24`, matching the address reserved for the
+   site switch above. This drops the web session; the switch answers on the new address
+   from then on.
+5. **System Tools → Backup and Restore** — export the configuration and keep the file.
+
+If the unit is second-hand and the password is unknown, hold the front-panel pinhole for
+5–10 seconds with the switch powered on, until the LEDs flash together. That restores
+`192.168.0.1` and `admin`/`admin`, and wipes everything else.
+
 **TL-SG108E footguns**
 
 - **PVID is a separate page, and it defaults to 1.** Membership is set under *802.1Q VLAN*;
@@ -314,15 +346,12 @@ subinterface and no DHCP scope, so VLANs 50 and 60 stay dark on their own.
   frames from the driver station laptops still land in VLAN 1 — they get no lease, while
   the field badge stays green and the switch reports no error. If a station gets no
   address, check its PVID before anything else.
-- **Back the configuration up, because the only lockout recovery wipes it.** Settings
-  persist on *Apply* — there is no separate save-to-flash step on this firmware — but the
-  pinhole reset takes the entire VLAN configuration with it, and it is the sole way back
-  in from a management-VLAN mistake. Export from *System Tools → Backup and Restore* once
-  the field works and keep the file with the repo.
-- **There is no console port.** The only way in is over the network. Take the switch's own
-  port out of the management VLAN and the sole recovery is the pinhole factory reset,
-  which drops the entire VLAN configuration with it. Leave port 1 untagged in VLAN 1 while
-  you work.
+- **There is no console port, and the only recovery wipes the configuration.** Management
+  is over the network alone. Take the switch's own port out of the management VLAN and the
+  pinhole reset is the sole way back in, taking every VLAN with it. Leave port 1 untagged
+  in VLAN 1 while you work, and keep an exported backup once the field runs.
+- **Settings persist on *Apply*.** There is no separate save-to-flash step on this
+  firmware. Confirm it on your own unit with a power cycle before trusting a field to it.
 - **It ships on 192.168.0.1 with `admin`/`admin`.** That collides with the usual home
   router range, which is often the network you are setting it up from. Configure it on an
   isolated link, or move it off `192.168.0.x` before it ever joins one.
@@ -344,6 +373,36 @@ cabling.
 ### Step 3 — Configure the field access point
 
 The AP must run the Vivid-Hosting OpenWRT firmware with the REST API enabled. Bioarena communicates over HTTP. Set the AP address and password under **Arena → Settings**.
+
+Specifically, bioarena needs plain HTTP on port 80 serving `POST /configuration` and
+`GET /status`, the latter polled once a second and expected to report `ACTIVE`. That is
+the **field firmware**, not the team-radio firmware — a radio in team mode serves no such
+API and sits at `10.TE.AM.1` for whichever team it was last provisioned for.
+
+**First-time VH-113 setup**
+
+1. Laptop straight into the AP, static `192.168.69.100/24`, browse `http://192.168.69.1` —
+   Vivid's default management address.
+2. Confirm or flash the field-mode image, following Vivid Hosting's own instructions.
+3. Set the AP's static address to `10.0.100.2` on the management subnet.
+4. Set the radio channel. It must match **AP Channel** under Arena → Settings, which is
+   what gets pushed on every match load.
+
+**The AP password is normally blank.** The practice firmware exposes no API token, and
+that is a supported configuration rather than a workaround: bioarena adds the
+`Authorization: Bearer` header only when the password field is non-empty, so a blank field
+means unauthenticated calls, which is what this firmware expects. Confirm with:
+
+```bash
+curl -s http://10.0.100.2/status
+```
+
+JSON back means leave **AP Password** empty. A `401` means this build does want a token,
+and on Vivid's field images that is usually the web UI's admin password.
+
+**Enter the address without a scheme.** `10.0.100.2`, not `http://10.0.100.2` — the code
+prepends `http://`, so a typed prefix produces `http://http://10.0.100.2` and every poll
+fails.
 
 When a match loads, the controller pushes one SSID + WPA2 key per team (six total). The
 SSID is the team number and the key is that team's WPA key from its record under

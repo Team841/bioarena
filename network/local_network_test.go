@@ -65,10 +65,10 @@ func TestLocalNetworkConfigureTeamEthernet(t *testing.T) {
 	// The pool matches the switch's: .20 through .199, seven-day lease, gateway .4.
 	assert.Contains(t, *config, "port=0\nbind-dynamic\n")
 	assert.Contains(t, *config, "# R1 -- Team 841\ninterface=eth0.10\n")
-	assert.Contains(t, *config, "dhcp-range=set:vlan10,10.8.41.20,10.8.41.199,255.255.255.0,7d\n")
+	assert.Contains(t, *config, "dhcp-range=set:vlan10,10.8.41.20,10.8.41.199,255.255.255.0,5m\n")
 	assert.Contains(t, *config, "dhcp-option=tag:vlan10,option:router,10.8.41.4\n")
 	assert.Contains(t, *config, "# B2 -- Team 254\ninterface=eth0.50\n")
-	assert.Contains(t, *config, "dhcp-range=set:vlan50,10.2.54.20,10.2.54.199,255.255.255.0,7d\n")
+	assert.Contains(t, *config, "dhcp-range=set:vlan50,10.2.54.20,10.2.54.199,255.255.255.0,5m\n")
 
 	// Stations without a team get no scope at all.
 	for _, vlan := range []int{20, 30, 40, 60} {
@@ -87,6 +87,132 @@ func TestLocalNetworkConfigureNoTeams(t *testing.T) {
 	assert.Equal(t, 8, len(*commands)) // sysctl + six deletes + restart
 	assert.NotContains(t, *commands, "ip link add link eth0 name eth0.10 type vlan id 10")
 	assert.NotContains(t, *config, "dhcp-range")
+}
+
+// Registering one station must not disturb a robot being driven from another: an
+// unchanged station keeps its subinterface, its address, and its clients' leases.
+func TestLocalNetworkOnlyTouchesChangedStations(t *testing.T) {
+	ln, commands, _ := newTestLocalNetwork(LocalNetworkConfig{TrunkInterface: "eth0"})
+	assert.Nil(t, ln.ConfigureTeamEthernet([6]*model.Team{{Id: 841}, nil, nil, nil, nil, nil}))
+
+	// Second call adds B1 and leaves R1 alone.
+	*commands = nil
+	assert.Nil(t, ln.ConfigureTeamEthernet([6]*model.Team{{Id: 841}, nil, nil, {Id: 254}, nil, nil}))
+
+	assert.Equal(
+		t,
+		[]string{
+			"sysctl -w net.ipv4.ip_forward=1",
+			"ip link delete eth0.40",
+			"ip link add link eth0 name eth0.40 type vlan id 40",
+			"ip addr add 10.2.54.4/24 dev eth0.40",
+			"ip link set dev eth0.40 up",
+			"systemctl restart dnsmasq",
+		},
+		*commands,
+	)
+	for _, command := range *commands {
+		assert.NotContains(t, command, "eth0.10", "R1 was unchanged and must not be touched")
+	}
+}
+
+// A station whose team changes is removed before it is added, so it is never addressed
+// for both teams at once.
+func TestLocalNetworkReplacesTeamOnSameStation(t *testing.T) {
+	ln, commands, config := newTestLocalNetwork(LocalNetworkConfig{TrunkInterface: "eth0"})
+	assert.Nil(t, ln.ConfigureTeamEthernet([6]*model.Team{{Id: 841}, nil, nil, nil, nil, nil}))
+
+	*commands = nil
+	assert.Nil(t, ln.ConfigureTeamEthernet([6]*model.Team{{Id: 254}, nil, nil, nil, nil, nil}))
+
+	assert.Equal(
+		t,
+		[]string{
+			"sysctl -w net.ipv4.ip_forward=1",
+			"ip link delete eth0.10",
+			"ip link add link eth0 name eth0.10 type vlan id 10",
+			"ip addr add 10.2.54.4/24 dev eth0.10",
+			"ip link set dev eth0.10 up",
+			"systemctl restart dnsmasq",
+		},
+		*commands,
+	)
+	assert.NotContains(t, *config, "10.8.41")
+}
+
+// Clearing a station removes its subnet and nothing else.
+func TestLocalNetworkClearsOneStation(t *testing.T) {
+	ln, commands, config := newTestLocalNetwork(LocalNetworkConfig{TrunkInterface: "eth0"})
+	assert.Nil(t, ln.ConfigureTeamEthernet([6]*model.Team{{Id: 841}, nil, nil, {Id: 254}, nil, nil}))
+
+	*commands = nil
+	assert.Nil(t, ln.ConfigureTeamEthernet([6]*model.Team{{Id: 841}, nil, nil, nil, nil, nil}))
+
+	assert.Equal(
+		t,
+		[]string{
+			"sysctl -w net.ipv4.ip_forward=1",
+			"ip link delete eth0.40",
+			"systemctl restart dnsmasq",
+		},
+		*commands,
+	)
+	assert.Contains(t, *config, "interface=eth0.10\n")
+	assert.NotContains(t, *config, "interface=eth0.40\n")
+}
+
+// An unchanged team list does nothing at all -- no commands, and no dnsmasq restart that
+// would serve no purpose.
+func TestLocalNetworkSkipsUnchangedTeams(t *testing.T) {
+	ln, commands, _ := newTestLocalNetwork(LocalNetworkConfig{TrunkInterface: "eth0"})
+	teams := [6]*model.Team{{Id: 841}, nil, nil, nil, nil, nil}
+	assert.Nil(t, ln.ConfigureTeamEthernet(teams))
+
+	*commands = nil
+	assert.Nil(t, ln.ConfigureTeamEthernet(teams))
+	assert.Empty(t, *commands)
+	assert.Equal(t, "ACTIVE", ln.Status)
+
+	// Identity is the team number, so a fresh record for the same team is still unchanged.
+	assert.Nil(t, ln.ConfigureTeamEthernet([6]*model.Team{{Id: 841, WpaKey: "changed"}, nil, nil, nil, nil, nil}))
+	assert.Empty(t, *commands)
+}
+
+// The first configuration after startup cannot trust the recorded state: subinterfaces
+// left by a previous run of the service outlive the process.
+func TestLocalNetworkFirstConfigurationReconcilesInFull(t *testing.T) {
+	ln, commands, _ := newTestLocalNetwork(LocalNetworkConfig{TrunkInterface: "eth0"})
+	assert.Nil(t, ln.ConfigureTeamEthernet([6]*model.Team{}))
+
+	for _, vlan := range []int{10, 20, 30, 40, 50, 60} {
+		assert.Contains(t, *commands, fmt.Sprintf("ip link delete eth0.%d", vlan))
+	}
+}
+
+// After a failure the host is partly configured, so the recorded state is worthless and
+// the next call must reconcile everything rather than trust its own bookkeeping.
+func TestLocalNetworkReconcilesInFullAfterFailure(t *testing.T) {
+	ln, commands, _ := newTestLocalNetwork(LocalNetworkConfig{TrunkInterface: "eth0"})
+	assert.Nil(t, ln.ConfigureTeamEthernet([6]*model.Team{{Id: 841}, nil, nil, nil, nil, nil}))
+
+	failing := true
+	ln.runCommand = func(name string, args ...string) (string, error) {
+		*commands = append(*commands, strings.TrimSpace(name+" "+strings.Join(args, " ")))
+		if failing && name == "ip" && args[0] == "addr" {
+			return "RTNETLINK answers: Permission denied", fmt.Errorf("exit status 2")
+		}
+		return "", nil
+	}
+	assert.NotNil(t, ln.ConfigureTeamEthernet([6]*model.Team{{Id: 254}, nil, nil, nil, nil, nil}))
+	assert.Equal(t, "ERROR", ln.Status)
+
+	failing = false
+	*commands = nil
+	assert.Nil(t, ln.ConfigureTeamEthernet([6]*model.Team{{Id: 254}, nil, nil, nil, nil, nil}))
+	for _, vlan := range []int{10, 20, 30, 40, 50, 60} {
+		assert.Contains(t, *commands, fmt.Sprintf("ip link delete eth0.%d", vlan))
+	}
+	assert.Equal(t, "ACTIVE", ln.Status)
 }
 
 // Tearing down a station that was never configured is the normal case, not a failure.
