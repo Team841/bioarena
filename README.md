@@ -21,10 +21,10 @@ Flash with Raspberry Pi Imager and open its customisation panel (the gear icon, 
 `Ctrl+Shift+X`) **before writing**. Several things are far easier to set there than after
 first boot.
 
-- **Name the user `pi`.** Bookworm and later no longer create it by default, and every
-  path in this project assumes it: `/home/pi/bioarena`, `User=pi` in `bioarena.service`,
-  and every `scp` target below. Any other name means editing the service file and every
-  path in it.
+- **Name the login user whatever you like.** Bookworm and later no longer create `pi` by
+  default, and nothing here depends on the name: bioarena installs to `/opt/bioarena` and
+  runs as a dedicated `bioarena` system account. The `scp` commands below use `<USER>` for
+  whichever account you log in with.
 - **Enable SSH.** A fresh image has it off, so without this the first boot needs a
   keyboard and monitor.
 - **Set the keyboard layout and locale.** A mismatched layout is why keys like `|` end up
@@ -86,30 +86,54 @@ Check which you need with `uname -m` on the Pi: `aarch64` for the default, `armv
 the override. The wrong one does not fail informatively — the Pi reports
 `cannot execute binary file: Exec format error`.
 
+**Create the service account (once per Pi)**
+
+Bioarena runs as a dedicated system account and installs to `/opt/bioarena`, so the
+deployment does not depend on which login user the SD card was flashed with. Run on the
+Pi, replacing `<USER>` with your login name:
+
+```bash
+sudo useradd --system --home-dir /opt/bioarena --shell /usr/sbin/nologin bioarena
+sudo mkdir -p /opt/bioarena
+sudo chown -R bioarena:bioarena /opt/bioarena
+sudo chmod 2775 /opt/bioarena
+sudo usermod -aG bioarena <USER>
+```
+
+Log out and back in for the group to take effect. `2775` is setgid and group-writable, so
+your login user can `scp` straight into `/opt/bioarena` and the files land in the
+`bioarena` group.
+
 **Copy files to the Pi**
 
 If bioarena is already installed, stop it first — Linux refuses to overwrite a running
 executable, and `scp` reports that as a bare `Failure`:
 
 ```bash
-ssh pi@<PI_IP> "sudo systemctl stop bioarena"
+ssh <USER>@<PI_IP> "sudo systemctl stop bioarena"
 ```
 
 ```bash
-scp bioarena-pi pi@<PI_IP>:~/bioarena/
-scp -r static templates pi@<PI_IP>:~/bioarena/
-scp bioarena.service pi@<PI_IP>:~/
+scp bioarena-pi <USER>@<PI_IP>:/opt/bioarena/
+scp -r static templates <USER>@<PI_IP>:/opt/bioarena/
+scp bioarena.service <USER>@<PI_IP>:~/
 ```
 
 Keep the `bioarena-pi` filename — `bioarena.service` runs
-`/home/pi/bioarena/bioarena-pi`, so renaming it on copy leaves the service unable to
+`/opt/bioarena/bioarena-pi`, so renaming it on copy leaves the service unable to
 start.
 
-Then make it executable on the Pi:
+Then hand the copied files to the service account:
 
 ```bash
-chmod +x ~/bioarena/bioarena-pi
+sudo chown -R bioarena:bioarena /opt/bioarena
+sudo chmod +x /opt/bioarena/bioarena-pi
 ```
+
+The `chown` matters on every deploy, not just the first. Files arrive owned by your login
+user, and the service writes `event.db`, `logs/`, and `db/backups/` into this directory —
+a copied `event.db` left owned by the wrong account makes the field come up unable to save
+settings.
 
 **Install the systemd service (run on the Pi)**
 
@@ -121,7 +145,7 @@ sudo systemctl start bioarena
 ```
 
 The service file is **moved**, not copied, so it ends up at
-`/etc/systemd/system/bioarena.service` and will not be found in `~/bioarena/`. Confirm
+`/etc/systemd/system/bioarena.service` and will not be found in `/opt/bioarena/`. Confirm
 it is installed with:
 
 ```bash
@@ -266,11 +290,11 @@ repositories have moved to `archive.debian.org` and can no longer install `scree
 `minicom` without repointing the sources list.
 
 ```bash
-scp docs/console.py pi@10.0.100.5:~/
+scp docs/console.py <USER>@10.0.100.5:~/
 ```
 
 ```bash
-ssh pi@10.0.100.5
+ssh <USER>@10.0.100.5
 python3 ~/console.py            # /dev/ttyUSB0 at 9600 8N1; Ctrl-] to exit
 python3 ~/console.py --list     # if unsure which device the cable is
 ```
@@ -354,7 +378,7 @@ No routing, no DHCP, no SVIs.
 ```bash
 sudo apt install dnsmasq
 sudo touch /etc/dnsmasq.d/bioarena.conf
-sudo chown pi /etc/dnsmasq.d/bioarena.conf
+sudo chown bioarena /etc/dnsmasq.d/bioarena.conf
 ```
 
 The service runs `ip`, `sysctl`, and `systemctl restart dnsmasq`. `AmbientCapabilities=CAP_NET_ADMIN`
@@ -362,21 +386,21 @@ in `bioarena.service` covers the first two — the kernel grants `CAP_NET_ADMIN`
 same access as root under `/proc/sys/net`, so `ip_forward` is writable — but not the
 restart, which systemd authorises over D-Bus.
 
-Simplest fix, and the one to use unless you have a reason not to: run the service as root
-by removing `User=pi` from `bioarena.service`.
-
-For something narrower, authorise that one unit for the `pi` user in
+Authorise that one unit for the service account in
 `/etc/polkit-1/rules.d/50-bioarena-dnsmasq.rules`:
 
 ```javascript
 polkit.addRule(function (action, subject) {
   if (action.id == "org.freedesktop.systemd1.manage-units" &&
       action.lookup("unit") == "dnsmasq.service" &&
-      subject.user == "pi") {
+      subject.user == "bioarena") {
     return polkit.Result.YES;
   }
 });
 ```
+
+The blunter alternative is `User=root` in `bioarena.service`, which needs no rule at all.
+The polkit route grants exactly one unit to one account and is worth the extra file.
 
 Polkit, not sudo: bioarena invokes `systemctl` directly, so a `sudoers` entry would never
 be consulted. The JavaScript rule format needs polkit 0.106 or newer, which Trixie and
@@ -575,13 +599,13 @@ copy them to the Pi.
 Or pull them off over SSH:
 
 ```bash
-scp pi@10.0.100.5:~/bioarena/logs/\*.csv ./
+scp <USER>@10.0.100.5:/opt/bioarena/logs/\*.csv ./
 ```
 
 The directory grows with every match. Clear it periodically:
 
 ```bash
-ssh pi@10.0.100.5 "rm -f ~/bioarena/logs/*.csv"
+ssh <USER>@10.0.100.5 "sudo rm -f /opt/bioarena/logs/*.csv"
 ```
 
 ### Running a practice match
@@ -722,15 +746,38 @@ pins:
 Build and deploy:
 
 ```bash
-./build-pi.sh          # produces estop-panel binary alongside bioarena
-scp estop-panel pi@10.0.100.11:~/estop-panel/
-scp estop-panel.yaml   pi@10.0.100.11:~/estop-panel/
+./build-pi.sh          # produces estop-panel-pi alongside bioarena-pi
+```
+
+On the panel Pi, once: create the same service account as the field controller but with
+`/opt/estop-panel`, and add it to the `gpio` group so it can read the pins.
+
+```bash
+sudo useradd --system --home-dir /opt/estop-panel --shell /usr/sbin/nologin bioarena
+sudo usermod -aG gpio bioarena
+sudo mkdir -p /opt/estop-panel
+sudo chown -R bioarena:bioarena /opt/estop-panel
+sudo chmod 2775 /opt/estop-panel
+sudo usermod -aG bioarena <USER>
+```
+
+Then deploy:
+
+```bash
+scp estop-panel-pi <USER>@10.0.100.11:/opt/estop-panel/estop-panel
+scp estop-panel.yaml <USER>@10.0.100.11:/opt/estop-panel/
 # Edit ExecStartPre IP in estop-panel.service, then:
-scp cmd/estop-panel/estop-panel.service pi@10.0.100.11:~/
+scp cmd/estop-panel/estop-panel.service <USER>@10.0.100.11:~/
 # On the panel Pi:
+sudo chown -R bioarena:bioarena /opt/estop-panel
+sudo chmod +x /opt/estop-panel/estop-panel
 sudo mv ~/estop-panel.service /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable --now estop-panel
 ```
+
+The `gpio` group membership is the one that bites: without it the panel starts, logs that
+it cannot open the GPIO chip, and reports no stops — a field that looks fine and has no
+working e-stops.
 
 Wire the main bioarena to the panel by adding to `config.yaml` and restarting:
 
@@ -864,7 +911,7 @@ seconds after being registered, which reads as a flaky field rather than a confi
 problem.
 
 ```bash
-scp docs/99-bioarena-unmanaged.conf pi@10.0.100.5:~/
+scp docs/99-bioarena-unmanaged.conf <USER>@10.0.100.5:~/
 ```
 
 On the Pi:

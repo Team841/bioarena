@@ -4,14 +4,20 @@ After=network.target
 
 [Service]
 Type=simple
-User=pi
-WorkingDirectory=/home/pi/estop-panel
+
+# Same dedicated system account as the field controller, for the same reason: the panel
+# must not depend on which login user the SD card was flashed with. It needs to be in the
+# gpio group to read the e-stop pins -- see the README.
+User=bioarena
+WorkingDirectory=/opt/estop-panel
+
 # Set a static IP for this panel Pi.
 # Red panel:  10.0.100.11/24
 # Blue panel: 10.0.100.12/24
 # Edit the address below before deploying.
-ExecStartPre=/sbin/ip addr add 10.0.100.11/24 dev eth0
-ExecStart=/home/pi/estop-panel/estop-panel
+AmbientCapabilities=CAP_NET_ADMIN
+ExecStartPre=-/sbin/ip addr add 10.0.100.11/24 dev eth0
+ExecStart=/opt/estop-panel/estop-panel
 Restart=on-failure
 RestartSec=5s
 StandardOutput=journal

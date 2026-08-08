@@ -6,17 +6,26 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=pi
+
+# A dedicated system account, not a login user. Raspberry Pi OS no longer creates "pi" by
+# default, and naming whichever account happens to exist here makes the field controller
+# depend on how the SD card was flashed. See "Install" in the README for the useradd.
+User=bioarena
+WorkingDirectory=/opt/bioarena
+
+# CAP_NET_ADMIN covers "ip addr add" below, and the VLAN subinterfaces and ip_forward that
+# team_network_driver: local configures -- the kernel grants CAP_NET_ADMIN holders root's
+# access under /proc/sys/net. It does not cover restarting dnsmasq, which systemd
+# authorises over D-Bus; see the polkit rule in the README.
 AmbientCapabilities=CAP_NET_ADMIN
-WorkingDirectory=/home/pi/bioarena
 
 # Assign the FMS address to eth0 before starting.
 # The leading '-' tells systemd to ignore the error if the address is
 # already configured (e.g. after a service restart).
 ExecStartPre=-/sbin/ip addr add 10.0.100.5/24 dev eth0
-ExecStartPre=/bin/chmod +x /home/pi/bioarena/bioarena-pi
+ExecStartPre=/bin/chmod +x /opt/bioarena/bioarena-pi
 
-ExecStart=/home/pi/bioarena/bioarena-pi
+ExecStart=/opt/bioarena/bioarena-pi
 Restart=on-failure
 RestartSec=5
 
