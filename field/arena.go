@@ -189,10 +189,9 @@ func (arena *Arena) LoadSettings() error {
 	} else {
 		arena.teamNetwork = network.NewSwitch(
 			network.SwitchConfig{
-				Address:          settings.SwitchAddress,
-				Password:         settings.SwitchPassword,
-				DSPortInterfaces: settings.SwitchDSPortInterfaces,
-				DnsServer:        settings.SwitchDnsServer,
+				Address:   settings.SwitchAddress,
+				Password:  settings.SwitchPassword,
+				DnsServer: settings.SwitchDnsServer,
 			},
 		)
 	}

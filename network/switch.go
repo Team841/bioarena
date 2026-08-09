@@ -36,11 +36,27 @@ const (
 	blue3Vlan = 60
 )
 
+// dsPortInterfaces is the driver station port for each alliance station, in station order.
+// A Catalyst 3560-CX with the stations on its first six ports is the assumed field, so
+// wire R1 to Gi0/1 and so on; the trunks to the Pi and the access point go on the ports
+// above these.
+//
+// These are shut and reopened around a VLAN change, which is what makes a laptop
+// re-request an address on its new subnet rather than keeping the previous match's. Only
+// the stations whose team changed are cycled.
+var dsPortInterfaces = [6]string{
+	"GigabitEthernet0/1",
+	"GigabitEthernet0/2",
+	"GigabitEthernet0/3",
+	"GigabitEthernet0/4",
+	"GigabitEthernet0/5",
+	"GigabitEthernet0/6",
+}
+
 type Switch struct {
 	address               string
 	port                  int
 	password              string
-	dsPortInterfaces      [6]string
 	dnsServer             string
 	mutex                 sync.Mutex
 	configBackoffDuration time.Duration
@@ -61,30 +77,16 @@ type Switch struct {
 var ServerIpAddress = "10.0.100.5" // The DS will try to connect to this address only.
 
 // SwitchConfig collects the switch settings. A struct rather than positional arguments
-// because most of them are strings, and a transposed pair would misconfigure a field
-// without failing.
+// because they are all strings, and a transposed pair would misconfigure a field without
+// failing.
 type SwitchConfig struct {
-	Address  string
-	Password string
-
-	// DSPortInterfaces names one driver station port per alliance station, in station
-	// order (R1, R2, R3, B1, B2, B3), comma separated:
-	//
-	//	GigabitEthernet0/1,GigabitEthernet0/2,GigabitEthernet0/3,...
-	//
-	// These ports are shut and reopened around a VLAN change, which is what makes a
-	// laptop re-request an address on its new subnet rather than keeping one from the
-	// previous match. Only the stations whose team changed are cycled.
-	//
-	// Blank skips port cycling entirely: the VLANs are still rebuilt, but a laptop that
-	// already holds a lease keeps its old address until the lease expires.
-	DSPortInterfaces string
-
+	Address   string
+	Password  string
 	DnsServer string
 }
 
 func NewSwitch(config SwitchConfig) *Switch {
-	sw := &Switch{
+	return &Switch{
 		address:               config.Address,
 		port:                  switchTelnetPort,
 		password:              config.Password,
@@ -93,32 +95,6 @@ func NewSwitch(config SwitchConfig) *Switch {
 		configPauseDuration:   switchConfigPauseDurationSec * time.Second,
 		Status:                "UNKNOWN",
 	}
-
-	// Anything other than exactly six names is ignored rather than half applied: a short
-	// list would silently leave some stations never cycled, which shows up as one team
-	// unable to get an address long after the setting was edited.
-	if names := strings.Split(config.DSPortInterfaces, ","); len(names) == len(sw.dsPortInterfaces) {
-		complete := true
-		for i, name := range names {
-			trimmed := strings.TrimSpace(name)
-			if trimmed == "" {
-				complete = false
-				break
-			}
-			sw.dsPortInterfaces[i] = trimmed
-		}
-		if !complete {
-			sw.dsPortInterfaces = [6]string{}
-		}
-	}
-
-	return sw
-}
-
-// hasPortMap reports whether the driver station ports are known, and so whether they can
-// be cycled around a VLAN change.
-func (sw *Switch) hasPortMap() bool {
-	return sw.dsPortInterfaces[0] != ""
 }
 
 func (sw *Switch) GetStatus() string {
@@ -159,7 +135,7 @@ func (sw *Switch) ConfigureTeamEthernet(teams [6]*model.Team) error {
 	// Shut down DS ethernet ports to prevent conflicts during VLAN reconfiguration. Only
 	// the stations being rebuilt: cycling a port disconnects the driver station behind it,
 	// and in free practice the others are mid-drive.
-	if portsDown := sw.portCommands(rebuild, "shutdown"); portsDown != "" {
+	if portsDown := portCommands(rebuild, "shutdown"); portsDown != "" {
 		if _, err := sw.runConfigCommand(portsDown); err != nil {
 			return sw.fail(err)
 		}
@@ -236,7 +212,7 @@ func (sw *Switch) ConfigureTeamEthernet(teams [6]*model.Team) error {
 	time.Sleep(sw.configBackoffDuration)
 
 	// Bring back up exactly the ports that were shut.
-	if portsUp := sw.portCommands(rebuild, "no shutdown"); portsUp != "" {
+	if portsUp := portCommands(rebuild, "no shutdown"); portsUp != "" {
 		if _, err := sw.runConfigCommand(portsUp); err != nil {
 			return sw.fail(err)
 		}
@@ -249,15 +225,12 @@ func (sw *Switch) ConfigureTeamEthernet(teams [6]*model.Team) error {
 }
 
 // portCommands builds an interface block applying the given verb to each selected
-// station's driver station port. Empty when no port map is configured.
-func (sw *Switch) portCommands(stations [6]bool, verb string) string {
-	if !sw.hasPortMap() {
-		return ""
-	}
+// station's driver station port.
+func portCommands(stations [6]bool, verb string) string {
 	command := ""
 	for i, selected := range stations {
 		if selected {
-			command += fmt.Sprintf("interface %s\n%s\n", sw.dsPortInterfaces[i], verb)
+			command += fmt.Sprintf("interface %s\n%s\n", dsPortInterfaces[i], verb)
 		}
 	}
 	return command

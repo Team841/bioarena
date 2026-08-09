@@ -157,30 +157,22 @@ func TestSetupSettingsFieldTabRemovedFields(t *testing.T) {
 	body := recorder.Body.String()
 	assert.NotContains(t, body, "apPassword")
 
-	// The driver-station port map is exposed: port naming is field-specific.
-	// TestSetupSettingsOmittedFieldBehavior covers the case where it is not submitted at
-	// all, which must still leave it unchanged.
-	assert.Contains(t, body, "switchDSPortInterfaces")
+	// The driver station ports are fixed by the reference field wiring, not configured.
+	assert.NotContains(t, body, "switchDSPortInterfaces")
 }
 
 func TestSetupSettingsOmittedFieldBehavior(t *testing.T) {
 	web := setupTestWeb(t)
 
-	// Pre-set AP password and capture the default DS port map.
 	web.arena.EventSettings.ApPassword = "secret"
 	assert.Nil(t, web.arena.Database.UpdateEventSettings(web.arena.EventSettings))
-	originalPorts := web.arena.EventSettings.SwitchDSPortInterfaces
-	assert.NotEmpty(t, originalPorts)
 
-	// POST without apPassword or switchDSPortInterfaces.
+	// POST without apPassword.
 	recorder := web.postHttpResponse("/setup/settings", "name=Test+Event")
 	assert.Equal(t, 303, recorder.Code)
 
 	// AP password should be cleared to empty string (intentional default).
 	assert.Equal(t, "", web.arena.EventSettings.ApPassword)
-
-	// The port map should be unchanged.
-	assert.Equal(t, originalPorts, web.arena.EventSettings.SwitchDSPortInterfaces)
 }
 
 func (web *Web) postFileHttpResponse(path string, paramName string, file *bytes.Buffer) *httptest.ResponseRecorder {
@@ -196,14 +188,3 @@ func (web *Web) postFileHttpResponse(path string, paramName string, file *bytes.
 	return recorder
 }
 
-// The port map is a single-line list, so a stray interface name is the only mistake
-// available -- there is no free-form command text left to mangle.
-func TestSetupSettingsPortMapTrimmed(t *testing.T) {
-	web := setupTestWeb(t)
-
-	recorder := web.postHttpResponse(
-		"/setup/settings", "name=Test+Event&switchDSPortInterfaces=++Gi0%2F1%2CGi0%2F2++",
-	)
-	assert.Equal(t, 303, recorder.Code)
-	assert.Equal(t, "Gi0/1,Gi0/2", web.arena.EventSettings.SwitchDSPortInterfaces)
-}

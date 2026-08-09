@@ -39,8 +39,8 @@ silently fails to close. The failure is invisible because a Telnet read timeout 
 treated as success further up.
 
 **Upstream cannot currently trigger it.** Both upstream callers build strings ending in
-`\n`, and upstream has no driver-station port commands. bioarena hit it by adding a third
-caller whose default text did not honour the unstated precondition.
+`\n`, and upstream does not cycle driver station ports at all. bioarena hit it by adding a
+third caller whose text did not honour the unstated precondition.
 
 **The pitch is therefore hardening, not a bug report.** A helper that silently corrupts
 its input when a precondition is unmet is worth guarding regardless of whether any
@@ -60,17 +60,17 @@ Covered by `TestConfigCommandTerminatesLastLine` and
 `TestConfigCommandDoesNotDoubleTerminate` in `network/switch_test.go`.
 
 **Submit it as an isolated patch, not a file copy.** `network/switch.go` carries several
-unrelated fork changes — the driver-station port commands, `GetStationForTeamId`,
-`ServerIpAddress` as a var rather than a const, `DevMode` removed, the module path. A PR
-should touch only `runConfigCommand` and add the two tests. Check what else has drifted
-before branching:
+unrelated fork changes — driver station port cycling, incremental configuration,
+`GetStationForTeamId`, `ServerIpAddress` as a var rather than a const, `DevMode` removed,
+the module path. A PR should touch only `runConfigCommand` and add the two tests. Check
+what else has drifted before branching:
 
 ```bash
 git diff upstream/main -- network/switch.go
 ```
 
 Note also that upstream's tests construct the switch as `NewSwitch(address, password)`,
-where bioarena's takes four arguments. The upstream-facing tests must use upstream's
+where bioarena's takes a `SwitchConfig`. The upstream-facing tests must use upstream's
 two-argument signature.
 
 ---
@@ -86,9 +86,8 @@ Deliberate, specific to a practice field, and not appropriate to send upstream.
 | `led/override.go` | New file: practice-field fixture layout and capability fallback. | Upstream fields have the full 16-fixture hardware. Deliberately additive so the six ported `led/` files stay byte-identical. |
 | `field/team_match_log.go` | Logs written to `logs/` rather than `static/logs/`. | Upstream's placement makes them downloadable for free, but it also means the deploy step's `scp -r static` copies every accumulated log to the field Pi. bioarena serves them from `/logs/` instead. |
 | `web/web.go` | Serves `/logs/` with directory listing and no authentication. | Restores the browse-and-download behaviour lost by moving the directory, deliberately matching how `/static/` is served. |
-| `model`, `web`, `templates` | A driver-station port map (`SwitchDSPortInterfaces`): one interface per station, defaulted for a Catalyst 3560-CX. Bioarena shuts and reopens those ports around a VLAN change. | A bioarena addition with no upstream equivalent. It began as two free-form command blocks, which allowed an invalid interface range to be entered and then fail silently — a list of six names cannot express that mistake. |
 | `field/`, `hardware/`, `cmd/estop-panel` | GPIO and network e-stop panels, free practice mode, half-field conveniences. | Practice-field hardware and workflow with no upstream counterpart. |
-| `network/switch.go` | Configuration is incremental: the last applied teams are cached, only changed stations are rebuilt, and only their driver station ports are cycled, using a new per-station `SwitchDSPortInterfaces` setting. Falls back to upstream's full rebuild when that setting is blank or the switch's state is unknown. `NewSwitch` takes a `SwitchConfig` struct. | Upstream reconfigures only between matches, where cycling every port costs nothing. This fork also reconfigures on free practice slot changes, where the other stations have robots being driven. |
+| `network/switch.go` | Configuration is incremental: the last applied teams are cached, only the stations whose team changed are rebuilt, and only their driver station ports are cycled. Those ports are fixed in code as `GigabitEthernet0/1`–`0/6` in station order, so a 3560-CX wired that way is assumed. Full rebuild whenever the switch's state is unknown — at startup and after a failure. `NewSwitch` takes a `SwitchConfig` struct. | Upstream reconfigures only between matches, where rebuilding everything costs nothing. This fork also reconfigures on free practice slot changes, where the other stations have robots being driven. The ports were briefly an operator-editable command block, which let an invalid interface range be entered and then fail silently — a Telnet read timeout counts as success — so fixing the wiring removes the setting and the mistake together. |
 | `network/team_network.go`, `network/local_network.go` | `TeamNetwork` interface with a second implementation that applies the team subnets on the Pi (VLAN subinterfaces plus dnsmasq) instead of on a Layer 3 switch. `Arena.networkSwitch` becomes `Arena.teamNetwork`. | Upstream fields have competition switches. This exists so a practice field can run on a Layer 2 switch, and it puts all six teams' traffic across the Pi's single NIC — an acceptable trade for a practice field and not for a real one. |
 
 ---

@@ -28,8 +28,6 @@ func TestEventSettingsReadWrite(t *testing.T) {
 			TbaDownloadEnabled:          false,
 			AutoConfigureTeams:          true,
 			ApChannel:                   36,
-			SwitchDSPortInterfaces: "GigabitEthernet0/1,GigabitEthernet0/2,GigabitEthernet0/3," +
-				"GigabitEthernet0/4,GigabitEthernet0/5,GigabitEthernet0/6",
 			WarmupDurationSec:           0,
 			AutoDurationSec:             20,
 			PauseDurationSec:            3,

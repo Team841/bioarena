@@ -178,23 +178,6 @@ UI for configuring event settings.
                   </small>
                 </div>
               </div>
-              <div class="row mb-3">
-                <label class="col-lg-6 control-label" for="switchDSPortInterfaces">
-                  Driver Station Ports
-                </label>
-                <div class="col-lg-6">
-                  <input type="text" class="form-control" id="switchDSPortInterfaces" name="switchDSPortInterfaces"
-                    value="{{.SwitchDSPortInterfaces}}" spellcheck="false"
-                    placeholder="GigabitEthernet0/1,GigabitEthernet0/2,GigabitEthernet0/3,GigabitEthernet0/4,GigabitEthernet0/5,GigabitEthernet0/6">
-                  <small class="text-body-secondary">
-                    One interface per station in order R1, R2, R3, B1, B2, B3, defaulted for a Catalyst 3560-CX
-                    with the stations on its first six ports. A match load shuts and reopens only the ports whose
-                    team changed, which is what makes those laptops re-request an address on their new subnet;
-                    robots on the other stations stay connected. Blank skips the cycling, and a laptop keeps its
-                    previous address until the lease expires. Anything other than six names is ignored.
-                  </small>
-                </div>
-              </div>
 
             </fieldset>
             <fieldset class="mb-4">

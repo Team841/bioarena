@@ -293,33 +293,21 @@ One-time setup:
    command is discarded with no error.
 3. Create VLANs 10, 20, 30, 40, 50, 60 (one per alliance station).
 4. Set the Pi's port as a trunk carrying all VLANs.
-5. Set each driver station's port as an access port in the correct VLAN. These are the
-   ports bioarena shuts and reopens around a VLAN reconfiguration, so they must match the
-   driver station port map below.
-6. Enable `ip routing`.
+5. **Wire the driver stations to `GigabitEthernet0/1` through `0/6`, in station order:**
+   R1, R2, R3, B1, B2, B3. Set each as an access port in that station's VLAN. This wiring
+   is assumed by the code, not configured — bioarena shuts and reopens these ports around
+   a VLAN change, so a station wired elsewhere gets its VLAN rebuilt without its port ever
+   being cycled.
+6. Put the Pi and the access point on trunk ports above those six, carrying all VLANs.
+7. Enable `ip routing`.
 
-The switch address and password are set in the web UI under **Arena → Settings**.
+The switch address and password are the only switch settings in the web UI, under
+**Arena → Settings**.
 
-**Check the driver station port map** under **Arena → Settings**. It is one field, listing
-the port each station is wired to in station order (R1, R2, R3, B1, B2, B3), and it
-defaults to a 3560-CX with the stations on its first six ports:
-
-```
-GigabitEthernet0/1,GigabitEthernet0/2,GigabitEthernet0/3,GigabitEthernet0/4,GigabitEthernet0/5,GigabitEthernet0/6
-```
-
-Change it only if your stations are wired to different ports. Exactly six entries are
-required; anything else is ignored rather than half applied, since a short list would leave
-some stations never cycled and surface much later as one team unable to get an address.
-
-These ports are shut and reopened around a VLAN change, which is what makes a laptop
-re-request an address on its new subnet instead of keeping the previous match's. Only the
-stations whose team changed are cycled, so the others keep their VLAN, their addresses,
-and their driver station connections — which is what makes free practice usable, where
-teams come and go while others are driving.
-
-Leaving the field blank skips port cycling entirely. The VLANs are still rebuilt, but a
-laptop already holding a lease keeps its old address until that lease expires.
+Cycling a station's port is what makes its laptop re-request an address on the new subnet
+rather than keep the previous match's. Only the stations whose team changed are cycled, so
+the others keep their VLAN, their addresses, and their driver station connections — which
+is what makes free practice usable while other teams are driving.
 
 The first configuration after a restart rebuilds everything, because the switch outlives
 the process and may have been changed by hand in between.

@@ -37,11 +37,6 @@ type EventSettings struct {
 	ApChannel                        int
 	SwitchAddress                    string
 	SwitchPassword                   string
-	// SwitchDSPortInterfaces names one driver station port per alliance station, in
-	// station order, comma separated. A match load shuts and reopens the ports whose team
-	// changed, which is what makes those laptops re-request an address on their new
-	// subnet. Blank skips the cycling; the VLANs are still rebuilt.
-	SwitchDSPortInterfaces string
 	// SwitchDnsServer is handed to team subnets in the per-match DHCP pools. Blank omits
 	// the option entirely, which is correct for a field with no upstream resolver: a
 	// DNS server clients cannot reach makes lookups time out rather than fail fast.
@@ -162,10 +157,6 @@ func (database *Database) GetEventSettings() (*EventSettings, error) {
 		TbaDownloadEnabled:          false,
 		AutoConfigureTeams:          true,
 		ApChannel:                   36,
-		// Catalyst 3560-CX, stations on the first six ports. Field-specific, but a
-		// working default beats a blank field the operator has to guess at.
-		SwitchDSPortInterfaces: "GigabitEthernet0/1,GigabitEthernet0/2,GigabitEthernet0/3," +
-			"GigabitEthernet0/4,GigabitEthernet0/5,GigabitEthernet0/6",
 		CompanionAddress:            "",
 		WarmupDurationSec:           game.MatchTiming.WarmupDurationSec,
 		AutoDurationSec:             game.MatchTiming.AutoDurationSec,
