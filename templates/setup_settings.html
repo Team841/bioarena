@@ -202,6 +202,22 @@ UI for configuring event settings.
                   </small>
                 </div>
               </div>
+              <div class="row mb-3">
+                <label class="col-lg-6 control-label" for="switchDSPortInterfaces">
+                  Driver Station Ports &mdash; Per Station
+                </label>
+                <div class="col-lg-6">
+                  <input type="text" class="form-control" id="switchDSPortInterfaces" name="switchDSPortInterfaces"
+                    value="{{.SwitchDSPortInterfaces}}" spellcheck="false"
+                    placeholder="GigabitEthernet0/1,GigabitEthernet0/2,GigabitEthernet0/3,GigabitEthernet0/4,GigabitEthernet0/5,GigabitEthernet0/6">
+                  <small class="text-body-secondary">
+                    One interface per station in order R1, R2, R3, B1, B2, B3. Set, a match load rebuilds only the
+                    stations whose team changed and cycles only their ports, leaving robots on the other stations
+                    connected. Blank, every VLAN is rebuilt and every port cycled, which disconnects all six for
+                    several seconds. Anything other than six names is ignored.
+                  </small>
+                </div>
+              </div>
 
             </fieldset>
             <fieldset class="mb-4">

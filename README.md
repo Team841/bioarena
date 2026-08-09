@@ -268,6 +268,41 @@ One-time setup:
 
 The switch address and password are set in the web UI under **Arena → Settings**.
 
+**Set the driver station port settings to match your switch.** They default to
+`FastEthernet0/1-6`, which is 3500XL-era naming. A Catalyst 3560-CX has
+`GigabitEthernet0/1-8`, so the defaults address interfaces that do not exist — and IOS
+rejecting the range is invisible, because a Telnet read timeout counts as success. The
+port cycling then fails silently on every match load, and laptops keep addresses from the
+previous match's subnet.
+
+Three fields under **Arena → Settings**:
+
+| Field | Example |
+|---|---|
+| Driver Station Ports — Down | `interface range GigabitEthernet0/1-6`<br>`shutdown` |
+| Driver Station Ports — Up | `interface range GigabitEthernet0/1-6`<br>`no shutdown` |
+| Driver Station Ports — Per Station | `GigabitEthernet0/1,GigabitEthernet0/2,GigabitEthernet0/3,GigabitEthernet0/4,GigabitEthernet0/5,GigabitEthernet0/6` |
+
+The per-station list is what makes a reconfiguration surgical. With it, a match load
+rebuilds only the stations whose team changed and cycles only their ports; the others keep
+their VLAN, their addresses, and their driver station connections. Without it every VLAN is
+rebuilt and every port cycled, which drops all six stations for several seconds — fine
+between matches, but in free practice it disconnects robots that are being driven.
+
+The list is in station order (R1, R2, R3, B1, B2, B3) and must have exactly six entries.
+Anything else is ignored rather than half applied, since a short list would leave some
+stations never cycled and surface much later as one team unable to get an address.
+
+The first configuration after a restart always rebuilds everything, because the switch
+outlives the process and may have been changed by hand in between.
+
+**Check the license level** with `show version`. Bioarena needs six concurrent SVIs with
+addresses and the IOS DHCP server. IP Base has both; verify before wiring a field on
+LAN Base.
+
+**Telnet is likely disabled.** Recent IOS images ship SSH-only, so the VTY lines need
+`transport input telnet` set over the console before bioarena can reach the switch at all.
+
 > **Bioarena will not touch the switch or the AP unless network security is enabled.**
 > Off means no errors, no switch activity, nothing at all — so if the field appears
 > inert, check this first.

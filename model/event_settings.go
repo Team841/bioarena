@@ -39,6 +39,11 @@ type EventSettings struct {
 	SwitchPassword                   string
 	SwitchDSPortUpCommands           string
 	SwitchDSPortDownCommands         string
+	// SwitchDSPortInterfaces names one driver station port per alliance station, in
+	// station order, comma separated. Set, a match load cycles only the ports whose team
+	// changed; blank, it falls back to the commands above and cycles every port, taking
+	// every other station down with it.
+	SwitchDSPortInterfaces string
 	// SwitchDnsServer is handed to team subnets in the per-match DHCP pools. Blank omits
 	// the option entirely, which is correct for a field with no upstream resolver: a
 	// DNS server clients cannot reach makes lookups time out rather than fail fast.

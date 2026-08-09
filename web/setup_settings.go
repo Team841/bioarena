@@ -77,6 +77,9 @@ func (web *Web) settingsPostHandler(w http.ResponseWriter, r *http.Request) {
 			*target = normalizeSwitchCommands(values[0])
 		}
 	}
+	if values, ok := r.PostForm["switchDSPortInterfaces"]; ok && len(values) > 0 {
+		eventSettings.SwitchDSPortInterfaces = strings.TrimSpace(values[0])
+	}
 
 	eventSettings.FieldEStopPin, _ = strconv.Atoi(r.PostFormValue("fieldEStopPin"))
 	eventSettings.RedEStopPanelAddress = r.PostFormValue("redEStopPanelAddress")
