@@ -5,6 +5,9 @@ Uses only the Python standard library. That is deliberate: the field Pis run old
 Raspbian releases whose apt repositories have moved to archive.debian.org, so installing
 screen or minicom is not always possible when you need a console at short notice.
 
+Linux and macOS only -- it drives the terminal through termios, which Windows has no
+equivalent of. Use PuTTY there, or run this from the Pi.
+
 Usage:
     python3 console.py                       # /dev/ttyUSB0 at 9600 8N1
     python3 console.py /dev/ttyACM0          # Cisco USB console ports enumerate as ACM
@@ -20,8 +23,19 @@ import glob
 import os
 import select
 import sys
-import termios
-import tty
+
+try:
+    import termios
+    import tty
+except ImportError:  # pragma: no cover - platform guard
+    sys.exit(
+        "console.py needs a POSIX terminal (termios), so it does not run on Windows.\n"
+        "  Run it from the Pi, which is on the field with the switch anyway:\n"
+        "    scp docs/console.py <USER>@10.0.100.5:~/\n"
+        "    ssh -t <USER>@10.0.100.5 'python3 ~/console.py'\n"
+        "  Or use PuTTY on Windows: Connection type Serial, the COM port from Device\n"
+        "  Manager, speed 9600, 8 data bits, 1 stop bit, no parity, no flow control."
+    )
 
 ESCAPE = b"\x1d"  # Ctrl-]
 

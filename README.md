@@ -336,6 +336,19 @@ python3 ~/console.py --list     # if unsure which device the cable is
 
 Cisco's own USB console ports enumerate as `/dev/ttyACM0` rather than `/dev/ttyUSB0`.
 
+**Run it from the Pi, not from a Windows dev machine.** It drives the terminal through
+`termios`, which Windows has no equivalent of, so it exits with instructions rather than
+running. The Pi is on the field with the switch anyway. If you would rather stay on
+Windows, PuTTY does the same job: connection type Serial, the COM port from Device
+Manager, 9600 baud, 8 data bits, 1 stop bit, no parity, no flow control.
+
+Over SSH, run it with `ssh -t` so a terminal is allocated — without that the session
+attaches but shows nothing:
+
+```bash
+ssh -t <USER>@10.0.100.5 "python3 ~/console.py"
+```
+
 Press Enter a few times after connecting — the console prints nothing until it receives
 input, which is the most common reason a working cable looks dead. If you get garbage
 characters instead of a prompt, the cable is fine and the baud rate is wrong; try
@@ -971,7 +984,7 @@ kernel versions and hardware generations. Confirm on the Pi with `gpiodetect`, a
 - [docs/hardware-wiring.md](docs/hardware-wiring.md) — field hardware wiring, opto-isolation, e-stop panel assembly.
 - [docs/prd-half-field-match-simulation.md](docs/prd-half-field-match-simulation.md) — requirements for 1v0 half-field REBUILT 2026 simulation: AUTO outcome selection, FMS Game Data, DMX HUB light.
 - [docs/upstream-divergences.md](docs/upstream-divergences.md) — where this fork differs from cheesy-arena, which differences are candidates to send upstream, and which files are kept byte-identical.
-- [docs/console.py](docs/console.py) — serial console for the field switch, standard library only.
+- [docs/console.py](docs/console.py) — serial console for the field switch, standard library only; Linux and macOS.
 - [docs/99-bioarena-unmanaged.conf](docs/99-bioarena-unmanaged.conf) — NetworkManager drop-in keeping it away from the VLAN subinterfaces, required on Trixie and Bookworm with `team_network_driver: local`.
 - [docs/richmond/config.cfg](docs/richmond/config.cfg) — TL-SG108E backup for the Richmond lab field.
 
