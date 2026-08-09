@@ -1,6 +1,8 @@
-# 10th Street FRC Practice Field — Configuration
+# Bioarena field controller — configuration
 # Edit this file and restart the service to apply changes.
 # Unknown keys produce a startup error (typo protection).
+#
+# This file is per-field. Record what a given site is set to in docs/sites/.
 
 # Match period durations (seconds).
 # FRC 2026 defaults: 20s auto, 3s pause, 140s teleop, 30s warning.

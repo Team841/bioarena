@@ -358,17 +358,23 @@ If you see nothing at all through a full power cycle of the switch, the problem 
 the cable. A switch whose fans spin but whose `SYST` LED never lights is not booting, and
 there is nothing on the console to talk to.
 
-When prompted by the setup wizard, assign the switch a static management IP on the field management subnet. Each site uses `10.X.100.3/24` where `X` is the site number:
+Assign the switch a static management IP on the field management subnet, mask
+`255.255.255.0`. Fields are numbered so that several can be reached over one VPN without
+overlapping: site `X` uses `10.X.100.0/24`, giving `10.X.100.3` for the switch alongside
+`10.X.100.5` for the Pi and `10.X.100.2` for the access point.
 
-| Site         | Switch IP     |
-|--------------|---------------|
-| Richmond lab | 10.0.100.3    |
-| Site 2       | 10.2.100.3    |
-| Site 3       | 10.3.100.3    |
-| Site 4       | 10.4.100.3    |
-| Site 5       | 10.5.100.3    |
+| Site | Management subnet | Switch |
+|------|-------------------|--------|
+| 1    | 10.0.100.0/24     | 10.0.100.3 |
+| 2    | 10.2.100.0/24     | 10.2.100.3 |
+| 3    | 10.3.100.0/24     | 10.3.100.3 |
 
-Subnet mask: `255.255.255.0`
+Within a site the last two octets never change, so every field is wired and documented
+identically and only the second octet identifies which one you are on. Record the
+assignment for each deployment in [docs/sites/](docs/sites).
+
+Give the switch a hostname naming the site — `<Site>Switch` — so a console session makes
+it obvious which field you are connected to.
 
 Set an enable password when prompted — this is the password bioarena uses to authenticate over Telnet. Enter it in **Setup > Settings > Switch Password**.
 
@@ -461,8 +467,9 @@ this is a practice-field arrangement, not a competition one.
 
 #### Half field on a Layer 2 switch
 
-The Richmond lab build: four driver stations (R1, R2, R3, B1) on a TP-Link TL-SG108E,
-with `team_network_driver: local` above.
+A reduced-station field on an eight-port Layer 2 switch — four driver stations
+(R1, R2, R3, B1) with `team_network_driver: local` above. The worked example is a TP-Link
+TL-SG108E; any VLAN-capable switch follows the same shape.
 
 Both the Pi and the AP are trunks. The VH-113 tags each team's SSID onto that team's
 VLAN, so VLANs 10–60 have to reach it — an access port there leaves every robot
@@ -526,16 +533,14 @@ If the unit is second-hand and the password is unknown, hold the front-panel pin
   The badge reads `DISABLED` (blue) rather than red, which is the honest state — no switch
   configured, as opposed to a switch that cannot be reached.
 
-**Restoring the Richmond switch**
+**Keep a switch backup per site.** Export from *System Tools → Backup and Restore* once the
+field works, and restore it after a factory reset rather than re-entering the VLAN tables
+by hand. Re-export whenever the port map changes: a backup that no longer matches the field
+restores cleanly and then fails in ways that look like cabling.
 
-[docs/richmond/config.cfg](docs/richmond/config.cfg) is a backup of the
-working TL-SG108E: hostname `RichmondSwitch`, VLANs `Red1`, `Red2`, `Red3`, `Blue1`, and
-the port and PVID assignments above. Upload it from *System Tools → Backup and Restore*
-after a factory reset rather than re-entering the VLAN tables by hand.
-
-Re-export it whenever the port map changes. A backup that no longer matches the field is
-worse than none, because it restores cleanly and then fails in ways that look like
-cabling.
+Site records live in [docs/sites/](docs/sites) — one file per deployment, with its port
+map, addresses, and switch backup. [docs/sites/richmond.md](docs/sites/richmond.md) is a
+worked example to copy when standing up another field.
 
 ### Step 3 — Configure the field access point
 
@@ -986,7 +991,7 @@ kernel versions and hardware generations. Confirm on the Pi with `gpiodetect`, a
 - [docs/upstream-divergences.md](docs/upstream-divergences.md) — where this fork differs from cheesy-arena, which differences are candidates to send upstream, and which files are kept byte-identical.
 - [docs/console.py](docs/console.py) — serial console for the field switch, standard library only; Linux and macOS.
 - [docs/99-bioarena-unmanaged.conf](docs/99-bioarena-unmanaged.conf) — NetworkManager drop-in keeping it away from the VLAN subinterfaces, required on Trixie and Bookworm with `team_network_driver: local`.
-- [docs/richmond/config.cfg](docs/richmond/config.cfg) — TL-SG108E backup for the Richmond lab field.
+- [docs/sites/](docs/sites) — one record per deployed field: addresses, switch port map, and switch backup. [richmond.md](docs/sites/richmond.md) is the example to copy.
 
 ## Contributing
 
