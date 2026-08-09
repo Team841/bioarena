@@ -7,6 +7,7 @@ package network
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/team841/bioarena/model"
 )
@@ -40,6 +41,29 @@ var (
 
 // vlanForStation lists the VLAN carrying each alliance station, in station order.
 var vlanForStation = [6]int{red1Vlan, red2Vlan, red3Vlan, blue1Vlan, blue2Vlan, blue3Vlan}
+
+// describeStations renders the stations a configuration touched, for the log. Success is
+// otherwise silent, which leaves the operator unable to tell a working field from one
+// where the configuration never ran -- the status badge shows the same red for "never
+// configured" as for "failed".
+func describeStations(teamIds [6]int, rebuilt [6]bool) string {
+	stations := []string{"R1", "R2", "R3", "B1", "B2", "B3"}
+	var parts []string
+	for i, station := range stations {
+		if !rebuilt[i] {
+			continue
+		}
+		if teamIds[i] == 0 {
+			parts = append(parts, station+" cleared")
+		} else {
+			parts = append(parts, fmt.Sprintf("%s %d", station, teamIds[i]))
+		}
+	}
+	if len(parts) == 0 {
+		return "no stations"
+	}
+	return strings.Join(parts, ", ")
+}
 
 // teamSubnet returns the first three octets of a team's subnet: Team 841 gets 10.8.41,
 // Team 1114 gets 10.11.14. This is the same split switch.go applies inline when it builds

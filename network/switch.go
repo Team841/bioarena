@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 
+	"log"
+
 	"github.com/team841/bioarena/model"
 	"net"
 	"sync"
@@ -101,6 +103,16 @@ func (sw *Switch) GetStatus() string {
 	return sw.Status
 }
 
+// setStatus records a status change, logging transitions the way the access point does.
+// The badge alone cannot distinguish a configuration that failed from one that never ran,
+// and a settings save rebuilds this object back to UNKNOWN.
+func (sw *Switch) setStatus(status string) {
+	if sw.Status != status {
+		log.Printf("Switch status changed from %s to %s.", sw.Status, status)
+	}
+	sw.Status = status
+}
+
 // Sets up wired networks for the given set of teams.
 func (sw *Switch) ConfigureTeamEthernet(teams [6]*model.Team) error {
 	// Make sure multiple configurations aren't being set at the same time.
@@ -111,7 +123,7 @@ func (sw *Switch) ConfigureTeamEthernet(teams [6]*model.Team) error {
 	// on every match load and pins the badge red, which reads as a broken switch rather
 	// than an absent one. GetStationForTeamId already guards the same way.
 	if sw.address == "" {
-		sw.Status = "DISABLED"
+		sw.setStatus("DISABLED")
 		return nil
 	}
 
@@ -121,11 +133,11 @@ func (sw *Switch) ConfigureTeamEthernet(teams [6]*model.Team) error {
 	// and may have been changed by hand in between.
 	full := !sw.synced
 	if !full && desired == sw.applied {
-		sw.Status = "ACTIVE"
+		sw.setStatus("ACTIVE")
 		return nil
 	}
 
-	sw.Status = "CONFIGURING"
+	sw.setStatus("CONFIGURING")
 
 	rebuild := [6]bool{}
 	for i := range rebuild {
@@ -218,9 +230,10 @@ func (sw *Switch) ConfigureTeamEthernet(teams [6]*model.Team) error {
 		}
 	}
 
+	log.Printf("Switch configured: %s.", describeStations(desired, rebuild))
 	sw.applied = desired
 	sw.synced = true
-	sw.Status = "ACTIVE"
+	sw.setStatus("ACTIVE")
 	return nil
 }
 
@@ -240,7 +253,7 @@ func portCommands(stations [6]bool, verb string) string {
 // recorded state is no longer trustworthy and the next call reconciles in full.
 func (sw *Switch) fail(err error) error {
 	sw.synced = false
-	sw.Status = "ERROR"
+	sw.setStatus("ERROR")
 	return err
 }
 

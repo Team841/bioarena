@@ -7,6 +7,7 @@ package network
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"strconv"
@@ -110,6 +111,16 @@ func (ln *LocalNetwork) GetStatus() string {
 	return ln.Status
 }
 
+// setStatus records a status change, logging transitions. The badge alone cannot
+// distinguish a configuration that failed from one that never ran, and a settings save
+// rebuilds this object back to UNKNOWN.
+func (ln *LocalNetwork) setStatus(status string) {
+	if ln.Status != status {
+		log.Printf("Team network status changed from %s to %s.", ln.Status, status)
+	}
+	ln.Status = status
+}
+
 // ConfigureTeamEthernet brings the host's VLAN subinterfaces and DHCP scopes into line
 // with the given teams.
 //
@@ -127,11 +138,11 @@ func (ln *LocalNetwork) ConfigureTeamEthernet(teams [6]*model.Team) error {
 	full := !ln.synced
 
 	if !full && desired == ln.applied {
-		ln.Status = "ACTIVE"
+		ln.setStatus("ACTIVE")
 		return nil
 	}
 
-	ln.Status = "CONFIGURING"
+	ln.setStatus("CONFIGURING")
 
 	// Routing between the team subnets and the FMS is this host's job now, so it has to
 	// forward. Set here rather than once at startup because a sysctl written by hand does
@@ -140,16 +151,19 @@ func (ln *LocalNetwork) ConfigureTeamEthernet(teams [6]*model.Team) error {
 		return ln.fail(fmt.Errorf("enabling IP forwarding: %w", err))
 	}
 
-	// changed reports the stations to rebuild. On a full reconciliation that is all of
+	// rebuild marks the stations to reconfigure. On a full reconciliation that is all of
 	// them, because the host's state is unknown: subinterfaces left by a previous run of
 	// the service outlive the process, and a station that looks empty may not be.
-	changed := func(i int) bool { return full || desired[i] != ln.applied[i] }
+	rebuild := [6]bool{}
+	for i := range rebuild {
+		rebuild[i] = full || desired[i] != ln.applied[i]
+	}
 
 	// Every removal before any addition. A team moving between stations must not be
 	// addressed on two VLANs at once, and that can happen in either direction, so
 	// per-station remove-then-add is not enough.
 	for i, vlan := range vlanForStation {
-		if !changed(i) {
+		if !rebuild[i] {
 			continue
 		}
 		if err := ln.removeStation(vlan); err != nil {
@@ -158,7 +172,7 @@ func (ln *LocalNetwork) ConfigureTeamEthernet(teams [6]*model.Team) error {
 	}
 
 	for i, vlan := range vlanForStation {
-		if !changed(i) || teams[i] == nil {
+		if !rebuild[i] || teams[i] == nil {
 			continue
 		}
 		if err := ln.configureStation(teams[i], vlan); err != nil {
@@ -182,9 +196,10 @@ func (ln *LocalNetwork) ConfigureTeamEthernet(teams [6]*model.Team) error {
 		return ln.fail(fmt.Errorf("restarting %s: %w", ln.config.DnsmasqService, err))
 	}
 
+	log.Printf("Team network configured: %s.", describeStations(desired, rebuild))
 	ln.applied = desired
 	ln.synced = true
-	ln.Status = "ACTIVE"
+	ln.setStatus("ACTIVE")
 	return nil
 }
 
@@ -192,7 +207,7 @@ func (ln *LocalNetwork) ConfigureTeamEthernet(teams [6]*model.Team) error {
 // recorded state is no longer trustworthy and the next call reconciles in full.
 func (ln *LocalNetwork) fail(err error) error {
 	ln.synced = false
-	ln.Status = "ERROR"
+	ln.setStatus("ERROR")
 	return err
 }
 

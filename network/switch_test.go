@@ -217,6 +217,26 @@ func TestConfigureSwitchSkipsUnchangedTeams(t *testing.T) {
 	assert.Nil(t, sw.ConfigureTeamEthernet([6]*model.Team{{Id: 841, WpaKey: "x"}, nil, nil, nil, nil, nil}))
 }
 
+// Success is otherwise silent, so the log line is what distinguishes a working field from
+// one where the configuration never ran -- both show the same badge.
+func TestDescribeStations(t *testing.T) {
+	assert.Equal(
+		t,
+		"R1 841, B1 254",
+		describeStations([6]int{841, 0, 0, 254, 0, 0}, [6]bool{true, false, false, true, false, false}),
+	)
+
+	// A station emptied this reconfiguration is worth naming; one that was already empty
+	// and unchanged is not.
+	assert.Equal(
+		t,
+		"R2 cleared",
+		describeStations([6]int{841, 0, 0, 0, 0, 0}, [6]bool{false, true, false, false, false, false}),
+	)
+
+	assert.Equal(t, "no stations", describeStations([6]int{}, [6]bool{}))
+}
+
 // The port map is fixed by the reference field wiring: station N on GigabitEthernet0/N.
 func TestSwitchPortCommands(t *testing.T) {
 	assert.Equal(
