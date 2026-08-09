@@ -143,17 +143,29 @@ Keep the `bioarena-pi` filename — `bioarena.service` runs
 `/opt/bioarena/bioarena-pi`, so renaming it on copy leaves the service unable to
 start.
 
-Then hand the copied files to the service account:
+Then make the binary executable:
 
 ```bash
-sudo chown -R bioarena:bioarena /opt/bioarena
-sudo chmod +x /opt/bioarena/bioarena-pi
+chmod +x /opt/bioarena/bioarena-pi
 ```
 
-The `chown` matters on every deploy, not just the first. Files arrive owned by your login
-user, and the service writes `event.db`, `logs/`, and `db/backups/` into this directory —
-a copied `event.db` left owned by the wrong account makes the field come up unable to save
-settings.
+**Leave the copied files owned by your login user.** The service only needs to read the
+binary and the assets; the files it writes — `event.db`, `logs/`, `db/backups/` — it
+creates itself and therefore already owns. Chowning the deploy artifacts to `bioarena`
+gains nothing and breaks the next deploy: `scp` overwrites a file by opening it for
+writing, so a file owned by the service account with mode 644 refuses the write no matter
+what the directory permissions say. The error is `dest open ... Permission denied`, which
+reads like a directory problem and is not one.
+
+If a previous deploy did chown them, undo it once:
+
+```bash
+sudo chown -R <USER>:bioarena /opt/bioarena
+sudo chown bioarena:bioarena /opt/bioarena/event.db
+```
+
+`event.db` stays with the service account because that is the one file bioarena must
+write. Carrying a database over from another Pi means chowning it the same way.
 
 **Install the systemd service (run on the Pi)**
 
@@ -898,11 +910,13 @@ scp estop-panel.yaml <USER>@10.0.100.11:/opt/estop-panel/
 # Edit ExecStartPre IP in estop-panel.service, then:
 scp cmd/estop-panel/estop-panel.service <USER>@10.0.100.11:~/
 # On the panel Pi:
-sudo chown -R bioarena:bioarena /opt/estop-panel
-sudo chmod +x /opt/estop-panel/estop-panel
+chmod +x /opt/estop-panel/estop-panel
 sudo mv ~/estop-panel.service /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable --now estop-panel
 ```
+
+As on the field controller, leave the copied files owned by your login user — the panel
+only reads them, and chowning them to the service account makes the next `scp` fail.
 
 The `gpio` group membership is the one that bites: without it the panel starts, logs that
 it cannot open the GPIO chip, and reports no stops — a field that looks fine and has no
