@@ -62,7 +62,9 @@ moved onto the field network.
 
 **Wrong timestamps in the logs.** The Pi has no real-time clock. On a field with no route
 to the internet it restores the last known time from `fake-hwclock` at boot, so journal
-entries and match logs can be days behind until it next sees an NTP server.
+entries and match logs can be days behind until it next sees an NTP server. See
+[Step 5](#step-5--serve-time-from-the-pi) for making the field's clocks at least agree with
+each other.
 
 **Build the Pi binary**
 
@@ -602,6 +604,57 @@ curl http://<AP_IP>/status
 telnet <SWITCH_IP> 23
 ```
 
+### Step 5 — Serve time from the Pi
+
+**Nothing on a practice field has a battery-backed clock.** The Pi restores the last known
+time from `fake-hwclock` at boot; a Catalyst comes up believing it is 2004. With no route
+to the internet neither corrects itself, so timestamps across the field disagree by years —
+and the moment that costs you is the one where a match went wrong and you are trying to
+line up the switch's log against bioarena's.
+
+The field controller is the only sensible source, so it serves time to everything else.
+
+**On the Pi.** Raspberry Pi OS ships `systemd-timesyncd`, which is a client only and cannot
+serve. Chrony can, and replaces it on install:
+
+```bash
+sudo apt install chrony
+```
+
+```bash
+scp docs/chrony-bioarena.conf <USER>@10.0.100.5:~/
+```
+
+```bash
+sudo mv ~/chrony-bioarena.conf /etc/chrony/conf.d/bioarena.conf
+sudo systemctl restart chrony
+```
+
+The drop-in carries `local stratum 10`, which is the part that matters: chrony otherwise
+refuses to answer while it is unsynchronised, which on an isolated field is always. Stratum
+10 is deliberately poor, so a real upstream source wins if the Pi ever reaches one.
+
+**On the switch.**
+
+```
+configure terminal
+ntp server 10.0.100.5
+end
+```
+
+Then `write memory`. Confirm with `show ntp associations` after a few minutes — the switch
+polls slowly, so it is not instant.
+
+**This makes the field's clocks consistent, not correct.** Correct requires the Pi reaching
+a real NTP server at some point, or being set by hand:
+
+```bash
+sudo timedatectl set-time "2026-08-08 14:30:00"
+```
+
+Worth doing before a session you might need to review afterwards. Consistent-but-wrong is
+still enough to correlate two logs; disagreeing by years is not.
+
 ### Team subnet addressing
 
 Each team's subnet is derived from the team number. Team 4834 uses `10.48.34.x`:
@@ -991,6 +1044,7 @@ kernel versions and hardware generations. Confirm on the Pi with `gpiodetect`, a
 - [docs/upstream-divergences.md](docs/upstream-divergences.md) — where this fork differs from cheesy-arena, which differences are candidates to send upstream, and which files are kept byte-identical.
 - [docs/console.py](docs/console.py) — serial console for the field switch, standard library only; Linux and macOS.
 - [docs/99-bioarena-unmanaged.conf](docs/99-bioarena-unmanaged.conf) — NetworkManager drop-in keeping it away from the VLAN subinterfaces, required on Trixie and Bookworm with `team_network_driver: local`.
+- [docs/chrony-bioarena.conf](docs/chrony-bioarena.conf) — chrony drop-in making the Pi the field's time source, so switch and controller logs can be correlated.
 - [docs/sites/](docs/sites) — one record per deployed field: addresses, switch port map, and switch backup. [richmond.md](docs/sites/richmond.md) is the example to copy.
 
 ## Contributing
