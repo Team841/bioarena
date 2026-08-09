@@ -1,46 +1,92 @@
 // Copyright 2026 10th Street Robotics. All Rights Reserved.
 //
-// GpioFieldEStopPanel reads a physically wired NC (normally-closed) e-stop button
-// connected to a Raspberry Pi GPIO pin.
+// GpioFieldEStopPanel reads a physically wired dual-channel e-stop button
+// connected to Raspberry Pi GPIO pins.
 //
-// Wiring: NC contact between GPIO pin and GND; Pi internal pull-up enabled.
-// Active-low: pin reads LOW (0) when the e-stop condition is triggered.
-// The latch persists after the button is released and must be cleared via Clear().
+// Wiring: three conductors run to the button — common GND, the NC contact, and
+// the NO contact. Both GPIO lines use the Pi's internal pull-up. Released, the
+// NC contact is closed (LOW) and the NO contact is open (HIGH); pressed, they
+// swap. Any other combination is a wiring fault: both HIGH means an open
+// circuit (cut conductor or broken ground), both LOW means a short.
+//
+// A fault stops the field exactly like a pressed button. The latch persists
+// after the button is released and must be cleared via Clear(), which refuses
+// while the live reading is anything but healthy-and-released.
+//
+// Passing ncPin = 0 configures a single-channel NO-only input, which behaves
+// like the pre-dual-channel driver and cannot detect wiring faults.
 
 package hardware
 
-import "sync/atomic"
+import (
+	"sync"
+	"time"
+)
 
 // lineReader abstracts the GPIO pin value read for testability.
-// On Linux the production constructor provides a *gpiod.Line.
+// On Linux the production constructor provides a *gpiocdev.Line.
 // Tests inject a mockLineReader without any real GPIO dependency.
 type lineReader interface {
 	Value() (int, error)
 }
 
-// GpioFieldEStopPanel implements FieldEStopPanel using a GPIO pin.
-// It is safe to call Triggered() and Clear() from any goroutine.
+// GpioFieldEStopPanel implements FieldEStopPanel using a pair of GPIO pins.
+// It is safe to call State() and Clear() from any goroutine.
 type GpioFieldEStopPanel struct {
-	reader    lineReader
-	triggered atomic.Bool
+	nc lineReader // nil for a single-channel (NO-only) input
+	no lineReader
+
+	mu           sync.Mutex
+	filter       DiscrepancyFilter
+	latched      StopState
+	latchedFault FaultKind
 }
 
-// Triggered returns true while the latch is active.
-// It re-latches on every call if the pin still reads active-low (LOW = 0),
-// so the latch cannot be silently cleared by a concurrent goroutine while
-// the button remains physically held.
-func (g *GpioFieldEStopPanel) Triggered() bool {
-	if val, err := g.reader.Value(); err == nil && val == 0 {
-		g.triggered.Store(true)
+// State returns the latched condition, re-reading the pins first.
+//
+// The latch only ever escalates: an active button latches over OK, and a fault
+// latches over an active button, so a fault that appears and then flickers
+// back to a plain press still has to be acknowledged as a fault.
+func (g *GpioFieldEStopPanel) State() (StopState, FaultKind) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	state, fault := g.read(time.Now())
+	if state == StopFault || (state == StopActive && g.latched == StopOK) {
+		g.latched, g.latchedFault = state, fault
 	}
-	return g.triggered.Load()
+	return g.latched, g.latchedFault
 }
 
-// Clear resets the latch only if the button is physically released (pin reads HIGH).
-// If the button is still held this is a safe no-op; the arena Update() loop will
-// re-detect the condition on the next tick.
+// Clear resets the latch only if the button currently reads healthy and
+// released. If it is still held, or the wiring is still faulted, this is a
+// safe no-op and the arena's Update() loop re-latches on the next tick.
 func (g *GpioFieldEStopPanel) Clear() {
-	if val, err := g.reader.Value(); err == nil && val == 1 {
-		g.triggered.Store(false)
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	if state, _ := g.read(time.Now()); state == StopOK {
+		g.latched, g.latchedFault = StopOK, FaultNone
 	}
+}
+
+// read samples both channels and decodes them. Callers must hold g.mu.
+//
+// A read error is a fault immediately rather than being fed through the
+// discrepancy window: an unreadable line is not a button in travel, and
+// holding the previous value would be the one failure mode that hides itself.
+func (g *GpioFieldEStopPanel) read(now time.Time) (StopState, FaultKind) {
+	noVal, err := g.no.Value()
+	if err != nil {
+		return StopFault, FaultReadError
+	}
+	if g.nc == nil {
+		return DecodeSingle(noVal), FaultNone
+	}
+	ncVal, err := g.nc.Value()
+	if err != nil {
+		return StopFault, FaultReadError
+	}
+	state, fault := DecodeChannels(ncVal, noVal)
+	return g.filter.Update(state, fault, now)
 }

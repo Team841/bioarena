@@ -144,7 +144,13 @@ const handleArenaStatus = function (data) {
       }
     }
 
-    if (stationStatus.EStop) {
+    // A wiring fault outranks the stop it causes: the station is stopped either
+    // way, but only one of the two is fixed by releasing the button.
+    teamBypassElement.attr("title", stationStatus.EStopFault || "");
+    if (stationStatus.EStopFault) {
+      teamBypassElement.attr("data-status-ok", false);
+      teamBypassElement.text("FAULT");
+    } else if (stationStatus.EStop) {
       teamBypassElement.attr("data-status-ok", false);
       teamBypassElement.text("E-STP");
     } else if (stationStatus.AStop) {

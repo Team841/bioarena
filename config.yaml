@@ -56,6 +56,9 @@ field_lights_driver: none
 # E-stop panel Pis (one per alliance).
 # Set host to the panel Pi's address and port, e.g. "http://10.0.100.11:8765"
 # Leave host empty ("") to skip polling that alliance's panel.
+# A configured panel that stops answering is treated as a wiring fault on all
+# three of its stations, which stops the field and blocks match start — so
+# only configure a panel you actually intend to keep running.
 # red_estop_panel:
 #   host: ""
 # blue_estop_panel:

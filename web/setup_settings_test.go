@@ -157,35 +157,30 @@ func TestSetupSettingsFieldTabRemovedFields(t *testing.T) {
 	body := recorder.Body.String()
 	assert.NotContains(t, body, "apPassword")
 
-	// The driver-station port commands are exposed: their interface names are
-	// switch-specific, and a Gigabit switch cannot use the FastEthernet defaults.
-	// TestSetupSettingsOmittedFieldBehavior covers the case where they are not
-	// submitted at all, which must still leave them unchanged.
-	assert.Contains(t, body, "switchDSPortUpCommands")
-	assert.Contains(t, body, "switchDSPortDownCommands")
+	// The driver-station port map is exposed: port naming is field-specific.
+	// TestSetupSettingsOmittedFieldBehavior covers the case where it is not submitted at
+	// all, which must still leave it unchanged.
+	assert.Contains(t, body, "switchDSPortInterfaces")
 }
 
 func TestSetupSettingsOmittedFieldBehavior(t *testing.T) {
 	web := setupTestWeb(t)
 
-	// Pre-set AP password and capture default DS port commands.
+	// Pre-set AP password and capture the default DS port map.
 	web.arena.EventSettings.ApPassword = "secret"
 	assert.Nil(t, web.arena.Database.UpdateEventSettings(web.arena.EventSettings))
-	originalUp := web.arena.EventSettings.SwitchDSPortUpCommands
-	originalDown := web.arena.EventSettings.SwitchDSPortDownCommands
-	assert.NotEmpty(t, originalUp)
-	assert.NotEmpty(t, originalDown)
+	originalPorts := web.arena.EventSettings.SwitchDSPortInterfaces
+	assert.NotEmpty(t, originalPorts)
 
-	// POST without apPassword, switchDSPortUpCommands, or switchDSPortDownCommands fields.
+	// POST without apPassword or switchDSPortInterfaces.
 	recorder := web.postHttpResponse("/setup/settings", "name=Test+Event")
 	assert.Equal(t, 303, recorder.Code)
 
 	// AP password should be cleared to empty string (intentional default).
 	assert.Equal(t, "", web.arena.EventSettings.ApPassword)
 
-	// DS port commands should be unchanged.
-	assert.Equal(t, originalUp, web.arena.EventSettings.SwitchDSPortUpCommands)
-	assert.Equal(t, originalDown, web.arena.EventSettings.SwitchDSPortDownCommands)
+	// The port map should be unchanged.
+	assert.Equal(t, originalPorts, web.arena.EventSettings.SwitchDSPortInterfaces)
 }
 
 func (web *Web) postFileHttpResponse(path string, paramName string, file *bytes.Buffer) *httptest.ResponseRecorder {

@@ -22,11 +22,14 @@ type mockWebFieldEStop struct {
 	triggered bool
 }
 
-func (m *mockWebFieldEStop) Triggered() bool {
+func (m *mockWebFieldEStop) State() (hardware.StopState, hardware.FaultKind) {
 	if m.pinHeld {
 		m.triggered = true
 	}
-	return m.triggered
+	if m.triggered {
+		return hardware.StopActive, hardware.FaultNone
+	}
+	return hardware.StopOK, hardware.FaultNone
 }
 func (m *mockWebFieldEStop) Clear() {
 	if !m.pinHeld {
@@ -250,7 +253,7 @@ func TestMatchPlayClearFieldEStop(t *testing.T) {
 
 	// Simulate a field e-stop: latch all stations.
 	mock.pinHeld = true
-	web.arena.FieldEStop.Triggered()
+	web.arena.FieldEStop.State()
 	web.arena.AllianceStations["R1"].EStop.Store(true)
 	web.arena.AllianceStations["B1"].EStop.Store(true)
 

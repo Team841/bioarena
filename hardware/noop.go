@@ -10,13 +10,15 @@ type NoopFieldLights struct{}
 
 func (n *NoopFieldLights) SetState(_ LightingState) error { return nil }
 
-// NoopEStopPanel reports no stops. Used when no hardware panel is configured.
+// NoopEStopPanel reports no inputs at all. Used when no hardware panel is
+// configured — distinct from a configured panel that has gone unreachable,
+// which reports faults.
 type NoopEStopPanel struct{}
 
-func (n *NoopEStopPanel) Poll() []EStopEvent { return nil }
+func (n *NoopEStopPanel) Poll() []InputState { return nil }
 
 // NoopFieldEStopPanel never triggers. Used when no GPIO pin is configured.
 type NoopFieldEStopPanel struct{}
 
-func (n *NoopFieldEStopPanel) Triggered() bool { return false }
-func (n *NoopFieldEStopPanel) Clear()          {}
+func (n *NoopFieldEStopPanel) State() (StopState, FaultKind) { return StopOK, FaultNone }
+func (n *NoopFieldEStopPanel) Clear()                        {}

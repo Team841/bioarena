@@ -38,11 +38,18 @@ func TestConfigureSwitch(t *testing.T) {
 	assert.Equal(t, "", command2)
 	assert.Equal(t, "ACTIVE", sw.Status)
 
-	// Should configure one team if only one is present.
+	// Should configure one team if only one is present. Only B2 changed, so only its VLAN
+	// is torn down -- the other five are already in the desired state.
 	sw.port += 1
 	mockTelnet(t, sw.port, &command1, &command2)
 	assert.Nil(t, sw.ConfigureTeamEthernet([6]*model.Team{nil, nil, nil, nil, {Id: 254}, nil}))
-	assert.Equal(t, expectedResetCommand, command1)
+	assert.Equal(
+		t,
+		"password\nenable\npassword\nterminal length 0\nconfig terminal\n"+
+			"interface Vlan50\nno ip address\nno ip dhcp pool dhcp50\n"+
+			"end\nexit\n",
+		command1,
+	)
 	assert.Equal(
 		t,
 		"password\nenable\npassword\nterminal length 0\nconfig terminal\n"+
@@ -53,7 +60,8 @@ func TestConfigureSwitch(t *testing.T) {
 		command2,
 	)
 
-	// Should configure all teams if all are present.
+	// Should configure all teams if all are present. Every station changes here -- B2
+	// swaps 254 for 1678 -- so this is a full six-VLAN rebuild again.
 	sw.port += 1
 	mockTelnet(t, sw.port, &command1, &command2)
 	assert.Nil(
@@ -141,11 +149,9 @@ const gigabitPorts = "GigabitEthernet0/1,GigabitEthernet0/2,GigabitEthernet0/3,"
 func newIncrementalTestSwitch(port int) *Switch {
 	sw := NewSwitch(
 		SwitchConfig{
-			Address:            "127.0.0.1",
-			Password:           "password",
-			DSPortUpCommands:   "interface range GigabitEthernet0/1-6\nno shutdown",
-			DSPortDownCommands: "interface range GigabitEthernet0/1-6\nshutdown",
-			DSPortInterfaces:   gigabitPorts,
+			Address:          "127.0.0.1",
+			Password:         "password",
+			DSPortInterfaces: gigabitPorts,
 		},
 	)
 	sw.port = port
@@ -160,11 +166,13 @@ func newIncrementalTestSwitch(port int) *Switch {
 func TestConfigureSwitchOnlyTouchesChangedStations(t *testing.T) {
 	sw := newIncrementalTestSwitch(9100)
 
-	// First call reconciles in full: the switch's state is unknown at startup.
+	// First call reconciles in full: the switch's state is unknown at startup, so every
+	// station's port is cycled and every VLAN rebuilt.
 	commands := mockTelnetMulti(t, sw.port, 4)
 	assert.Nil(t, sw.ConfigureTeamEthernet([6]*model.Team{{Id: 841}, nil, nil, nil, nil, nil}))
 	assert.Equal(t, "ACTIVE", sw.Status)
-	assert.Contains(t, commands.at(0), "interface range GigabitEthernet0/1-6\nshutdown")
+	assert.Contains(t, commands.at(0), "interface GigabitEthernet0/1\nshutdown\n")
+	assert.Contains(t, commands.at(0), "interface GigabitEthernet0/6\nshutdown\n")
 	assert.Contains(t, commands.at(1), "interface Vlan60\nno ip address")
 
 	// Second call adds B1 only.
@@ -215,28 +223,24 @@ func TestConfigureSwitchSkipsUnchangedTeams(t *testing.T) {
 	assert.Nil(t, sw.ConfigureTeamEthernet([6]*model.Team{{Id: 841, WpaKey: "x"}, nil, nil, nil, nil, nil}))
 }
 
-// Without a per-station port map there is nothing to be gained by rebuilding only some
-// VLANs: the range commands cycle every port regardless, so every station is disturbed.
-func TestConfigureSwitchWithoutPortMapRebuildsEverything(t *testing.T) {
-	sw := NewSwitch(
-		SwitchConfig{
-			Address:            "127.0.0.1",
-			Password:           "password",
-			DSPortDownCommands: "interface range GigabitEthernet0/1-6\nshutdown",
-		},
-	)
+// Without a port map the VLANs are still rebuilt incrementally; only the port cycling is
+// skipped, which costs a laptop its lease renewal rather than the whole reconfiguration.
+func TestConfigureSwitchWithoutPortMap(t *testing.T) {
+	sw := NewSwitch(SwitchConfig{Address: "127.0.0.1", Password: "password"})
 	sw.port = 9130
 	sw.configBackoffDuration = time.Millisecond
 	sw.configPauseDuration = time.Millisecond
 
-	mockTelnetMulti(t, sw.port, 3)
+	mockTelnetMulti(t, sw.port, 2) // remove and add only: no port commands
 	assert.Nil(t, sw.ConfigureTeamEthernet([6]*model.Team{{Id: 841}, nil, nil, nil, nil, nil}))
+	assert.Equal(t, "ACTIVE", sw.Status)
 
 	sw.port++
-	commands := mockTelnetMulti(t, sw.port, 3)
+	commands := mockTelnetMulti(t, sw.port, 2)
 	assert.Nil(t, sw.ConfigureTeamEthernet([6]*model.Team{{Id: 841}, nil, nil, {Id: 254}, nil, nil}))
-	assert.Contains(t, commands.at(1), "Vlan10")
-	assert.Contains(t, commands.at(1), "Vlan60")
+	assert.NotContains(t, commands.at(0), "shutdown")
+	assert.Contains(t, commands.at(0), "interface Vlan40\nno ip address")
+	assert.NotContains(t, commands.at(0), "Vlan10")
 }
 
 // A partial or malformed port map is ignored rather than half applied: a short list would
@@ -244,9 +248,9 @@ func TestConfigureSwitchWithoutPortMapRebuildsEverything(t *testing.T) {
 // address.
 func TestSwitchPortMapValidation(t *testing.T) {
 	for _, testCase := range []struct {
-		name        string
-		interfaces  string
-		incremental bool
+		name       string
+		interfaces string
+		usable     bool
 	}{
 		{"six names", gigabitPorts, true},
 		{"blank", "", false},
@@ -256,7 +260,7 @@ func TestSwitchPortMapValidation(t *testing.T) {
 		{"whitespace tolerated", "Gi0/1, Gi0/2, Gi0/3, Gi0/4, Gi0/5, Gi0/6", true},
 	} {
 		sw := NewSwitch(SwitchConfig{Address: "127.0.0.1", DSPortInterfaces: testCase.interfaces})
-		assert.Equal(t, testCase.incremental, sw.canConfigureIncrementally(), testCase.name)
+		assert.Equal(t, testCase.usable, sw.hasPortMap(), testCase.name)
 	}
 }
 
@@ -357,28 +361,21 @@ func mockTelnet(t *testing.T, port int, command1 *string, command2 *string) {
 // to the last line and IOS rejected "no shutdownend". A Telnet read timeout counts as
 // success, so the port cycling failed silently on every match load.
 func TestConfigCommandTerminatesLastLine(t *testing.T) {
-	sw := NewSwitch(
-		SwitchConfig{
-			Address:            "127.0.0.1",
-			Password:           "password",
-			DSPortUpCommands:   "interface range FastEthernet0/1-6\nno shutdown",
-			DSPortDownCommands: "interface range FastEthernet0/1-6\nshutdown",
-		},
-	)
+	sw := NewSwitch(SwitchConfig{Address: "127.0.0.1", Password: "password"})
 	sw.port = 9080
 	sw.configBackoffDuration = time.Millisecond
 	sw.configPauseDuration = time.Millisecond
 
 	var command1, command2 string
 	mockTelnetSingleWithResponse(t, sw.port, "", &command1)
-	_, err := sw.runConfigCommand(sw.dsPortDownCommands)
+	_, err := sw.runConfigCommand("interface range GigabitEthernet0/1-6\nshutdown")
 	assert.Nil(t, err)
 	assert.Contains(t, command1, "shutdown\nend\n")
 	assert.NotContains(t, command1, "shutdownend")
 
 	sw.port++
 	mockTelnetSingleWithResponse(t, sw.port, "", &command2)
-	_, err = sw.runConfigCommand(sw.dsPortUpCommands)
+	_, err = sw.runConfigCommand("interface range GigabitEthernet0/1-6\nno shutdown")
 	assert.Nil(t, err)
 	assert.Contains(t, command2, "no shutdown\nend\n")
 	assert.NotContains(t, command2, "no shutdownend")

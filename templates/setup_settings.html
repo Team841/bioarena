@@ -111,7 +111,7 @@ UI for configuring event settings.
           <div class="tab-pane" id="field" role="tabpanel">
             <fieldset class="mb-4">
               <legend>Networking</legend>
-              <p>Enable this setting if you have a Vivid-Hosting VH-113 access point and Cisco Catalyst 3500-series
+              <p>Enable this setting if you have a Vivid-Hosting VH-113 access point and Cisco Catalyst 3560-CX
                 switch
                 available, for isolating each team to its own SSID and VLAN.</p>
               <div class="row mb-3">
@@ -179,42 +179,19 @@ UI for configuring event settings.
                 </div>
               </div>
               <div class="row mb-3">
-                <label class="col-lg-6 control-label" for="switchDSPortDownCommands">
-                  Driver Station Ports &mdash; Down
-                </label>
-                <div class="col-lg-6">
-                  <textarea class="form-control" id="switchDSPortDownCommands" name="switchDSPortDownCommands"
-                    rows="2" spellcheck="false">{{.SwitchDSPortDownCommands}}</textarea>
-                </div>
-              </div>
-              <div class="row mb-3">
-                <label class="col-lg-6 control-label" for="switchDSPortUpCommands">
-                  Driver Station Ports &mdash; Up
-                </label>
-                <div class="col-lg-6">
-                  <textarea class="form-control" id="switchDSPortUpCommands" name="switchDSPortUpCommands"
-                    rows="2" spellcheck="false">{{.SwitchDSPortUpCommands}}</textarea>
-                  <small class="text-body-secondary">
-                    Run in global configuration mode to shut the wired station ports before a VLAN
-                    reconfiguration and bring them back after. Interface names are switch-specific: the defaults
-                    target <code>FastEthernet0/1-6</code>, but a Gigabit switch such as a Catalyst 3560-CX needs
-                    <code>GigabitEthernet0/1-6</code>. Leave blank to skip the port cycling entirely.
-                  </small>
-                </div>
-              </div>
-              <div class="row mb-3">
                 <label class="col-lg-6 control-label" for="switchDSPortInterfaces">
-                  Driver Station Ports &mdash; Per Station
+                  Driver Station Ports
                 </label>
                 <div class="col-lg-6">
                   <input type="text" class="form-control" id="switchDSPortInterfaces" name="switchDSPortInterfaces"
                     value="{{.SwitchDSPortInterfaces}}" spellcheck="false"
                     placeholder="GigabitEthernet0/1,GigabitEthernet0/2,GigabitEthernet0/3,GigabitEthernet0/4,GigabitEthernet0/5,GigabitEthernet0/6">
                   <small class="text-body-secondary">
-                    One interface per station in order R1, R2, R3, B1, B2, B3. Set, a match load rebuilds only the
-                    stations whose team changed and cycles only their ports, leaving robots on the other stations
-                    connected. Blank, every VLAN is rebuilt and every port cycled, which disconnects all six for
-                    several seconds. Anything other than six names is ignored.
+                    One interface per station in order R1, R2, R3, B1, B2, B3, defaulted for a Catalyst 3560-CX
+                    with the stations on its first six ports. A match load shuts and reopens only the ports whose
+                    team changed, which is what makes those laptops re-request an address on their new subnet;
+                    robots on the other stations stay connected. Blank skips the cycling, and a laptop keeps its
+                    previous address until the lease expires. Anything other than six names is ignored.
                   </small>
                 </div>
               </div>
@@ -223,9 +200,15 @@ UI for configuring event settings.
             <fieldset class="mb-4">
               <legend>E-Stop Panels</legend>
               <div class="row mb-3">
-                <label class="col-lg-6 control-label">Field E-Stop GPIO Pin<br/>(BCM number; 0 = disabled)</label>
+                <label class="col-lg-6 control-label">Field E-Stop NO GPIO Pin<br/>(BCM number; 0 = disabled)</label>
                 <div class="col-lg-6">
                   <input type="number" class="form-control" name="fieldEStopPin" value="{{.FieldEStopPin}}" min="0">
+                </div>
+              </div>
+              <div class="row mb-3">
+                <label class="col-lg-6 control-label">Field E-Stop NC GPIO Pin<br/>(BCM number; 0 = single-channel, no fault detection)</label>
+                <div class="col-lg-6">
+                  <input type="number" class="form-control" name="fieldEStopNcPin" value="{{.FieldEStopNcPin}}" min="0">
                 </div>
               </div>
               <div class="row mb-3">

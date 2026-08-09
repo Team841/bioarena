@@ -124,6 +124,20 @@ const handleArenaStatus = function (data) {
   document.getElementById("fieldEstopOverlay").style.display =
     data.GpioFieldEStopActive ? "flex" : "none";
 
+  // A wiring fault cannot be cleared by releasing the button, so say which it is.
+  const fault = data.GpioFieldEStopFault || "";
+  const faultEl = document.getElementById("fieldEstopFault");
+  if (faultEl) {
+    faultEl.textContent = fault ? "Wiring fault: " + fault : "";
+    faultEl.style.display = fault ? "block" : "none";
+  }
+  const titleEl = document.getElementById("fieldEstopTitle");
+  if (titleEl) {
+    titleEl.innerHTML = fault
+      ? "⛔ FIELD E-STOP WIRING FAULT"
+      : "⛔ FIELD E-STOP ACTIVE";
+  }
+
   // Hardware status badges.
   document.getElementById("apStatus").dataset.status = data.AccessPointStatus || "";
   document.getElementById("swStatus").dataset.status = data.SwitchStatus || "";

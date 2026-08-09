@@ -95,27 +95,35 @@ func TestComputeLightingStatePhaseMapping(t *testing.T) {
 
 // --- EStopPanel polling integration ---
 
-// recordingPanel records every event delivered to handleTeamStop.
-// It implements hardware.EStopPanel and returns a fixed event list.
+// recordingPanel implements hardware.EStopPanel and returns a fixed snapshot.
 type recordingPanel struct {
-	events []hardware.EStopEvent
+	inputs []hardware.InputState
 }
 
-func (r *recordingPanel) Poll() []hardware.EStopEvent { return r.events }
+func (r *recordingPanel) Poll() []hardware.InputState { return r.inputs }
+
+// pollPanels drives the panels exactly the way Update() does.
+func pollPanels(arena *Arena) {
+	for _, p := range arena.EStopPanels {
+		for _, input := range p.Poll() {
+			stations := []string{input.Station}
+			if input.Station == "all" {
+				stations = allStationNames
+			}
+			for _, station := range stations {
+				arena.handlePanelInput(station, input)
+			}
+		}
+	}
+}
 
 func TestEStopPanelPollSingleStation(t *testing.T) {
 	arena := setupTestArena(t)
-	panel := &recordingPanel{
-		events: []hardware.EStopEvent{{Station: "R1", IsAStop: false}},
-	}
-	arena.EStopPanels = []hardware.EStopPanel{panel}
+	arena.EStopPanels = []hardware.EStopPanel{&recordingPanel{
+		inputs: []hardware.InputState{{Station: "R1", State: hardware.StopActive}},
+	}}
 
-	// Trigger polling manually the same way Update() does.
-	for _, p := range arena.EStopPanels {
-		for _, ev := range p.Poll() {
-			arena.handleTeamStop(ev.Station, !ev.IsAStop, ev.IsAStop)
-		}
-	}
+	pollPanels(arena)
 
 	assert.True(t, arena.AllianceStations["R1"].EStop.Load())
 	assert.False(t, arena.AllianceStations["B1"].EStop.Load())
@@ -123,46 +131,128 @@ func TestEStopPanelPollSingleStation(t *testing.T) {
 
 func TestEStopPanelPollAllStations(t *testing.T) {
 	arena := setupTestArena(t)
-	panel := &recordingPanel{
-		events: []hardware.EStopEvent{{Station: "all", IsAStop: false}},
-	}
-	arena.EStopPanels = []hardware.EStopPanel{panel}
+	arena.EStopPanels = []hardware.EStopPanel{&recordingPanel{
+		inputs: []hardware.InputState{{Station: "all", State: hardware.StopActive}},
+	}}
 
-	for _, p := range arena.EStopPanels {
-		for _, ev := range p.Poll() {
-			if ev.Station == "all" {
-				for _, s := range []string{"R1", "R2", "R3", "B1", "B2", "B3"} {
-					arena.handleTeamStop(s, !ev.IsAStop, ev.IsAStop)
-				}
-			} else {
-				arena.handleTeamStop(ev.Station, !ev.IsAStop, ev.IsAStop)
-			}
-		}
-	}
+	pollPanels(arena)
 
-	for _, station := range []string{"R1", "R2", "R3", "B1", "B2", "B3"} {
+	for _, station := range allStationNames {
 		assert.True(t, arena.AllianceStations[station].EStop.Load(), "station=%s", station)
 	}
 }
 
-// --- GPIO FieldEStop arena integration ---
+func TestEStopPanelReleasedInputClearsStop(t *testing.T) {
+	arena := setupTestArena(t)
+	panel := &recordingPanel{
+		inputs: []hardware.InputState{{Station: "R1", State: hardware.StopActive}},
+	}
+	arena.EStopPanels = []hardware.EStopPanel{panel}
+	pollPanels(arena)
+	assert.True(t, arena.AllianceStations["R1"].EStop.Load())
 
-// mockFieldEStop simulates a GPIO field e-stop for arena integration tests.
-type mockFieldEStop struct {
-	pinHeld   bool // true while button is physically held (pin active-low)
-	triggered bool // latched once pinHeld becomes true
+	// An explicit released reading is what clears the stop outside a match;
+	// with the old presence-based protocol there was nothing to report here.
+	panel.inputs = []hardware.InputState{{Station: "R1", State: hardware.StopOK}}
+	pollPanels(arena)
+	assert.False(t, arena.AllianceStations["R1"].EStop.Load())
 }
 
-func (m *mockFieldEStop) Triggered() bool {
-	if m.pinHeld {
-		m.triggered = true
+func TestEStopPanelFaultStopsStation(t *testing.T) {
+	arena := setupTestArena(t)
+	arena.EStopPanels = []hardware.EStopPanel{&recordingPanel{
+		inputs: []hardware.InputState{
+			{Station: "R2", State: hardware.StopFault, Fault: hardware.FaultBothOpen},
+		},
+	}}
+
+	pollPanels(arena)
+
+	assert.True(t, arena.AllianceStations["R2"].EStop.Load(), "a wiring fault must stop the station")
+	assert.Equal(t, uint32(hardware.FaultBothOpen), arena.AllianceStations["R2"].EStopFault.Load())
+}
+
+func TestEStopPanelFaultBlocksMatchStart(t *testing.T) {
+	arena := setupTestArena(t)
+	// R1 is checked first, so its fault is what the operator is told about.
+	arena.AllianceStations["R1"].EStopFault.Store(uint32(hardware.FaultBothClosed))
+
+	err := arena.checkCanStartMatch()
+	assert.ErrorContains(t, err, "wiring fault")
+	assert.ErrorContains(t, err, "R1")
+}
+
+func TestEStopPanelFaultClearsWhenWiringRepaired(t *testing.T) {
+	arena := setupTestArena(t)
+	panel := &recordingPanel{
+		inputs: []hardware.InputState{
+			{Station: "R1", State: hardware.StopFault, Fault: hardware.FaultBothOpen},
+		},
 	}
-	return m.triggered
+	arena.EStopPanels = []hardware.EStopPanel{panel}
+	pollPanels(arena)
+	assert.Equal(t, uint32(hardware.FaultBothOpen), arena.AllianceStations["R1"].EStopFault.Load())
+
+	// The fault tracks the live wiring rather than latching, so a repair that
+	// the panel reports as healthy takes the fault with it.
+	panel.inputs = []hardware.InputState{{Station: "R1", State: hardware.StopOK}}
+	pollPanels(arena)
+	assert.Equal(t, uint32(hardware.FaultNone), arena.AllianceStations["R1"].EStopFault.Load())
+	assert.False(t, arena.AllianceStations["R1"].EStop.Load())
+	if err := arena.checkCanStartMatch(); err != nil {
+		assert.NotContains(t, err.Error(), "wiring fault")
+	}
+}
+
+func TestAStopInputDoesNotClearLatchedEStop(t *testing.T) {
+	arena := setupTestArena(t)
+	arena.EStopPanels = []hardware.EStopPanel{&recordingPanel{
+		inputs: []hardware.InputState{
+			{Station: "R1", IsAStop: false, State: hardware.StopActive},
+			{Station: "R1", IsAStop: true, State: hardware.StopActive},
+		},
+	}}
+
+	pollPanels(arena)
+
+	// Each input only speaks for its own half of the station's state.
+	assert.True(t, arena.AllianceStations["R1"].EStop.Load(), "an a-stop must not clear an e-stop")
+	assert.True(t, arena.AllianceStations["R1"].AStop.Load())
+}
+
+// --- GPIO FieldEStop arena integration ---
+
+// mockFieldEStop simulates a dual-channel GPIO field e-stop, latching the same
+// way the real driver does.
+type mockFieldEStop struct {
+	live         hardware.StopState // what the pins currently read
+	liveFault    hardware.FaultKind
+	latched      hardware.StopState
+	latchedFault hardware.FaultKind
+}
+
+func (m *mockFieldEStop) State() (hardware.StopState, hardware.FaultKind) {
+	if m.live == hardware.StopFault || (m.live == hardware.StopActive && m.latched == hardware.StopOK) {
+		m.latched, m.latchedFault = m.live, m.liveFault
+	}
+	return m.latched, m.latchedFault
 }
 
 func (m *mockFieldEStop) Clear() {
-	if !m.pinHeld {
-		m.triggered = false
+	if m.live == hardware.StopOK {
+		m.latched, m.latchedFault = hardware.StopOK, hardware.FaultNone
+	}
+}
+
+// pollFieldEStop drives the field e-stop the way Update() does.
+func pollFieldEStop(arena *Arena) {
+	state, fault := arena.FieldEStop.State()
+	arena.fieldEStopFault.Store(uint32(fault))
+	if state != hardware.StopOK && !arena.fieldEStopActive.Load() {
+		arena.fieldEStopActive.Store(true)
+		for _, as := range arena.AllianceStations {
+			as.EStop.Store(true)
+		}
 	}
 }
 
@@ -171,68 +261,79 @@ func TestFieldEStopDisablesAllStations(t *testing.T) {
 	mock := &mockFieldEStop{}
 	arena.FieldEStop = mock
 
-	// Press button — first Triggered() call should latch.
-	mock.pinHeld = true
-	if arena.FieldEStop.Triggered() && !arena.fieldEStopActive.Load() {
-		arena.fieldEStopActive.Store(true)
-		for _, as := range arena.AllianceStations {
-			as.EStop.Store(true)
-		}
-	}
+	mock.live = hardware.StopActive
+	pollFieldEStop(arena)
 
 	assert.True(t, arena.fieldEStopActive.Load())
-	for _, station := range []string{"R1", "R2", "R3", "B1", "B2", "B3"} {
+	for _, station := range allStationNames {
+		assert.True(t, arena.AllianceStations[station].EStop.Load(), "station=%s should be e-stopped", station)
+	}
+}
+
+func TestFieldEStopFaultDisablesAllStations(t *testing.T) {
+	arena := setupTestArena(t)
+	mock := &mockFieldEStop{live: hardware.StopFault, liveFault: hardware.FaultBothOpen}
+	arena.FieldEStop = mock
+
+	pollFieldEStop(arena)
+
+	assert.True(t, arena.fieldEStopActive.Load())
+	assert.Equal(t, uint32(hardware.FaultBothOpen), arena.fieldEStopFault.Load())
+	for _, station := range allStationNames {
 		assert.True(t, arena.AllianceStations[station].EStop.Load(), "station=%s should be e-stopped", station)
 	}
 }
 
 func TestFieldEStopLatchPersistsAfterRelease(t *testing.T) {
 	arena := setupTestArena(t)
-	mock := &mockFieldEStop{}
+	mock := &mockFieldEStop{live: hardware.StopActive}
 	arena.FieldEStop = mock
 
-	// Press then release — latch must persist.
-	mock.pinHeld = true
-	mock.Triggered() // latch
-	arena.fieldEStopActive.Store(true)
-	mock.pinHeld = false
+	pollFieldEStop(arena)
+	mock.live = hardware.StopOK
 
-	assert.True(t, arena.FieldEStop.Triggered(), "latch must persist after button release")
+	state, _ := arena.FieldEStop.State()
+	assert.Equal(t, hardware.StopActive, state, "latch must persist after button release")
 	assert.True(t, arena.fieldEStopActive.Load())
 }
 
 func TestFieldEStopClearReleasedButton(t *testing.T) {
 	arena := setupTestArena(t)
-	mock := &mockFieldEStop{pinHeld: true}
+	mock := &mockFieldEStop{live: hardware.StopActive}
 	arena.FieldEStop = mock
-
-	mock.Triggered() // latch
-	arena.fieldEStopActive.Store(true)
-	for _, as := range arena.AllianceStations {
-		as.EStop.Store(true)
-	}
+	pollFieldEStop(arena)
 
 	// Release button and clear.
-	mock.pinHeld = false
+	mock.live = hardware.StopOK
 	arena.ClearFieldEStop()
 
 	assert.False(t, arena.fieldEStopActive.Load())
-	for _, station := range []string{"R1", "R2", "R3", "B1", "B2", "B3"} {
+	for _, station := range allStationNames {
 		assert.False(t, arena.AllianceStations[station].EStop.Load(), "station=%s should be cleared", station)
 	}
 }
 
 func TestFieldEStopClearNoopWhileHeld(t *testing.T) {
 	arena := setupTestArena(t)
-	mock := &mockFieldEStop{pinHeld: true}
+	mock := &mockFieldEStop{live: hardware.StopActive}
 	arena.FieldEStop = mock
-
-	mock.Triggered() // latch
-	arena.fieldEStopActive.Store(true)
+	pollFieldEStop(arena)
 
 	// Try to clear while still held — should be no-op.
 	arena.ClearFieldEStop()
 	assert.True(t, arena.fieldEStopActive.Load(), "clear while held must be no-op")
+}
+
+func TestFieldEStopClearNoopWhileFaulted(t *testing.T) {
+	arena := setupTestArena(t)
+	mock := &mockFieldEStop{live: hardware.StopFault, liveFault: hardware.FaultBothOpen}
+	arena.FieldEStop = mock
+	pollFieldEStop(arena)
+
+	// An operator must not be able to acknowledge away a fault that is still live.
+	arena.ClearFieldEStop()
+	assert.True(t, arena.fieldEStopActive.Load(), "clear while faulted must be no-op")
+	assert.Equal(t, uint32(hardware.FaultBothOpen), arena.fieldEStopFault.Load())
 }
 
 func TestFieldEStopBlocksMatchStart(t *testing.T) {
@@ -241,6 +342,14 @@ func TestFieldEStopBlocksMatchStart(t *testing.T) {
 
 	err := arena.checkCanStartMatch()
 	assert.ErrorContains(t, err, "field emergency stop")
+}
+
+func TestFieldEStopFaultBlocksMatchStart(t *testing.T) {
+	arena := setupTestArena(t)
+	arena.fieldEStopFault.Store(uint32(hardware.FaultUnreachable))
+
+	err := arena.checkCanStartMatch()
+	assert.ErrorContains(t, err, "wiring fault")
 }
 
 // --- NoopFieldLights integration ---

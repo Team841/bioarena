@@ -37,12 +37,10 @@ type EventSettings struct {
 	ApChannel                        int
 	SwitchAddress                    string
 	SwitchPassword                   string
-	SwitchDSPortUpCommands           string
-	SwitchDSPortDownCommands         string
 	// SwitchDSPortInterfaces names one driver station port per alliance station, in
-	// station order, comma separated. Set, a match load cycles only the ports whose team
-	// changed; blank, it falls back to the commands above and cycles every port, taking
-	// every other station down with it.
+	// station order, comma separated. A match load shuts and reopens the ports whose team
+	// changed, which is what makes those laptops re-request an address on their new
+	// subnet. Blank skips the cycling; the VLANs are still rebuilt.
 	SwitchDSPortInterfaces string
 	// SwitchDnsServer is handed to team subnets in the per-match DHCP pools. Blank omits
 	// the option entirely, which is correct for a field with no upstream resolver: a
@@ -50,7 +48,12 @@ type EventSettings struct {
 	SwitchDnsServer string
 	RedEStopPanelAddress             string
 	BlueEStopPanelAddress            string
+	// FieldEStopPin is the BCM pin carrying the field e-stop's NO contact, and
+	// FieldEStopNcPin the NC contact. Both set, the two channels are compared and
+	// a disagreement is reported as a wiring fault; FieldEStopNcPin left at 0
+	// falls back to single-channel monitoring with no fault detection.
 	FieldEStopPin                    int
+	FieldEStopNcPin                  int
 	AdminPassword                    string
 	TeamSignRed1Id                   int
 	TeamSignRed2Id                   int
@@ -159,8 +162,10 @@ func (database *Database) GetEventSettings() (*EventSettings, error) {
 		TbaDownloadEnabled:          false,
 		AutoConfigureTeams:          true,
 		ApChannel:                   36,
-		SwitchDSPortUpCommands:      "interface range FastEthernet0/1-6\nno shutdown",
-		SwitchDSPortDownCommands:    "interface range FastEthernet0/1-6\nshutdown",
+		// Catalyst 3560-CX, stations on the first six ports. Field-specific, but a
+		// working default beats a blank field the operator has to guess at.
+		SwitchDSPortInterfaces: "GigabitEthernet0/1,GigabitEthernet0/2,GigabitEthernet0/3," +
+			"GigabitEthernet0/4,GigabitEthernet0/5,GigabitEthernet0/6",
 		CompanionAddress:            "",
 		WarmupDurationSec:           game.MatchTiming.WarmupDurationSec,
 		AutoDurationSec:             game.MatchTiming.AutoDurationSec,

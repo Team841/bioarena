@@ -10,8 +10,10 @@ Simplified match play UI for 10th Street practice field controller.
 <!-- Driven by arenaStatus.GpioFieldEStopActive via WebSocket push. -->
 <div id="fieldEstopOverlay" class="field-estop-overlay" style="display:none">
   <div class="field-estop-box">
-    <div class="field-estop-title">&#x26D4; FIELD E-STOP ACTIVE</div>
+    <div class="field-estop-title" id="fieldEstopTitle">&#x26D4; FIELD E-STOP ACTIVE</div>
     <div class="field-estop-sub">All robots disabled. Address the condition, then clear.</div>
+    <!-- Populated from arenaStatus.GpioFieldEStopFault; hidden when the wiring reads healthy. -->
+    <div class="field-estop-sub" id="fieldEstopFault" style="display:none"></div>
     <button class="field-estop-clear-btn" onclick="clearFieldEStop()">Clear Field E-Stop</button>
   </div>
 </div>

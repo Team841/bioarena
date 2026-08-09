@@ -85,6 +85,7 @@ type Arena struct {
 	ethernetConfigGeneration  uint64       // increments per request; stale requests are dropped
 	ethernetApplyMutex        sync.Mutex   // serialises wired reconfigurations
 	fieldEStopActive          atomic.Bool  // latched when GPIO field e-stop fires; cleared by ClearFieldEStop()
+	fieldEStopFault           atomic.Uint32 // hardware.FaultKind of the field e-stop; FaultNone when healthy
 	fieldDisabled             atomic.Bool  // operator halt: robots disabled, field networking untouched
 	stationDetectorOverride   stationDetector // nil in production; injected in tests
 }
@@ -98,7 +99,14 @@ type AllianceStation struct {
 	Team       *model.Team
 	WifiStatus network.TeamWifiStatus
 	aStopReset bool
+	// EStopFault is the hardware.FaultKind reported by this station's dual-channel
+	// e-stop, or FaultNone. It tracks the live wiring condition rather than
+	// latching: once the wiring is repaired the panel stops reporting it.
+	EStopFault atomic.Uint32
 }
+
+// allStationNames is every alliance station, for field-wide stops.
+var allStationNames = []string{"R1", "R2", "R3", "B1", "B2", "B3"}
 
 // Creates the arena and sets it to its initial state.
 func NewArena(dbPath string) (*Arena, error) {
@@ -181,22 +189,28 @@ func (arena *Arena) LoadSettings() error {
 	} else {
 		arena.teamNetwork = network.NewSwitch(
 			network.SwitchConfig{
-				Address:            settings.SwitchAddress,
-				Password:           settings.SwitchPassword,
-				DSPortUpCommands:   settings.SwitchDSPortUpCommands,
-				DSPortDownCommands: settings.SwitchDSPortDownCommands,
-				DSPortInterfaces:   settings.SwitchDSPortInterfaces,
-				DnsServer:          settings.SwitchDnsServer,
+				Address:          settings.SwitchAddress,
+				Password:         settings.SwitchPassword,
+				DSPortInterfaces: settings.SwitchDSPortInterfaces,
+				DnsServer:        settings.SwitchDnsServer,
 			},
 		)
 	}
 
 	if settings.FieldEStopPin != 0 {
-		panel, err := hardware.NewGpioFieldEStopPanel("gpiochip0", settings.FieldEStopPin)
+		panel, err := hardware.NewGpioFieldEStopPanel("gpiochip0", settings.FieldEStopNcPin, settings.FieldEStopPin)
 		if err != nil {
-			log.Printf("WARNING: Could not open field e-stop GPIO pin %d: %v", settings.FieldEStopPin, err)
+			log.Printf(
+				"WARNING: Could not open field e-stop GPIO pins (NC %d, NO %d): %v",
+				settings.FieldEStopNcPin,
+				settings.FieldEStopPin,
+				err,
+			)
 			arena.FieldEStop = &hardware.NoopFieldEStopPanel{}
 		} else {
+			if settings.FieldEStopNcPin == 0 {
+				log.Println("WARNING: Field e-stop is wired single-channel — wiring faults will not be detected.")
+			}
 			arena.FieldEStop = panel
 		}
 	} else {
@@ -206,10 +220,10 @@ func (arena *Arena) LoadSettings() error {
 
 	arena.EStopPanels = nil
 	if addr := settings.RedEStopPanelAddress; addr != "" {
-		arena.EStopPanels = append(arena.EStopPanels, hardware.NewNetworkEStopPanel(addr))
+		arena.EStopPanels = append(arena.EStopPanels, hardware.NewNetworkEStopPanel(addr, "red"))
 	}
 	if addr := settings.BlueEStopPanelAddress; addr != "" {
-		arena.EStopPanels = append(arena.EStopPanels, hardware.NewNetworkEStopPanel(addr))
+		arena.EStopPanels = append(arena.EStopPanels, hardware.NewNetworkEStopPanel(addr, "blue"))
 	}
 
 	arena.applyHubLedSettings(settings)
@@ -460,11 +474,15 @@ func (arena *Arena) DisableAll() {
 // ClearFieldEStop is called by the "clearFieldEStop" WebSocket command.
 // It resets the GPIO field e-stop latch and clears all station e-stops so that
 // driver stations can re-enable their robots. If the button is still physically
-// held the underlying Clear() is a no-op, and the latch stays active.
+// held — or its wiring is faulted — the underlying Clear() is a no-op and the
+// latch stays active, so an operator cannot acknowledge away a fault that is
+// still present.
 // Safe to call from any goroutine (all writes are atomic).
 func (arena *Arena) ClearFieldEStop() {
 	arena.FieldEStop.Clear()
-	if !arena.FieldEStop.Triggered() {
+	state, fault := arena.FieldEStop.State()
+	arena.fieldEStopFault.Store(uint32(fault))
+	if state == hardware.StopOK {
 		arena.fieldEStopActive.Store(false)
 		for _, as := range arena.AllianceStations {
 			as.EStop.Store(false)
@@ -584,26 +602,31 @@ func (arena *Arena) Update() {
 	arena.handleSounds(matchTimeSec)
 
 	// Poll GPIO field e-stop (latching; fires once per press, cleared via web UI).
-	if arena.FieldEStop.Triggered() && !arena.fieldEStopActive.Load() {
+	// A wiring fault stops the field on the same path as a pressed button.
+	fieldEStopState, fieldEStopFault := arena.FieldEStop.State()
+	if prev := arena.fieldEStopFault.Swap(uint32(fieldEStopFault)); prev != uint32(fieldEStopFault) &&
+		fieldEStopFault != hardware.FaultNone {
+		log.Printf("WARNING: Field e-stop wiring fault: %s", fieldEStopFault)
+	}
+	if fieldEStopState != hardware.StopOK && !arena.fieldEStopActive.Load() {
 		arena.fieldEStopActive.Store(true)
 		for _, as := range arena.AllianceStations {
 			as.EStop.Store(true)
 		}
-		switch arena.MatchState {
-		case StartMatch, WarmupPeriod, AutoPeriod, PausePeriod, TeleopPeriod:
-			_ = arena.AbortMatch()
-		}
+		arena.abortMatchForStop()
 	}
 
 	// Poll hardware e-stop panels (runs on arena goroutine — no locking needed).
+	// Panels report the state of every configured input, so a released button
+	// arrives as an explicit StopOK rather than as an absence.
 	for _, panel := range arena.EStopPanels {
-		for _, event := range panel.Poll() {
-			if event.Station == "all" {
-				for _, s := range []string{"R1", "R2", "R3", "B1", "B2", "B3"} {
-					arena.handleTeamStop(s, !event.IsAStop, event.IsAStop)
-				}
-			} else {
-				arena.handleTeamStop(event.Station, !event.IsAStop, event.IsAStop)
+		for _, input := range panel.Poll() {
+			stations := []string{input.Station}
+			if input.Station == "all" {
+				stations = allStationNames
+			}
+			for _, station := range stations {
+				arena.handlePanelInput(station, input)
 			}
 		}
 	}
@@ -827,6 +850,10 @@ func (arena *Arena) checkCanStartMatch() error {
 		return fmt.Errorf("cannot start match while there is a match still in progress or with results pending")
 	}
 
+	if fault := hardware.FaultKind(arena.fieldEStopFault.Load()); fault != hardware.FaultNone {
+		return fmt.Errorf("cannot start match while the field e-stop reports a wiring fault: %s", fault)
+	}
+
 	if arena.fieldEStopActive.Load() {
 		return fmt.Errorf("cannot start match while field emergency stop is active")
 	}
@@ -856,6 +883,9 @@ func (arena *Arena) checkCanStartMatch() error {
 func (arena *Arena) checkAllianceStationsReady(stations ...string) error {
 	for _, station := range stations {
 		allianceStation := arena.AllianceStations[station]
+		if fault := hardware.FaultKind(allianceStation.EStopFault.Load()); fault != hardware.FaultNone {
+			return fmt.Errorf("cannot start match while station %s reports an e-stop wiring fault: %s", station, fault)
+		}
 		if allianceStation.EStop.Load() {
 			return fmt.Errorf("cannot start match while an emergency stop is active")
 		}
@@ -976,20 +1006,65 @@ func (arena *Arena) handlePlcInputOutput() {
 	}
 }
 
+// handleTeamStop applies both stop kinds at once. The PLC path reports them
+// together, so it calls this; the hardware panels report each input separately
+// and call the halves directly.
 func (arena *Arena) handleTeamStop(station string, eStopState, aStopState bool) {
+	arena.handleTeamEStop(station, eStopState)
+	arena.handleTeamAStop(station, aStopState)
+}
+
+func (arena *Arena) handleTeamEStop(station string, active bool) {
 	allianceStation := arena.AllianceStations[station]
-	if eStopState {
+	if active {
 		allianceStation.EStop.Store(true)
 	} else if arena.MatchTimeSec() == 0 {
 		// Keep the E-stop latched until the match is over.
 		allianceStation.EStop.Store(false)
 	}
-	if aStopState {
+}
+
+func (arena *Arena) handleTeamAStop(station string, active bool) {
+	allianceStation := arena.AllianceStations[station]
+	if active {
 		allianceStation.AStop.Store(true)
 	} else if arena.MatchState != AutoPeriod {
 		// Keep the A-stop latched until the autonomous period is over.
 		allianceStation.AStop.Store(false)
 		allianceStation.aStopReset = true
+	}
+}
+
+// handlePanelInput folds one hardware panel input into station state.
+//
+// Only the half of the station's state that this input actually reports is
+// touched: an a-stop reading says nothing about the e-stop, and vice versa.
+func (arena *Arena) handlePanelInput(station string, input hardware.InputState) {
+	if input.IsAStop {
+		// A-stops are single-channel and cannot report a fault.
+		arena.handleTeamAStop(station, input.State == hardware.StopActive)
+		return
+	}
+
+	allianceStation := arena.AllianceStations[station]
+	prev := allianceStation.EStopFault.Swap(uint32(input.Fault))
+	if prev != uint32(input.Fault) && input.Fault != hardware.FaultNone {
+		log.Printf("WARNING: Station %s e-stop wiring fault: %s", station, input.Fault)
+	}
+
+	wasStopped := allianceStation.EStop.Load()
+	arena.handleTeamEStop(station, input.Stopped())
+	if input.Stopped() && !wasStopped {
+		arena.abortMatchForStop()
+	}
+}
+
+// abortMatchForStop aborts an in-progress match. It is a no-op outside a match,
+// which is what makes it safe to call on every rising edge of a stop.
+func (arena *Arena) abortMatchForStop() {
+	switch arena.MatchState {
+	case StartMatch, WarmupPeriod, AutoPeriod, PausePeriod, TeleopPeriod:
+		_ = arena.AbortMatch()
 	}
 }
 

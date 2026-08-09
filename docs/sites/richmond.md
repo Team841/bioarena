@@ -33,13 +33,13 @@ stations.
 
 | Port | Role | Membership | PVID |
 |------|------|------------|------|
-| 1 | Pi | untagged 1, tagged 10–60 | 1 |
-| 2 | VH-113 AP | untagged 1, tagged 10–60 | 1 |
+| 1–2 | spare | untagged 1 | 1 |
 | 3 | R1 driver station | untagged 10 | 10 |
 | 4 | R2 driver station | untagged 20 | 20 |
 | 5 | R3 driver station | untagged 30 | 30 |
 | 6 | B1 driver station | untagged 40 | 40 |
-| 7–8 | spare | untagged 1 | 1 |
+| 7 | Pi | untagged 1, tagged 10–60 | 1 |
+| 8 | VH-113 AP | untagged 1, tagged 10–60 | 1 |
 
 Backup: [richmond-switch.cfg](richmond-switch.cfg). Restore from *System Tools → Backup and
 Restore* after a factory reset, and re-export whenever the port map changes — a backup

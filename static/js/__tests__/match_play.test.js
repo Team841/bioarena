@@ -46,6 +46,8 @@ const STATIONS = ["R1", "R2", "R3", "B1", "B2", "B3"];
 function buildDom() {
   document.body.innerHTML = `
     <div id="fieldEstopOverlay" style="display:none"></div>
+    <div id="fieldEstopTitle"></div>
+    <div id="fieldEstopFault" style="display:none"></div>
     <span id="apStatus" data-status=""></span>
     <span id="swStatus" data-status=""></span>
     <span id="hwEStopStatus" data-status-ok=""></span>
@@ -285,6 +287,24 @@ describe("handleArenaStatus — Field E-Stop overlay", () => {
   test("overlay shown when GpioFieldEStopActive=true", () => {
     handleArenaStatus({ ...makeStatus(0, false), GpioFieldEStopActive: true });
     expect(document.getElementById("fieldEstopOverlay").style.display).toBe("flex");
+  });
+
+  test("fault line hidden when the wiring reads healthy", () => {
+    handleArenaStatus({ ...makeStatus(0, false), GpioFieldEStopActive: true });
+    expect(document.getElementById("fieldEstopFault").style.display).toBe("none");
+    expect(document.getElementById("fieldEstopTitle").innerHTML).toContain("ACTIVE");
+  });
+
+  test("fault line names the wiring fault", () => {
+    handleArenaStatus({
+      ...makeStatus(0, false),
+      GpioFieldEStopActive: true,
+      GpioFieldEStopFault: "both channels open (cut conductor or broken ground)",
+    });
+    const fault = document.getElementById("fieldEstopFault");
+    expect(fault.style.display).toBe("block");
+    expect(fault.textContent).toContain("both channels open");
+    expect(document.getElementById("fieldEstopTitle").innerHTML).toContain("WIRING FAULT");
   });
 });
 

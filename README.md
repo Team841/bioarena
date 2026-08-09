@@ -282,39 +282,35 @@ One-time setup:
 3. Create VLANs 10, 20, 30, 40, 50, 60 (one per alliance station).
 4. Set the Pi's port as a trunk carrying all VLANs.
 5. Set each driver station's port as an access port in the correct VLAN. These are the
-   ports bioarena shuts and reopens around a VLAN reconfiguration, so they must match
-   the interface range in the driver-station port commands below.
+   ports bioarena shuts and reopens around a VLAN reconfiguration, so they must match the
+   driver station port map below.
 6. Enable `ip routing`.
 
 The switch address and password are set in the web UI under **Arena → Settings**.
 
-**Set the driver station port settings to match your switch.** They default to
-`FastEthernet0/1-6`, which is 3500XL-era naming. A Catalyst 3560-CX has
-`GigabitEthernet0/1-8`, so the defaults address interfaces that do not exist — and IOS
-rejecting the range is invisible, because a Telnet read timeout counts as success. The
-port cycling then fails silently on every match load, and laptops keep addresses from the
-previous match's subnet.
+**Check the driver station port map** under **Arena → Settings**. It is one field, listing
+the port each station is wired to in station order (R1, R2, R3, B1, B2, B3), and it
+defaults to a 3560-CX with the stations on its first six ports:
 
-Three fields under **Arena → Settings**:
+```
+GigabitEthernet0/1,GigabitEthernet0/2,GigabitEthernet0/3,GigabitEthernet0/4,GigabitEthernet0/5,GigabitEthernet0/6
+```
 
-| Field | Example |
-|---|---|
-| Driver Station Ports — Down | `interface range GigabitEthernet0/1-6`<br>`shutdown` |
-| Driver Station Ports — Up | `interface range GigabitEthernet0/1-6`<br>`no shutdown` |
-| Driver Station Ports — Per Station | `GigabitEthernet0/1,GigabitEthernet0/2,GigabitEthernet0/3,GigabitEthernet0/4,GigabitEthernet0/5,GigabitEthernet0/6` |
+Change it only if your stations are wired to different ports. Exactly six entries are
+required; anything else is ignored rather than half applied, since a short list would leave
+some stations never cycled and surface much later as one team unable to get an address.
 
-The per-station list is what makes a reconfiguration surgical. With it, a match load
-rebuilds only the stations whose team changed and cycles only their ports; the others keep
-their VLAN, their addresses, and their driver station connections. Without it every VLAN is
-rebuilt and every port cycled, which drops all six stations for several seconds — fine
-between matches, but in free practice it disconnects robots that are being driven.
+These ports are shut and reopened around a VLAN change, which is what makes a laptop
+re-request an address on its new subnet instead of keeping the previous match's. Only the
+stations whose team changed are cycled, so the others keep their VLAN, their addresses,
+and their driver station connections — which is what makes free practice usable, where
+teams come and go while others are driving.
 
-The list is in station order (R1, R2, R3, B1, B2, B3) and must have exactly six entries.
-Anything else is ignored rather than half applied, since a short list would leave some
-stations never cycled and surface much later as one team unable to get an address.
+Leaving the field blank skips port cycling entirely. The VLANs are still rebuilt, but a
+laptop already holding a lease keeps its old address until that lease expires.
 
-The first configuration after a restart always rebuilds everything, because the switch
-outlives the process and may have been changed by hand in between.
+The first configuration after a restart rebuilds everything, because the switch outlives
+the process and may have been changed by hand in between.
 
 **Check the license level** with `show version`. Bioarena needs six concurrent SVIs with
 addresses and the IOS DHCP server. IP Base has both; verify before wiring a field on
@@ -413,7 +409,7 @@ When a match loads, the controller pushes DHCP pool and IP configurations for ea
 
 #### Team networks on the Pi (Layer 2 switches)
 
-Everything above assumes a Layer 3 switch. If yours cannot route — a 3500XL, a TP-Link
+Everything above assumes a Layer 3 switch. If yours cannot route — a TP-Link
 smart switch, anything with one SVI and no DHCP server — the Pi can do that work instead.
 Set in `config.yaml`:
 

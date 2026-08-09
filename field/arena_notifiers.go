@@ -8,10 +8,20 @@ package field
 
 import (
 	"github.com/team841/bioarena/game"
+	"github.com/team841/bioarena/hardware"
 	"github.com/team841/bioarena/model"
 	"github.com/team841/bioarena/network"
 	"github.com/team841/bioarena/websocket"
 )
+
+// faultDescription renders a stored hardware.FaultKind for the web UI,
+// returning "" for a healthy input so the JavaScript can test it directly.
+func faultDescription(kind uint32) string {
+	if hardware.FaultKind(kind) == hardware.FaultNone {
+		return ""
+	}
+	return hardware.FaultKind(kind).String()
+}
 
 type ArenaNotifiers struct {
 	ArenaStatusNotifier *websocket.Notifier
@@ -37,6 +47,10 @@ type allianceStationView struct {
 	Bypass     bool
 	Team       *model.Team
 	WifiStatus network.TeamWifiStatus
+	// EStopFault describes a dual-channel wiring fault on this station's e-stop,
+	// or is empty when the wiring reads healthy. A faulted station also has
+	// EStop set, so a UI that ignores this field still shows the stop.
+	EStopFault string
 }
 
 // Instantiates notifiers and configures their message producing methods.
@@ -59,6 +73,7 @@ func (arena *Arena) generateArenaStatusMessage() any {
 			Bypass:     as.Bypass.Load(),
 			Team:       as.Team,
 			WifiStatus: as.WifiStatus,
+			EStopFault: faultDescription(as.EStopFault.Load()),
 		}
 	}
 	return &struct {
@@ -72,6 +87,7 @@ func (arena *Arena) generateArenaStatusMessage() any {
 		FieldEStop                bool
 		PlcArmorBlockStatuses     map[string]bool
 		GpioFieldEStopActive      bool
+		GpioFieldEStopFault       string
 		FreePracticeReconfiguring bool
 		FieldDisabled             bool
 	}{
@@ -85,6 +101,7 @@ func (arena *Arena) generateArenaStatusMessage() any {
 		arena.Plc.GetFieldEStop(),
 		arena.Plc.GetArmorBlockStatuses(),
 		arena.fieldEStopActive.Load(),
+		faultDescription(arena.fieldEStopFault.Load()),
 		arena.freePracticeReconfiguring.Load(),
 		arena.fieldDisabled.Load(),
 	}

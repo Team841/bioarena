@@ -2,7 +2,7 @@
 // Portions Copyright Team 841. All Rights Reserved.
 // Author: pat@patfairbank.com (Patrick Fairbank)
 //
-// Methods for configuring a Cisco Switch 3500-series switch for team VLANs.
+// Methods for configuring a Cisco Catalyst 3560-CX switch for team VLANs.
 
 package network
 
@@ -40,8 +40,6 @@ type Switch struct {
 	address               string
 	port                  int
 	password              string
-	dsPortUpCommands      string
-	dsPortDownCommands    string
 	dsPortInterfaces      [6]string
 	dnsServer             string
 	mutex                 sync.Mutex
@@ -63,27 +61,23 @@ type Switch struct {
 var ServerIpAddress = "10.0.100.5" // The DS will try to connect to this address only.
 
 // SwitchConfig collects the switch settings. A struct rather than positional arguments
-// because five of the six are strings, and a transposed pair would misconfigure a field
+// because most of them are strings, and a transposed pair would misconfigure a field
 // without failing.
 type SwitchConfig struct {
 	Address  string
 	Password string
-
-	// DSPortUpCommands and DSPortDownCommands cycle the driver station ports around a
-	// reconfiguration, forcing laptops to re-request an address on their new subnet.
-	// They are operator-supplied because interface naming is switch-specific -- a 3560-CX
-	// has GigabitEthernet0/1-8 where a 3500XL had FastEthernet0/1-6.
-	DSPortUpCommands   string
-	DSPortDownCommands string
 
 	// DSPortInterfaces names one driver station port per alliance station, in station
 	// order (R1, R2, R3, B1, B2, B3), comma separated:
 	//
 	//	GigabitEthernet0/1,GigabitEthernet0/2,GigabitEthernet0/3,...
 	//
-	// Set, a reconfiguration cycles only the ports whose team changed. Blank, it falls
-	// back to the commands above, which cycle every port -- taking every other station
-	// down with it for the duration.
+	// These ports are shut and reopened around a VLAN change, which is what makes a
+	// laptop re-request an address on its new subnet rather than keeping one from the
+	// previous match. Only the stations whose team changed are cycled.
+	//
+	// Blank skips port cycling entirely: the VLANs are still rebuilt, but a laptop that
+	// already holds a lease keeps its old address until the lease expires.
 	DSPortInterfaces string
 
 	DnsServer string
@@ -94,8 +88,6 @@ func NewSwitch(config SwitchConfig) *Switch {
 		address:               config.Address,
 		port:                  switchTelnetPort,
 		password:              config.Password,
-		dsPortUpCommands:      config.DSPortUpCommands,
-		dsPortDownCommands:    config.DSPortDownCommands,
 		dnsServer:             config.DnsServer,
 		configBackoffDuration: switchConfigBackoffDurationSec * time.Second,
 		configPauseDuration:   switchConfigPauseDurationSec * time.Second,
@@ -123,10 +115,9 @@ func NewSwitch(config SwitchConfig) *Switch {
 	return sw
 }
 
-// canConfigureIncrementally reports whether per-station port cycling is available. Without
-// it a reconfiguration has to cycle every port, so there is nothing to be gained by
-// touching only some of the VLANs.
-func (sw *Switch) canConfigureIncrementally() bool {
+// hasPortMap reports whether the driver station ports are known, and so whether they can
+// be cycled around a VLAN change.
+func (sw *Switch) hasPortMap() bool {
 	return sw.dsPortInterfaces[0] != ""
 }
 
@@ -150,10 +141,9 @@ func (sw *Switch) ConfigureTeamEthernet(teams [6]*model.Team) error {
 
 	desired := teamIds(teams)
 
-	// A full reconciliation when the switch's state is unknown, and whenever per-station
-	// port cycling is unavailable -- without it every port gets cycled regardless, so
-	// rebuilding only some of the VLANs would disturb every station anyway.
-	full := !sw.synced || !sw.canConfigureIncrementally()
+	// A full reconciliation when the switch's state is unknown: it outlives the process
+	// and may have been changed by hand in between.
+	full := !sw.synced
 	if !full && desired == sw.applied {
 		sw.Status = "ACTIVE"
 		return nil
@@ -169,11 +159,7 @@ func (sw *Switch) ConfigureTeamEthernet(teams [6]*model.Team) error {
 	// Shut down DS ethernet ports to prevent conflicts during VLAN reconfiguration. Only
 	// the stations being rebuilt: cycling a port disconnects the driver station behind it,
 	// and in free practice the others are mid-drive.
-	portsDown := sw.dsPortDownCommands
-	if !full {
-		portsDown = sw.portCommands(rebuild, "shutdown")
-	}
-	if portsDown != "" {
+	if portsDown := sw.portCommands(rebuild, "shutdown"); portsDown != "" {
 		if _, err := sw.runConfigCommand(portsDown); err != nil {
 			return sw.fail(err)
 		}
@@ -249,12 +235,8 @@ func (sw *Switch) ConfigureTeamEthernet(teams [6]*model.Team) error {
 	// Give some time for the configuration to take before another one can be attempted.
 	time.Sleep(sw.configBackoffDuration)
 
-	// Bring the DS ethernet ports back up, matching whichever set was shut.
-	portsUp := sw.dsPortUpCommands
-	if !full {
-		portsUp = sw.portCommands(rebuild, "no shutdown")
-	}
-	if portsUp != "" {
+	// Bring back up exactly the ports that were shut.
+	if portsUp := sw.portCommands(rebuild, "no shutdown"); portsUp != "" {
 		if _, err := sw.runConfigCommand(portsUp); err != nil {
 			return sw.fail(err)
 		}
@@ -267,8 +249,11 @@ func (sw *Switch) ConfigureTeamEthernet(teams [6]*model.Team) error {
 }
 
 // portCommands builds an interface block applying the given verb to each selected
-// station's driver station port.
+// station's driver station port. Empty when no port map is configured.
 func (sw *Switch) portCommands(stations [6]bool, verb string) string {
+	if !sw.hasPortMap() {
+		return ""
+	}
 	command := ""
 	for i, selected := range stations {
 		if selected {

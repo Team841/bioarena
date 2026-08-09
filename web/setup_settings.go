@@ -61,27 +61,16 @@ func (web *Web) settingsPostHandler(w http.ResponseWriter, r *http.Request) {
 	eventSettings.SwitchAddress = r.PostFormValue("switchAddress")
 	eventSettings.SwitchPassword = r.PostFormValue("switchPassword")
 	eventSettings.SwitchDnsServer = strings.TrimSpace(r.PostFormValue("switchDnsServer"))
-	// Interface names differ per switch model, so these are operator-editable rather
-	// than hardcoded: the defaults target FastEthernet, but a Gigabit switch needs
-	// GigabitEthernet or every match load fails on an invalid interface range.
-	//
-	// Only assigned when the field is actually present in the submission. A POST that
-	// omits them -- a partial form, or an older cached page -- leaves them untouched
-	// rather than silently clearing the switch configuration. Submitting the field empty
-	// is still meaningful and disables the port cycling.
-	for field, target := range map[string]*string{
-		"switchDSPortUpCommands":   &eventSettings.SwitchDSPortUpCommands,
-		"switchDSPortDownCommands": &eventSettings.SwitchDSPortDownCommands,
-	} {
-		if values, ok := r.PostForm[field]; ok && len(values) > 0 {
-			*target = normalizeSwitchCommands(values[0])
-		}
-	}
+	// Port naming is field-specific, so this stays operator-editable. Only assigned when
+	// the field is actually present in the submission: a POST that omits it -- a partial
+	// form, or an older cached page -- leaves it untouched rather than silently clearing
+	// the port map. Submitting it empty is still meaningful and disables port cycling.
 	if values, ok := r.PostForm["switchDSPortInterfaces"]; ok && len(values) > 0 {
 		eventSettings.SwitchDSPortInterfaces = strings.TrimSpace(values[0])
 	}
 
 	eventSettings.FieldEStopPin, _ = strconv.Atoi(r.PostFormValue("fieldEStopPin"))
+	eventSettings.FieldEStopNcPin, _ = strconv.Atoi(r.PostFormValue("fieldEStopNcPin"))
 	eventSettings.RedEStopPanelAddress = r.PostFormValue("redEStopPanelAddress")
 	eventSettings.BlueEStopPanelAddress = r.PostFormValue("blueEStopPanelAddress")
 
