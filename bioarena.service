@@ -23,8 +23,10 @@ AmbientCapabilities=CAP_NET_ADMIN
 # The leading '-' tells systemd to ignore the error if the address is
 # already configured (e.g. after a service restart).
 ExecStartPre=-/sbin/ip addr add 10.0.100.5/24 dev eth0
-ExecStartPre=/bin/chmod +x /opt/bioarena/bioarena-pi
 
+# The binary is made executable at deploy time, by the account that copied it. Doing it
+# here instead fails: this unit runs as bioarena, chmod requires ownership, and the
+# deployed files belong to whoever ran the scp.
 ExecStart=/opt/bioarena/bioarena-pi
 Restart=on-failure
 RestartSec=5
