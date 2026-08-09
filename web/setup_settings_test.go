@@ -196,18 +196,14 @@ func (web *Web) postFileHttpResponse(path string, paramName string, file *bytes.
 	return recorder
 }
 
-func TestNormalizeSwitchCommands(t *testing.T) {
-	// Browsers submit CRLF; the switch driver writes these bytes straight to Telnet.
-	assert.Equal(
-		t,
-		"interface range GigabitEthernet0/1-6\nno shutdown",
-		normalizeSwitchCommands("interface range GigabitEthernet0/1-6\r\nno shutdown\r\n"),
+// The port map is a single-line list, so a stray interface name is the only mistake
+// available -- there is no free-form command text left to mangle.
+func TestSetupSettingsPortMapTrimmed(t *testing.T) {
+	web := setupTestWeb(t)
+
+	recorder := web.postHttpResponse(
+		"/setup/settings", "name=Test+Event&switchDSPortInterfaces=++Gi0%2F1%2CGi0%2F2++",
 	)
-
-	// A whitespace-only box means "skip the port cycling", not "send a newline".
-	assert.Equal(t, "", normalizeSwitchCommands("   \r\n  \n "))
-	assert.Equal(t, "", normalizeSwitchCommands(""))
-
-	// Lone CR is normalised too.
-	assert.Equal(t, "a\nb", normalizeSwitchCommands("a\rb"))
+	assert.Equal(t, 303, recorder.Code)
+	assert.Equal(t, "Gi0/1,Gi0/2", web.arena.EventSettings.SwitchDSPortInterfaces)
 }

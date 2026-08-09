@@ -270,16 +270,6 @@ func (web *Web) clearDbHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/setup/settings", 303)
 }
 
-// normalizeSwitchCommands prepares a textarea's contents for the switch driver, which
-// writes them straight into the telnet stream. Browsers submit CRLF line endings, which
-// IOS renders as stray blank lines, and an all-whitespace box should mean "skip this
-// step" rather than sending a lone newline.
-func normalizeSwitchCommands(value string) string {
-	value = strings.ReplaceAll(value, "\r\n", "\n")
-	value = strings.ReplaceAll(value, "\r", "\n")
-	return strings.TrimSpace(value)
-}
-
 func (web *Web) renderSettings(w http.ResponseWriter, r *http.Request, errorMessage string) {
 	template, err := web.parseFiles("templates/setup_settings.html", "templates/base.html")
 	if err != nil {
