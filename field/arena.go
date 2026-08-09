@@ -1541,20 +1541,9 @@ func (arena *Arena) autoAssignTeam(teamId int) string {
 	}
 
 	// Ensure the team exists in the DB with a valid WPA key.
-	team, err := arena.Database.GetTeamById(teamId)
-	if err != nil {
-		log.Printf("Error looking up Team %d for auto-assignment: %v", teamId, err)
+	if _, err := arena.ensureTeamExists(teamId); err != nil {
+		log.Printf("Error creating Team %d for auto-assignment: %v", teamId, err)
 		return ""
-	}
-	if team == nil {
-		team = &model.Team{
-			Id:     teamId,
-			WpaKey: fmt.Sprintf("%08d", teamId),
-		}
-		if err := arena.Database.CreateTeam(team); err != nil {
-			log.Printf("Error creating Team %d for auto-assignment: %v", teamId, err)
-			return ""
-		}
 	}
 
 	// Try to detect the physical station via the switch VLAN/ARP table.
@@ -1583,10 +1572,54 @@ func (arena *Arena) autoAssignTeam(teamId int) string {
 		return ""
 	}
 
-	if err := arena.assignTeam(teamId, station); err != nil {
+	if err := arena.registerTeamAtStation(teamId, station); err != nil {
 		log.Printf("Error auto-assigning Team %d to %s: %v", teamId, station, err)
 		return ""
 	}
+	log.Printf("Auto-assigned Team %d to station %s.", teamId, station)
+	return station
+}
+
+// registerTeamAtStation puts a team in a station and reconfigures the field for it,
+// removing the team from any station it already occupied.
+//
+// The duplicate clearing matters because a team can now arrive at a station on its own: a
+// laptop moved from one port to another would otherwise leave the team registered in both,
+// and the abandoned station would keep a subnet nobody is using.
+func (arena *Arena) registerTeamAtStation(teamId int, station string) error {
+	for _, other := range stationOrder {
+		if other == station {
+			continue
+		}
+		if as := arena.AllianceStations[other]; as.Team != nil && as.Team.Id == teamId {
+			log.Printf("Team %d moved from %s to %s; clearing %s.", teamId, other, station, other)
+			if err := arena.assignTeam(0, other); err != nil {
+				return err
+			}
+			arena.setMatchTeam(other, 0)
+		}
+	}
+
+	if err := arena.assignTeam(teamId, station); err != nil {
+		return err
+	}
+	arena.setMatchTeam(station, teamId)
+
+	arena.setupNetwork([6]*model.Team{
+		arena.AllianceStations["R1"].Team, arena.AllianceStations["R2"].Team,
+		arena.AllianceStations["R3"].Team, arena.AllianceStations["B1"].Team,
+		arena.AllianceStations["B2"].Team, arena.AllianceStations["B3"].Team,
+	}, false)
+	arena.MatchLoadNotifier.Notify()
+	arena.ArenaStatusNotifier.Notify()
+	if arena.CurrentMatch.Type != model.Test {
+		arena.Database.UpdateMatch(arena.CurrentMatch)
+	}
+	return nil
+}
+
+// setMatchTeam records a station's team on the current match.
+func (arena *Arena) setMatchTeam(station string, teamId int) {
 	switch station {
 	case "R1":
 		arena.CurrentMatch.Red1 = teamId
@@ -1601,15 +1634,52 @@ func (arena *Arena) autoAssignTeam(teamId int) string {
 	case "B3":
 		arena.CurrentMatch.Blue3 = teamId
 	}
-	arena.setupNetwork([6]*model.Team{
-		arena.AllianceStations["R1"].Team, arena.AllianceStations["R2"].Team,
-		arena.AllianceStations["R3"].Team, arena.AllianceStations["B1"].Team,
-		arena.AllianceStations["B2"].Team, arena.AllianceStations["B3"].Team,
-	}, false)
-	arena.MatchLoadNotifier.Notify()
-	if arena.CurrentMatch.Type != model.Test {
-		arena.Database.UpdateMatch(arena.CurrentMatch)
+}
+
+// registerStagingTeam assigns a team that connected from a staging subnet to the station
+// whose port it is plugged into.
+//
+// The station is known exactly: staging addresses carry the VLAN in their third octet, so
+// the address a driver station connects from names its port. This is the only identification
+// that survives shared hardware — it comes from the team number configured in the driver
+// station software, not from anything about the laptop.
+func (arena *Arena) registerStagingTeam(teamId int, stationIndex int) string {
+	if !arena.EventSettings.AutoConfigureTeams {
+		return ""
 	}
-	log.Printf("Auto-assigned Team %d to station %s.", teamId, station)
+	if arena.MatchState != PreMatch && arena.MatchState != FreePractice {
+		return ""
+	}
+	station := stationOrder[stationIndex]
+
+	if as := arena.AllianceStations[station]; as.Team != nil {
+		// Already registered here: nothing to do, and the laptop is about to move onto
+		// the team subnet anyway.
+		return station
+	}
+
+	if _, err := arena.ensureTeamExists(teamId); err != nil {
+		log.Printf("Error creating Team %d seen on the %s staging network: %v", teamId, station, err)
+		return ""
+	}
+	if err := arena.registerTeamAtStation(teamId, station); err != nil {
+		log.Printf("Error registering Team %d at %s: %v", teamId, station, err)
+		return ""
+	}
+	log.Printf("Team %d connected on the %s staging network; registered to %s.", teamId, station, station)
 	return station
+}
+
+// ensureTeamExists returns the team's record, creating it if the field has not seen it
+// before. A team that turns up on a staging network is by definition unexpected.
+func (arena *Arena) ensureTeamExists(teamId int) (*model.Team, error) {
+	team, err := arena.Database.GetTeamById(teamId)
+	if err != nil || team != nil {
+		return team, err
+	}
+	team = &model.Team{Id: teamId, WpaKey: fmt.Sprintf("%08d", teamId)}
+	if err := arena.Database.CreateTeam(team); err != nil {
+		return nil, err
+	}
+	return team, nil
 }

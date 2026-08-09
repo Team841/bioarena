@@ -312,6 +312,35 @@ is what makes free practice usable while other teams are driving.
 The first configuration after a restart rebuilds everything, because the switch outlives
 the process and may have been changed by hand in between.
 
+#### Staging networks and self-registration
+
+An unregistered station is not left dead. It gets a **staging subnet** — `172.16.<vlan>.0/24`,
+routed to the FMS — so a laptop plugged into it still receives an address and its driver
+station still connects. The driver station announces the team number configured in its own
+software, and the address it connects from names the port it is in, so bioarena registers
+that team to that station and rebuilds it onto the team's real subnet.
+
+In practice: plug a driver station into any station's port and it registers itself there.
+Move the cable to another port and the team moves with it, cleared from the station it
+left, so a team is never registered in two places.
+
+This is the only identification that survives driver stations being shared between teams.
+It comes from the team number set in the driver station software, not from anything about
+the laptop — a MAC address would name the hardware, which on a shared field says nothing
+about who is driving.
+
+`172.16/12` rather than somewhere in `10/8` because team subnets are derived from team
+numbers, and a team numbered under 100 lands on `10.0.NN.0/24` — team 33 would collide with
+a staging subnet keyed the obvious way. The driver station does not care what its own
+address is, only that it can reach `10.0.100.5`.
+
+Turn it off with **Auto-Configure Teams** under Arena → Settings, which leaves the staging
+subnets in place but stops bioarena acting on what connects to them. Registration is also
+skipped once a match is running.
+
+Staging is a Cisco-path feature. On `team_network_driver: local` an unregistered station
+has no subnet, as before.
+
 **Check the license level** with `show version`. Bioarena needs six concurrent SVIs with
 addresses and the IOS DHCP server. IP Base has both; verify before wiring a field on
 LAN Base.

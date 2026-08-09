@@ -22,21 +22,23 @@ func TestConfigureSwitch(t *testing.T) {
 	sw.configBackoffDuration = time.Millisecond
 	sw.configPauseDuration = time.Millisecond
 	expectedResetCommand := "password\nenable\npassword\nterminal length 0\nconfig terminal\n" +
-		"interface Vlan10\nno ip address\nno ip dhcp pool dhcp10\n" +
-		"interface Vlan20\nno ip address\nno ip dhcp pool dhcp20\n" +
-		"interface Vlan30\nno ip address\nno ip dhcp pool dhcp30\n" +
-		"interface Vlan40\nno ip address\nno ip dhcp pool dhcp40\n" +
-		"interface Vlan50\nno ip address\nno ip dhcp pool dhcp50\n" +
-		"interface Vlan60\nno ip address\nno ip dhcp pool dhcp60\n" +
+		"interface Vlan10\nno ip address\nno ip dhcp pool dhcp10\nno ip dhcp pool staging10\n" +
+		"interface Vlan20\nno ip address\nno ip dhcp pool dhcp20\nno ip dhcp pool staging20\n" +
+		"interface Vlan30\nno ip address\nno ip dhcp pool dhcp30\nno ip dhcp pool staging30\n" +
+		"interface Vlan40\nno ip address\nno ip dhcp pool dhcp40\nno ip dhcp pool staging40\n" +
+		"interface Vlan50\nno ip address\nno ip dhcp pool dhcp50\nno ip dhcp pool staging50\n" +
+		"interface Vlan60\nno ip address\nno ip dhcp pool dhcp60\nno ip dhcp pool staging60\n" +
 		"end\nexit\n"
 
-	// Empty field: every port cycled and every VLAN removed, with nothing to add -- so
-	// three sessions rather than four.
-	commands := mockTelnetMulti(t, sw.port, 3)
+	// Empty field: every port cycled, every VLAN removed, and every station given a
+	// staging subnet so a laptop plugged into it can still say which team it is.
+	commands := mockTelnetMulti(t, sw.port, 4)
 	assert.Nil(t, sw.ConfigureTeamEthernet([6]*model.Team{nil, nil, nil, nil, nil, nil}))
 	assert.Contains(t, commands.at(0), "interface GigabitEthernet0/1\nshutdown\n")
 	assert.Equal(t, expectedResetCommand, commands.at(1))
-	assert.Contains(t, commands.at(2), "interface GigabitEthernet0/1\nno shutdown\n")
+	assert.Contains(t, commands.at(2), "ip dhcp pool staging10\nnetwork 172.16.10.0 255.255.255.0\n")
+	assert.Contains(t, commands.at(2), "interface Vlan60\nip address 172.16.60.1 255.255.255.0\n")
+	assert.Contains(t, commands.at(3), "interface GigabitEthernet0/1\nno shutdown\n")
 	assert.Equal(t, "ACTIVE", sw.Status)
 
 	// Should configure one team if only one is present. Only B2 changed, so only its port
@@ -49,7 +51,7 @@ func TestConfigureSwitch(t *testing.T) {
 	assert.Equal(
 		t,
 		"password\nenable\npassword\nterminal length 0\nconfig terminal\n"+
-			"interface Vlan50\nno ip address\nno ip dhcp pool dhcp50\n"+
+			"interface Vlan50\nno ip address\nno ip dhcp pool dhcp50\nno ip dhcp pool staging50\n"+
 			"end\nexit\n",
 		commands.at(1),
 	)
@@ -192,13 +194,42 @@ func TestConfigureSwitchClearsOneStation(t *testing.T) {
 	mockTelnetMulti(t, sw.port, 4)
 	assert.Nil(t, sw.ConfigureTeamEthernet([6]*model.Team{{Id: 841}, nil, nil, {Id: 254}, nil, nil}))
 
+	// Clearing B1 replaces its team subnet with a staging one rather than leaving the
+	// station dead, so there is still a third command to add.
 	sw.port++
-	commands := mockTelnetMulti(t, sw.port, 3) // no VLANs to add, so no third config command
+	commands := mockTelnetMulti(t, sw.port, 4)
 	assert.Nil(t, sw.ConfigureTeamEthernet([6]*model.Team{{Id: 841}, nil, nil, nil, nil, nil}))
 	assert.Contains(t, commands.at(0), "interface GigabitEthernet0/4\nshutdown\n")
 	assert.Contains(t, commands.at(1), "interface Vlan40\nno ip address\nno ip dhcp pool dhcp40\n")
 	assert.NotContains(t, commands.at(1), "Vlan10")
-	assert.Contains(t, commands.at(2), "interface GigabitEthernet0/4\nno shutdown\n")
+	assert.Contains(t, commands.at(2), "ip dhcp pool staging40\nnetwork 172.16.40.0 255.255.255.0\n")
+	assert.NotContains(t, commands.at(2), "10.8.41")
+	assert.Contains(t, commands.at(3), "interface GigabitEthernet0/4\nno shutdown\n")
+}
+
+// A staging address names the port it came from: the VLAN is its third octet, so the
+// station a driver station is plugged into follows from the address alone.
+func TestStagingStationForAddress(t *testing.T) {
+	for _, testCase := range []struct {
+		address string
+		station int
+		staging bool
+	}{
+		{"172.16.10.25", 0, true},
+		{"172.16.40.199", 3, true},
+		{"172.16.60.20", 5, true},
+		{"172.16.99.20", 0, false}, // not a station VLAN
+		{"10.8.41.5", 0, false},    // a team subnet
+		{"10.0.100.5", 0, false},   // the FMS itself
+		{"172.16.10", 0, false},
+		{"", 0, false},
+	} {
+		station, staging := StagingStationForAddress(testCase.address)
+		assert.Equal(t, testCase.staging, staging, testCase.address)
+		if testCase.staging {
+			assert.Equal(t, testCase.station, station, testCase.address)
+		}
+	}
 }
 
 // An unchanged team list touches the switch not at all -- no Telnet session, so nothing to

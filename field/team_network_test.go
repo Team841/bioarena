@@ -101,6 +101,65 @@ func TestPollStationPortLinksForgetsOnError(t *testing.T) {
 	assert.False(t, arena.stationLinksKnown.Load())
 }
 
+// A laptop on a staging network says which team it is, and its address says which port it
+// is in — the only identification that survives driver stations being shared between teams.
+func TestRegisterStagingTeam(t *testing.T) {
+	arena, _ := setupTeamNetworkTestArena(t)
+
+	assert.Equal(t, "R1", arena.registerStagingTeam(841, 0))
+	assert.NotNil(t, arena.AllianceStations["R1"].Team)
+	assert.Equal(t, 841, arena.AllianceStations["R1"].Team.Id)
+	assert.Equal(t, 841, arena.CurrentMatch.Red1)
+
+	// The team record is created on the spot: a team arriving on a staging network is by
+	// definition one the field was not expecting.
+	team, err := arena.Database.GetTeamById(841)
+	assert.Nil(t, err)
+	assert.NotNil(t, team)
+}
+
+// Moving a laptop from one port to another must not leave the team registered in both,
+// which would keep a subnet alive for a station nobody is using.
+func TestRegisterStagingTeamClearsPreviousStation(t *testing.T) {
+	arena, _ := setupTeamNetworkTestArena(t)
+	assert.Equal(t, "R1", arena.registerStagingTeam(841, 0))
+
+	assert.Equal(t, "B1", arena.registerStagingTeam(841, 3))
+	assert.Nil(t, arena.AllianceStations["R1"].Team, "R1 should have been cleared")
+	assert.Equal(t, 0, arena.CurrentMatch.Red1)
+	assert.Equal(t, 841, arena.AllianceStations["B1"].Team.Id)
+	assert.Equal(t, 841, arena.CurrentMatch.Blue1)
+}
+
+// An occupied station is left alone: the laptop there is about to move onto that team's
+// own subnet anyway.
+func TestRegisterStagingTeamLeavesOccupiedStation(t *testing.T) {
+	arena, _ := setupTeamNetworkTestArena(t)
+	assert.Equal(t, "R1", arena.registerStagingTeam(841, 0))
+
+	assert.Equal(t, "R1", arena.registerStagingTeam(254, 0))
+	assert.Equal(t, 841, arena.AllianceStations["R1"].Team.Id, "the registered team stands")
+}
+
+// Auto-configuration off means the operator wants to assign stations by hand.
+func TestRegisterStagingTeamRespectsAutoConfigureSetting(t *testing.T) {
+	arena, _ := setupTeamNetworkTestArena(t)
+	arena.EventSettings.AutoConfigureTeams = false
+
+	assert.Equal(t, "", arena.registerStagingTeam(841, 0))
+	assert.Nil(t, arena.AllianceStations["R1"].Team)
+}
+
+// Not mid-match: a team turning up on a staging network then is a distraction, not a
+// registration.
+func TestRegisterStagingTeamSkippedDuringMatch(t *testing.T) {
+	arena, _ := setupTeamNetworkTestArena(t)
+	arena.MatchState = TeleopPeriod
+
+	assert.Equal(t, "", arena.registerStagingTeam(841, 0))
+	assert.Nil(t, arena.AllianceStations["R1"].Team)
+}
+
 // The local team network cannot see individual station ports, so it reports nothing rather
 // than guessing.
 func TestPollStationPortLinksSkippedWithoutReporter(t *testing.T) {

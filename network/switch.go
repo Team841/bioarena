@@ -38,6 +38,47 @@ const (
 	blue3Vlan = 60
 )
 
+// Staging subnets keep an unregistered station usable: a laptop plugged into it still gets
+// an address and can still reach the FMS, so its driver station announces which team it
+// belongs to. Without them an unregistered station is a dead port, and a laptop in the
+// wrong one produces silence -- no address, so no connection, so nothing to report.
+//
+// 172.16/12 rather than somewhere in 10/8 because team subnets take 10.TE.AM.0/24 from the
+// team number, and a team numbered under 100 lands on 10.0.NN.0/24 -- team 33 would collide
+// with a staging subnet keyed the obvious way. The driver station does not care what its
+// own address is, only that it can reach the FMS.
+const stagingSubnetPrefix = "172.16"
+
+// stagingLease is deliberately short. A laptop only holds a staging address until its team
+// is registered and the station is rebuilt, and the port cycling forces a renewal anyway;
+// this bounds the damage if it does not.
+const stagingLease = "5"
+
+// stagingSubnet returns the staging network for a VLAN: 172.16.<vlan>.0/24.
+func stagingSubnet(vlan int) string {
+	return fmt.Sprintf("%s.%d", stagingSubnetPrefix, vlan)
+}
+
+// StagingStationForAddress reports which alliance station a staging address belongs to, by
+// index in station order. The VLAN is the third octet, so the address alone identifies the
+// port a driver station is plugged into -- which is the whole point of the staging subnets.
+func StagingStationForAddress(address string) (int, bool) {
+	octets := strings.Split(address, ".")
+	if len(octets) != 4 || octets[0]+"."+octets[1] != stagingSubnetPrefix {
+		return 0, false
+	}
+	vlan, err := strconv.Atoi(octets[2])
+	if err != nil {
+		return 0, false
+	}
+	for i, stationVlan := range vlanForStation {
+		if stationVlan == vlan {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
 // dsPortInterfaces is the driver station port for each alliance station, in station order.
 // A Catalyst 3560-CX with the stations on its first six ports is the assumed field, so
 // wire R1 to Gi0/1 and so on; the trunks to the Pi and the access point go on the ports
@@ -160,7 +201,8 @@ func (sw *Switch) ConfigureTeamEthernet(teams [6]*model.Team) error {
 			continue
 		}
 		removeTeamVlansCommand += fmt.Sprintf(
-			"interface Vlan%d\nno ip address\nno ip dhcp pool dhcp%d\n", vlan, vlan,
+			"interface Vlan%d\nno ip address\nno ip dhcp pool dhcp%d\nno ip dhcp pool staging%d\n",
+			vlan, vlan, vlan,
 		)
 	}
 	_, err := sw.runConfigCommand(removeTeamVlansCommand)
@@ -208,8 +250,28 @@ func (sw *Switch) ConfigureTeamEthernet(teams [6]*model.Team) error {
 			switchTeamGatewayAddress,
 		)
 	}
+	// An empty station gets a staging subnet instead of nothing, so a laptop plugged into
+	// it can still reach the FMS and say which team it is.
+	addStagingVlan := func(vlan int) {
+		subnet := stagingSubnet(vlan)
+		addTeamVlansCommand += fmt.Sprintf(
+			"ip dhcp excluded-address %s.1 %s.19\n"+
+				"ip dhcp pool staging%d\n"+
+				"network %s.0 255.255.255.0\n"+
+				"default-router %s.1\n"+
+				"lease %s\n"+
+				"interface Vlan%d\nip address %s.1 255.255.255.0\n",
+			subnet, subnet, vlan, subnet, subnet, stagingLease, vlan, subnet,
+		)
+	}
+
 	for i, vlan := range vlanForStation {
-		if rebuild[i] {
+		if !rebuild[i] {
+			continue
+		}
+		if teams[i] == nil {
+			addStagingVlan(vlan)
+		} else {
 			addTeamVlan(teams[i], vlan)
 		}
 	}

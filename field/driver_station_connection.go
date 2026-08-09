@@ -395,6 +395,21 @@ func (arena *Arena) listenForDriverStations() {
 			continue
 		}
 
+		// A connection from a staging subnet names the port it arrived on, so the team can
+		// be registered to exactly the station it is plugged into. That registration
+		// rebuilds the station onto the team's own subnet and cycles its port, so this
+		// connection is about to die either way -- close it and let the driver station
+		// reconnect with its real address rather than tracking one that cannot survive.
+		remoteAddress, _, _ := net.SplitHostPort(tcpConn.RemoteAddr().String())
+		if stationIndex, staging := network.StagingStationForAddress(remoteAddress); staging {
+			arena.registerStagingTeam(teamId, stationIndex)
+			go func() {
+				time.Sleep(time.Second)
+				tcpConn.Close()
+			}()
+			continue
+		}
+
 		// Check to see if the team is supposed to be on the field, and notify the DS accordingly.
 		assignedStation := arena.getAssignedAllianceStation(teamId)
 		if assignedStation == "" {
