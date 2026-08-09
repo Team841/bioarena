@@ -34,19 +34,37 @@ first boot.
 
 After first boot, in this order:
 
-1. Install dnsmasq, while the Pi still has internet:
+1. **Install the packages, while the Pi still has internet.** This is the step that is
+   painful to go back for: once the Pi is on the field network there is no route out, and
+   an end-of-life release compounds it by needing its apt sources repointed at
+   `archive.debian.org` first.
+
+   ```bash
+   sudo apt install chrony
+   ```
+
+   Chrony on every field — it makes the Pi the field's time source, without which the
+   switch and the controller timestamp their logs years apart. See
+   [Step 5](#step-5--serve-time-from-the-pi).
 
    ```bash
    sudo apt install dnsmasq
    ```
 
-2. Install the NetworkManager drop-in and set the static field address — see
-   [Raspberry Pi OS releases](#raspberry-pi-os-releases) and
-   [Step 1](#step-1--assign-a-static-ip-to-the-pi).
-3. Copy the binary, assets, and service file (below), plus `config.yaml`. Carry `event.db`
+   Dnsmasq only for `team_network_driver: local`, where the Pi serves DHCP itself. On the
+   Cisco path the switch does that and dnsmasq is unused — but installing it anyway costs
+   nothing and leaves the option open, which is worth more than the disk space when the
+   switch fails on a Saturday.
+
+2. Set the static field address, and install the NetworkManager drop-in if using
+   `team_network_driver: local` — see [Raspberry Pi OS releases](#raspberry-pi-os-releases)
+   and [Step 1](#step-1--assign-a-static-ip-to-the-pi).
+3. Install the chrony drop-in and point the switch at the Pi, per
+   [Step 5](#step-5--serve-time-from-the-pi).
+4. Copy the binary, assets, and service file (below), plus `config.yaml`. Carry `event.db`
    across too if you want the previous field's settings, teams, and admin password;
    without it the first start creates a fresh database with the default password.
-4. Confirm the GPIO chip name with `gpiodetect` if you use e-stop panels or GPIO lights.
+5. Confirm the GPIO chip name with `gpiodetect` if you use e-stop panels or GPIO lights.
 
 Two things that will look like faults and are not:
 
@@ -614,8 +632,13 @@ line up the switch's log against bioarena's.
 
 The field controller is the only sensible source, so it serves time to everything else.
 
+Part of the first deploy, not an optional extra — it needs internet, so it has to happen
+before the Pi joins the field network.
+
 **On the Pi.** Raspberry Pi OS ships `systemd-timesyncd`, which is a client only and cannot
-serve. Chrony can, and replaces it on install:
+serve; there is no setting that changes this. Chrony can, and Debian's package replaces
+timesyncd rather than running alongside it, since two daemons steering one clock is worse
+than either alone:
 
 ```bash
 sudo apt install chrony
@@ -817,19 +840,21 @@ field_lights_command: "START\n"
 
 > For full wiring diagrams, component list, and step-by-step assembly, see **[docs/hardware-wiring.md](docs/hardware-wiring.md)**.
 
-Each alliance can have a dedicated Raspberry Pi wired to 7 GPIO inputs:
+Each alliance can have a dedicated Raspberry Pi wired to 7 inputs:
 
-| Pin role           | Station              |
-|--------------------|----------------------|
-| station1_estop     | R1 or B1 (e-stop)    |
-| station1_astop     | R1 or B1 (a-stop)    |
-| station2_estop     | R2 or B2 (e-stop)    |
-| station2_astop     | R2 or B2 (a-stop)    |
-| station3_estop     | R3 or B3 (e-stop)    |
-| station3_astop     | R3 or B3 (a-stop)    |
-| field_estop        | all stations (e-stop) |
+| Pin role           | Station              | Channels |
+|--------------------|----------------------|----------|
+| station1_estop     | R1 or B1 (e-stop)    | NC + NO  |
+| station1_astop     | R1 or B1 (a-stop)    | NO       |
+| station2_estop     | R2 or B2 (e-stop)    | NC + NO  |
+| station2_astop     | R2 or B2 (a-stop)    | NO       |
+| station3_estop     | R3 or B3 (e-stop)    | NC + NO  |
+| station3_astop     | R3 or B3 (a-stop)    | NO       |
+| field_estop        | all stations (e-stop) | NC + NO |
 
-Wiring: NO (normally-open) contacts; one side to a GPIO pin, the other to GND. Internal pull-up enabled; pin reads LOW (0) when the button is pressed (active-low). Use latching mushroom-head buttons for e-stops and momentary pushbuttons for a-stops. The panel reports current pin state on every poll.
+Wiring: e-stop buttons are **dual-channel**. Three conductors run to each button — common GND, the NC contact, and the NO contact — with the internal pull-up on both GPIO lines. Released, NC reads LOW and NO reads HIGH; pressed, they swap. Any other combination is a wiring fault, which stops the field and blocks match start until the wiring is repaired. A-stops stay single-channel NO.
+
+Use latching mushroom-head buttons for e-stops and momentary pushbuttons for a-stops. The panel samples its pins locally at 100 Hz and reports the state of every configured input on each poll.
 
 Recommended static IPs: `10.0.100.11` (red panel), `10.0.100.12` (blue panel).
 
@@ -840,13 +865,15 @@ alliance: "red"       # "red" or "blue"
 http_port: 8765
 gpio_chip: "gpiochip0"
 pins:
-  station1_estop: 17  # BCM GPIO; 0 = not wired, skipped
+  # BCM GPIO numbers. {nc: 0, no: N} or a bare N is single-channel (no fault
+  # detection); no: 0 means not wired and is skipped.
+  station1_estop: {nc: 17, no: 4}
   station1_astop: 27
-  station2_estop: 22
+  station2_estop: {nc: 22, no: 12}
   station2_astop: 23
-  station3_estop: 24
+  station3_estop: {nc: 24, no: 13}
   station3_astop: 25
-  field_estop: 5
+  field_estop: {nc: 5, no: 6}
 ```
 
 Build and deploy:
