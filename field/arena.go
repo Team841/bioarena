@@ -50,21 +50,21 @@ const (
 )
 
 type Arena struct {
-	Database             *model.Database
-	EventSettings        *model.EventSettings
-	accessPoint          network.AccessPoint
-	teamNetwork          network.TeamNetwork
-	localNetworkConfig   *network.LocalNetworkConfig
-	Plc                  plc.Plc
-	FieldLights          hardware.FieldLights
-	Leds                 *led.Controller
-	hubLedFallback       led.Fallback
-	EStopPanels          []hardware.EStopPanel
-	FieldEStop           hardware.FieldEStopPanel
-	AutoWinner           hardware.Alliance
-	AutoWinnerMode       AutoWinnerMode
-	GameData             string
-	AllianceStations     map[string]*AllianceStation
+	Database           *model.Database
+	EventSettings      *model.EventSettings
+	accessPoint        network.AccessPoint
+	teamNetwork        network.TeamNetwork
+	localNetworkConfig *network.LocalNetworkConfig
+	Plc                plc.Plc
+	FieldLights        hardware.FieldLights
+	Leds               *led.Controller
+	hubLedFallback     led.Fallback
+	EStopPanels        []hardware.EStopPanel
+	FieldEStop         hardware.FieldEStopPanel
+	AutoWinner         hardware.Alliance
+	AutoWinnerMode     AutoWinnerMode
+	GameData           string
+	AllianceStations   map[string]*AllianceStation
 	ArenaNotifiers
 	MatchState
 	lastMatchState       MatchState
@@ -79,14 +79,15 @@ type Arena struct {
 	matchAborted         bool
 	soundsPlayed         map[*game.MatchSound]struct{}
 
-	freePracticeReconfiguring atomic.Bool  // true while AP is being reconfigured for a slot change
-	freePracticeReconfigMu    sync.Mutex   // serialises concurrent SetFreePracticeSlot calls
-	ethernetConfigMutex       sync.Mutex   // guards ethernetConfigGeneration
-	ethernetConfigGeneration  uint64       // increments per request; stale requests are dropped
-	ethernetApplyMutex        sync.Mutex   // serialises wired reconfigurations
-	fieldEStopActive          atomic.Bool  // latched when GPIO field e-stop fires; cleared by ClearFieldEStop()
-	fieldEStopFault           atomic.Uint32 // hardware.FaultKind of the field e-stop; FaultNone when healthy
-	fieldDisabled             atomic.Bool  // operator halt: robots disabled, field networking untouched
+	freePracticeReconfiguring atomic.Bool     // true while AP is being reconfigured for a slot change
+	freePracticeReconfigMu    sync.Mutex      // serialises concurrent SetFreePracticeSlot calls
+	ethernetConfigMutex       sync.Mutex      // guards ethernetConfigGeneration
+	ethernetConfigGeneration  uint64          // increments per request; stale requests are dropped
+	ethernetApplyMutex        sync.Mutex      // serialises wired reconfigurations
+	fieldEStopActive          atomic.Bool     // latched when GPIO field e-stop fires; cleared by ClearFieldEStop()
+	fieldEStopFault           atomic.Uint32   // hardware.FaultKind of the field e-stop; FaultNone when healthy
+	fieldDisabled             atomic.Bool     // operator halt: robots disabled, field networking untouched
+	stationLinksKnown         atomic.Bool     // true once the switch has reported driver station port links
 	stationDetectorOverride   stationDetector // nil in production; injected in tests
 }
 
@@ -99,6 +100,9 @@ type AllianceStation struct {
 	Team       *model.Team
 	WifiStatus network.TeamWifiStatus
 	aStopReset bool
+	// PortLinked is whether this station's driver station port has link, as last reported
+	// by the switch. Only meaningful when Arena.stationLinksKnown is set.
+	PortLinked atomic.Bool
 	// EStopFault is the hardware.FaultKind reported by this station's dual-channel
 	// e-stop, or FaultNone. It tracks the live wiring condition rather than
 	// latching: once the wiring is repaired the panel stops reporting it.
@@ -1096,6 +1100,40 @@ func (arena *Arena) PlaySound(name string) {
 // Performs any actions that need to run at the interval specified by periodicTaskPeriodSec.
 func (arena *Arena) runPeriodicTasks() {
 	arena.updateEarlyLateMessage()
+	arena.pollStationPortLinks()
+}
+
+// pollStationPortLinks asks the switch which driver station ports have link, so the UI can
+// point out a laptop in the wrong station.
+//
+// Setup only. During a match or a free practice run this would put a Telnet session on the
+// switch every thirty seconds for information nobody is looking at, and the wiring is
+// settled by then anyway.
+func (arena *Arena) pollStationPortLinks() {
+	if arena.MatchState != PreMatch {
+		return
+	}
+	reporter, ok := arena.teamNetwork.(network.StationLinkReporter)
+	if !ok {
+		// team_network_driver: local, which cannot see the station ports.
+		return
+	}
+
+	links, err := reporter.GetStationPortLinks()
+	if err != nil {
+		// Logged only on the transition. An unconfigured switch would otherwise report
+		// the same thing every thirty seconds for as long as the field runs.
+		if arena.stationLinksKnown.Swap(false) {
+			log.Printf("Cannot read driver station port links: %v", err)
+		}
+		return
+	}
+
+	for i, station := range stationOrder {
+		arena.AllianceStations[station].PortLinked.Store(links[i])
+	}
+	arena.stationLinksKnown.Store(true)
+	arena.ArenaStatusNotifier.Notify()
 }
 
 // trussLightWarningSequence generates the sequence of truss light states during the "sonar ping" warning sound. It

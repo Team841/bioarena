@@ -51,6 +51,9 @@ type allianceStationView struct {
 	// or is empty when the wiring reads healthy. A faulted station also has
 	// EStop set, so a UI that ignores this field still shows the stop.
 	EStopFault string
+	// PortLinked is whether this station's driver station port has link, from the switch.
+	// Meaningless unless StationLinksKnown is set on the enclosing message.
+	PortLinked bool
 }
 
 // Instantiates notifiers and configures their message producing methods.
@@ -74,6 +77,7 @@ func (arena *Arena) generateArenaStatusMessage() any {
 			Team:       as.Team,
 			WifiStatus: as.WifiStatus,
 			EStopFault: faultDescription(as.EStopFault.Load()),
+			PortLinked: as.PortLinked.Load(),
 		}
 	}
 	return &struct {
@@ -90,6 +94,7 @@ func (arena *Arena) generateArenaStatusMessage() any {
 		GpioFieldEStopFault       string
 		FreePracticeReconfiguring bool
 		FieldDisabled             bool
+		StationLinksKnown         bool
 	}{
 		arena.CurrentMatch.Id,
 		stationViews,
@@ -104,6 +109,7 @@ func (arena *Arena) generateArenaStatusMessage() any {
 		faultDescription(arena.fieldEStopFault.Load()),
 		arena.freePracticeReconfiguring.Load(),
 		arena.fieldDisabled.Load(),
+		arena.stationLinksKnown.Load(),
 	}
 }
 

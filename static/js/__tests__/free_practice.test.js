@@ -87,6 +87,52 @@ beforeEach(() => {
   sentMessages.length = 0;
 });
 
+describe("cabling mismatches", () => {
+  test("reports a registered station with nothing plugged in", () => {
+    handleArenaStatus(
+      emptyStatus({
+        StationLinksKnown: true,
+        R1: { ...occupiedStation(841), PortLinked: false },
+      })
+    );
+    expect($("#status-R1").text()).toContain("nothing plugged into this port");
+  });
+
+  test("reports a cable in a station with no team", () => {
+    handleArenaStatus(
+      emptyStatus({
+        StationLinksKnown: true,
+        R2: { Team: null, DsConn: null, EStop: false, PortLinked: true },
+      })
+    );
+    expect($("#status-R2").text()).toContain("cable connected, no team registered");
+  });
+
+  test("says nothing when the station and its cable agree", () => {
+    handleArenaStatus(
+      emptyStatus({
+        StationLinksKnown: true,
+        R1: { ...occupiedStation(841), PortLinked: true },
+        R2: { Team: null, DsConn: null, EStop: false, PortLinked: false },
+      })
+    );
+    expect($("#status-R1").text()).not.toContain("plugged");
+    expect($("#status-R2").text()).not.toContain("cable");
+  });
+
+  // On team_network_driver: local nothing can see station ports, so silence is the only
+  // honest report — claiming every cable is out would be worse than saying nothing.
+  test("says nothing when link state is unknown", () => {
+    handleArenaStatus(
+      emptyStatus({
+        StationLinksKnown: false,
+        R1: { ...occupiedStation(841), PortLinked: false },
+      })
+    );
+    expect($("#status-R1").text()).not.toContain("plugged");
+  });
+});
+
 describe("field controls", () => {
   test("shows ENABLE FIELD alone in setup", () => {
     handleArenaStatus(emptyStatus({ MatchState: 0 }));

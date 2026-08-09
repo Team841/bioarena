@@ -7,8 +7,8 @@ package network
 import (
 	"bytes"
 	"fmt"
-	"github.com/team841/bioarena/model"
 	"github.com/stretchr/testify/assert"
+	"github.com/team841/bioarena/model"
 	"net"
 	"sync"
 	"testing"
@@ -215,6 +215,45 @@ func TestConfigureSwitchSkipsUnchangedTeams(t *testing.T) {
 
 	// Identity is the team number, so a fresh record for the same team is unchanged too.
 	assert.Nil(t, sw.ConfigureTeamEthernet([6]*model.Team{{Id: 841, WpaKey: "x"}, nil, nil, nil, nil, nil}))
+}
+
+// Link state is the only way to catch a laptop plugged into the wrong station: every other
+// check runs downstream of a driver station connection that such a laptop can never make.
+func TestParsePortLinks(t *testing.T) {
+	// IOS abbreviates the interface name here -- Gi0/1 for the GigabitEthernet0/1 it
+	// accepts in configuration -- so the parse matches on the numeric suffix.
+	output := "Port      Name               Status       Vlan       Duplex  Speed Type\n" +
+		"Gi0/1                        connected    10         a-full a-1000 10/100/1000BaseTX\n" +
+		"Gi0/2                        notconnect   20           auto   auto 10/100/1000BaseTX\n" +
+		"Gi0/3                        err-disabled 30           auto   auto 10/100/1000BaseTX\n" +
+		"Gi0/4                        connected    40         a-full a-1000 10/100/1000BaseTX\n" +
+		"Gi0/7                        connected    trunk      a-full a-1000 10/100/1000BaseTX\n"
+
+	assert.Equal(t, [6]bool{true, false, false, true, false, false}, parsePortLinks(output))
+}
+
+// A port description shifts every column to its right, so the status cannot be read by
+// position.
+func TestParsePortLinksWithDescriptions(t *testing.T) {
+	output := "Port      Name               Status       Vlan       Duplex  Speed Type\n" +
+		"Gi0/1     red 1 station        connected    10         a-full a-1000 10/100/1000BaseTX\n" +
+		"Gi0/2     red 2 station        notconnect   20           auto   auto 10/100/1000BaseTX\n"
+
+	assert.Equal(t, [6]bool{true, false, false, false, false, false}, parsePortLinks(output))
+}
+
+func TestParsePortLinksIgnoresJunk(t *testing.T) {
+	assert.Equal(t, [6]bool{}, parsePortLinks(""))
+	assert.Equal(t, [6]bool{}, parsePortLinks("% Invalid input detected at '^' marker.\n"))
+}
+
+// An unconfigured switch reports an error rather than six unplugged stations, which would
+// otherwise read as a field with every cable out.
+func TestGetStationPortLinksWithoutAddress(t *testing.T) {
+	sw := NewSwitch(SwitchConfig{})
+	links, err := sw.GetStationPortLinks()
+	assert.NotNil(t, err)
+	assert.Equal(t, [6]bool{}, links)
 }
 
 // Success is otherwise silent, so the log line is what distinguishes a working field from

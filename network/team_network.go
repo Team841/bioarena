@@ -39,6 +39,20 @@ var (
 	_ TeamNetwork = (*LocalNetwork)(nil)
 )
 
+// StationLinkReporter is implemented by team networks that can see the physical link state
+// of the driver station ports, and so can tell a laptop plugged into the wrong station
+// from one not plugged in at all.
+//
+// Optional rather than part of TeamNetwork because only a switch can answer it. On
+// team_network_driver: local the Pi sees the trunk, not the individual station ports, and
+// has nothing useful to report.
+type StationLinkReporter interface {
+	// GetStationPortLinks reports link per alliance station, in station order.
+	GetStationPortLinks() ([6]bool, error)
+}
+
+var _ StationLinkReporter = (*Switch)(nil)
+
 // vlanForStation lists the VLAN carrying each alliance station, in station order.
 var vlanForStation = [6]int{red1Vlan, red2Vlan, red3Vlan, blue1Vlan, blue2Vlan, blue3Vlan}
 

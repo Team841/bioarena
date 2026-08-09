@@ -237,6 +237,73 @@ func (sw *Switch) ConfigureTeamEthernet(teams [6]*model.Team) error {
 	return nil
 }
 
+// GetStationPortLinks reports whether each alliance station's driver station port has
+// link, in station order.
+//
+// This is the only way to catch a laptop plugged into the wrong station. Bioarena's other
+// checks all run downstream of a working connection: the wrong-station check needs the
+// driver station to reach the FMS, which needs an address, which the station cannot get
+// when its VLAN was never built. Link state is visible regardless.
+func (sw *Switch) GetStationPortLinks() ([6]bool, error) {
+	var links [6]bool
+	if sw.address == "" {
+		return links, errSwitchNotConfigured
+	}
+
+	output, err := sw.runCommand("show interfaces status\n")
+	if err != nil {
+		return links, err
+	}
+	return parsePortLinks(output), nil
+}
+
+var errSwitchNotConfigured = fmt.Errorf("switch address not configured")
+
+// parsePortLinks reads "show interfaces status" output.
+//
+//	Port      Name    Status       Vlan   Duplex  Speed Type
+//	Gi0/1             connected    10     a-full a-1000 10/100/1000BaseTX
+//	Gi0/2             notconnect   20       auto   auto 10/100/1000BaseTX
+//
+// Ports are matched on their numeric suffix because IOS abbreviates the name here --
+// "Gi0/1" for the "GigabitEthernet0/1" it accepts in configuration. The status is found by
+// looking for the token rather than by column, since a port with a description set shifts
+// every column to its right.
+func parsePortLinks(output string) [6]bool {
+	stationForPort := make(map[string]int, len(dsPortInterfaces))
+	for i, name := range dsPortInterfaces {
+		stationForPort[portNumericSuffix(name)] = i
+	}
+
+	var links [6]bool
+	for _, line := range strings.Split(output, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		station, ok := stationForPort[portNumericSuffix(fields[0])]
+		if !ok {
+			continue
+		}
+		for _, field := range fields[1:] {
+			if field == "connected" {
+				links[station] = true
+				break
+			}
+		}
+	}
+	return links
+}
+
+// portNumericSuffix strips an interface name's alphabetic prefix: both "GigabitEthernet0/1"
+// and "Gi0/1" reduce to "0/1".
+func portNumericSuffix(name string) string {
+	if i := strings.IndexAny(name, "0123456789"); i >= 0 {
+		return name[i:]
+	}
+	return ""
+}
+
 // portCommands builds an interface block applying the given verb to each selected
 // station's driver station port.
 func portCommands(stations [6]bool, verb string) string {

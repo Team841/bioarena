@@ -151,6 +151,18 @@ const handleArenaStatus = function (data) {
         }
       }
     }
+    // Cabling mismatches, which nothing downstream can catch: a laptop in the wrong
+    // station never gets an address, so it never connects, so no wrong-station check ever
+    // runs. Only reported while the switch is actually telling us about link.
+    if (data.StationLinksKnown) {
+      const registered = Boolean(as && as.Team && as.Team.Id);
+      if (registered && !as.PortLinked) {
+        statusText += " — nothing plugged into this port";
+      } else if (!registered && as && as.PortLinked) {
+        statusText += " — cable connected, no team registered";
+      }
+    }
+
     statusEl.text(statusText);
 
     // Disable inputs while reconfiguring (allowed in both setup and enabled states).
