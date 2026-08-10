@@ -217,6 +217,16 @@ func TestBaselineCommands(t *testing.T) {
 	command := baselineCommands()
 
 	assert.Contains(t, command, "ip routing\n")
+
+	// The access point answers on 192.168.69.1 and cannot be moved, so the field VLAN
+	// carries its subnet as a secondary. Without an interface in that subnet there is
+	// nothing to route through and nothing to ARP for, and the AP is unreachable.
+	assert.Contains(
+		t,
+		command,
+		"interface Vlan1\nip address 192.168.69.2 255.255.255.0 secondary\n",
+	)
+
 	assert.Contains(t, command, "vlan 10\nname Red1\n")
 	assert.Contains(t, command, "vlan 60\nname Blue3\n")
 

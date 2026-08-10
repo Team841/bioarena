@@ -650,30 +650,46 @@ Specifically, bioarena needs plain HTTP on port 80 serving `POST /configuration`
 the **field firmware**, not the team-radio firmware — a radio in team mode serves no such
 API and sits at `10.TE.AM.1` for whichever team it was last provisioned for.
 
+**The AP lives at `192.168.69.1` and stays there.** The VH-113 answers on that address and
+it is not configurable, so the field comes to it rather than the other way round. Two
+things carry an address in its subnet, both applied for you:
+
+- The Pi, via `ExecStartPre` in `bioarena.service` — `192.168.69.5/24` on `eth0`. This is
+  the one that matters, since the Pi is what talks to the AP. It needs no routing: the AP
+  is on the same VLAN, so they are neighbours.
+- The switch, via a secondary address on `Vlan1` — `192.168.69.2/24`, pushed with the rest
+  of the baseline. This lets anything else on the field reach the AP, and gives the AP a
+  gateway if it ever wants one.
+
+Without an address in that subnet the AP is simply unreachable: nothing has an interface
+there, so there is nothing to ARP for and nothing to route through, and the badge sits at
+`UNKNOWN` however healthy the AP is.
+
 **First-time VH-113 setup**
 
-1. Laptop straight into the AP, static `192.168.69.100/24`, browse `http://192.168.69.1` —
-   Vivid's default management address.
+1. Laptop straight into the AP, static `192.168.69.100/24`, browse `http://192.168.69.1`.
 2. Confirm or flash the field-mode image, following Vivid Hosting's own instructions.
-3. Set the AP's static address to `10.0.100.2` on the management subnet.
-4. Set the radio channel. It must match **AP Channel** under Arena → Settings, which is
+3. Set the radio channel. It must match **AP Channel** under Arena → Settings, which is
    what gets pushed on every match load.
+4. Put **AP Address** in Arena → Settings to `192.168.69.1`.
 
 **The AP password is normally blank.** The practice firmware exposes no API token, and
 that is a supported configuration rather than a workaround: bioarena adds the
 `Authorization: Bearer` header only when the password field is non-empty, so a blank field
-means unauthenticated calls, which is what this firmware expects. Confirm with:
+means unauthenticated calls, which is what this firmware expects. Confirm from the Pi:
 
 ```bash
-curl -s http://10.0.100.2/status
+curl -s http://192.168.69.1/status
 ```
 
 JSON back means leave **AP Password** empty. A `401` means this build does want a token,
-and on Vivid's field images that is usually the web UI's admin password.
+and on Vivid's field images that is usually the web UI's admin password. No answer at all
+means the address in that subnet is missing — check `ip addr show eth0` for
+`192.168.69.5`.
 
-**Enter the address without a scheme.** `10.0.100.2`, not `http://10.0.100.2` — the code
-prepends `http://`, so a typed prefix produces `http://http://10.0.100.2` and every poll
-fails.
+**Enter the address without a scheme.** `192.168.69.1`, not `http://192.168.69.1` — the
+code prepends `http://`, so a typed prefix produces `http://http://192.168.69.1` and every
+poll fails.
 
 When a match loads, the controller pushes one SSID + WPA2 key per team (six total). The
 SSID is the team number and the key is that team's WPA key from its record under

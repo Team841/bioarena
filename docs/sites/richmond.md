@@ -22,7 +22,7 @@ stations.
 |---|---|
 | Field controller Pi | `10.0.100.5` |
 | Switch (management) | `10.0.100.3` — set as **Switch Address** under Arena → Settings, with its Telnet password |
-| Field access point | `10.0.100.2` |
+| Field access point | `192.168.69.1` (fixed by the VH-113; the Pi and switch carry addresses in that subnet) |
 | Red e-stop panel | `10.0.100.11` (not installed) |
 | Blue e-stop panel | `10.0.100.12` (not installed) |
 

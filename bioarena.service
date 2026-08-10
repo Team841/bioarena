@@ -24,6 +24,12 @@ AmbientCapabilities=CAP_NET_ADMIN
 # already configured (e.g. after a service restart).
 ExecStartPre=-/sbin/ip addr add 10.0.100.5/24 dev eth0
 
+# A second address in the access point's subnet. The Vivid-Hosting AP answers on
+# 192.168.69.1 and cannot be moved, so reaching it means holding an address there: it is on
+# the same VLAN as this interface, so this needs no routing and no gateway.
+# Without it the AP is unreachable and its badge never leaves UNKNOWN.
+ExecStartPre=-/sbin/ip addr add 192.168.69.5/24 dev eth0
+
 # The binary is made executable at deploy time, by the account that copied it. Doing it
 # here instead fails: this unit runs as bioarena, chmod requires ownership, and the
 # deployed files belong to whoever ran the scp.

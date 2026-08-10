@@ -48,6 +48,19 @@ var switchTrunkInterfaces = [2]string{"GigabitEthernet0/7", "GigabitEthernet0/8"
 // rather than as VLAN0010 through VLAN0060.
 var vlanNames = [6]string{"Red1", "Red2", "Red3", "Blue1", "Blue2", "Blue3"}
 
+// The Vivid-Hosting access point answers on 192.168.69.1 and cannot be moved, so the field
+// VLAN carries that subnet as a secondary alongside the management one. Without it nothing
+// on the field can reach the AP: the switch has no interface in its subnet, so there is
+// nothing to route through and nothing to ARP for.
+//
+// The Pi also holds an address here, set by bioarena.service -- that is the one that
+// actually matters, since the Pi is what talks to the AP. This secondary lets anything
+// else on the field reach it too, and gives the AP a gateway if it ever needs one.
+const (
+	apSubnetMask          = "255.255.255.0"
+	switchApSubnetAddress = "192.168.69.2"
+)
+
 // Staging subnets keep an unregistered station usable: a laptop plugged into it still gets
 // an address and can still reach the FMS, so its driver station announces which team it
 // belongs to. Without them an unregistered station is a dead port, and a laptop in the
@@ -394,6 +407,13 @@ func portNumericSuffix(name string) string {
 // desired end state rather than a change -- so re-applying it costs nothing.
 func baselineCommands() string {
 	command := "ip routing\n"
+
+	// Secondary, so it sits alongside the management address the bootstrap script set as
+	// the primary. A secondary with no primary is rejected, which is why this is not the
+	// place the field's own address gets configured.
+	command += fmt.Sprintf(
+		"interface Vlan1\nip address %s %s secondary\nexit\n", switchApSubnetAddress, apSubnetMask,
+	)
 
 	for i, vlan := range vlanForStation {
 		command += fmt.Sprintf("vlan %d\nname %s\nexit\n", vlan, vlanNames[i])
