@@ -703,19 +703,36 @@ before the robot will associate.
 
 The Pi must be able to reach:
 
-| Destination          | Protocol | Port |
-|----------------------|----------|------|
-| Field AP             | HTTP     | 80   |
-| Cisco switch         | Telnet   | 23   |
-| Each robot subnet    | UDP      | 1160 |
+| Destination | Protocol | Port | How |
+|---|---|---|---|
+| Field AP, `192.168.69.1` | HTTP | 80 | Second address on `eth0`, same VLAN |
+| Switch, `10.0.100.3` | Telnet | 23 | Same subnet as the FMS address |
+| Team subnets, `10.TE.AM.0/24` | TCP 1750, UDP 1160 | | Routed via the switch |
+| Staging subnets, `172.16.<vlan>.0/24` | TCP 1750 | | Routed via the switch |
+
+The last two are the ones that catch people. The switch routes a driver station's packets
+to the Pi without any help, so it looks like the path works — but the Pi's replies need a
+route back, and the field deliberately has no default gateway. Without those routes a
+driver station sits there connected to a field that never answers it, which looks like the
+driver station's fault.
+
+`bioarena.service` adds them:
+
+```
+ExecStartPre=-/sbin/ip route add 10.0.0.0/8 via 10.0.100.3 dev eth0
+ExecStartPre=-/sbin/ip route add 172.16.0.0/12 via 10.0.100.3 dev eth0
+```
 
 Test from the Pi:
 
 ```bash
-ping 10.0.100.5        # self
-curl http://<AP_IP>/status
-telnet <SWITCH_IP> 23
+ping 192.168.69.1                 # the access point
+curl -s http://192.168.69.1/status
+ip route get 172.16.20.20         # a staging address: should route via 10.0.100.3
 ```
+
+`Network is unreachable` from that last one means the routes are missing, and every driver
+station will fail to connect no matter how healthy everything else looks.
 
 ### Step 5 — Serve time from the Pi
 
