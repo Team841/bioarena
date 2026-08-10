@@ -167,6 +167,46 @@ sudo chown bioarena:bioarena /opt/bioarena/event.db
 `event.db` stays with the service account because that is the one file bioarena must
 write. Carrying a database over from another Pi means chowning it the same way.
 
+**Faster deploys**
+
+The steps above are what a deploy does; [deploy-pi.ps1](deploy-pi.ps1) does them for you.
+The common case is a code change with no asset change, so that is the default and it copies
+one file:
+
+```powershell
+.\deploy-pi.ps1
+```
+
+```powershell
+.\deploy-pi.ps1 -Assets            # static/ or templates/ changed too
+.\deploy-pi.ps1 -Assets -Service   # and bioarena.service
+.\deploy-pi.ps1 -Target 10.2.100.5 # another site
+.\deploy-pi.ps1 -Panel 10.0.100.11 # an e-stop panel Pi instead
+```
+
+It builds, stops the service, copies, makes the binary executable, starts it, and reports
+whether the unit came up. Any step that fails stops the run — continuing past a failed copy
+would restart the service on whichever binary happened to be there, which looks like a
+successful deploy of code that was never pushed.
+
+Assets and the service file are opt-in rather than guessed. Copying `static` and `templates`
+every time is most of the wall clock, and installing the service file needs a sudo move and
+a `daemon-reload` that are wasted when it has not changed.
+
+**Set up key authentication first**, or every deploy asks for a password three times. On
+your development machine:
+
+```powershell
+ssh-keygen -t ed25519 -C "bioarena deploy"
+```
+
+```powershell
+type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh <USER>@10.0.100.5 "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+```
+
+Windows has no `ssh-copy-id`, which is why that is a pipe into `cat` rather than one
+command. After it, deploys are silent and take a few seconds.
+
 **Install the systemd service (run on the Pi)**
 
 ```bash
