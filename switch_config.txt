@@ -1,11 +1,26 @@
-! Baseline configuration for the Catalyst 3500-series switch. Load this into the switch prior to configuring
-! Cheesy Arena to connect to it. Default password is 1234Five.
+! Baseline configuration for the Catalyst 3560-CX (12-port, IP Base). Load this into the
+! switch before pointing bioarena at it. Telnet password and enable secret are both
+! 1234Five; the same password goes in Switch Address / Switch Password under
+! Arena -> Settings.
 !
+! Port map -- see docs/sites/richmond.md:
 !
-! Last configuration change at 13:18:54 UTC Sat Sep 28 2019
-! NVRAM config last updated at 13:18:57 UTC Sat Sep 28 2019
+!   Gi0/1-6    driver stations R1, R2, R3, B1, B2, B3   access vlan 10/20/30/40/50/60
+!   Gi0/7      field access point                       trunk, native vlan 100
+!   Gi0/8      field controller Pi (FMS, 10.0.100.5)    access vlan 100
+!   Gi0/9      Art-Net node (10.0.100.100)              access vlan 100
+!   Gi0/10-12  spare, for troubleshooting               access vlan 100
 !
-version 15.0
+! Gi0/1-6 are not arbitrary. network/switch.go hardcodes them as dsPortInterfaces in
+! station order and shuts and reopens each one around a VLAN change, which is what makes a
+! driver station laptop re-request an address on its new subnet. Move a station to another
+! port and it keeps the previous match's address.
+!
+! Everything under "interface Vlan10" through "interface Vlan60", and every dhcp pool named
+! dhcpNN or stagingNN, is rewritten by bioarena on each match load. The addresses below are
+! only placeholders so the SVIs exist before the first match.
+!
+version 15.2
 no service pad
 service timestamps debug datetime msec
 service timestamps log datetime msec
@@ -14,15 +29,17 @@ no service password-encryption
 hostname ChezySwitch
 !
 boot-start-marker
+boot system flash:c3560cx-universalk9-mz.152-7.E/c3560cx-universalk9-mz.152-7.E.bin
 boot-end-marker
-!
 !
 enable secret 5 $1$kKSW$fCMwnMdYvXui1TulfyYHN/
 !
 no aaa new-model
-system mtu routing 1500
 ip routing
 !
+! Field network. .1-.125 is excluded so the statically addressed field devices -- the Pi at
+! .5, this switch at .3, the access point at .2, the Art-Net node at .100 -- can never
+! collide with a lease.
 ip dhcp excluded-address 10.0.100.1 10.0.100.125
 ip dhcp excluded-address 10.0.100.200 10.0.100.225
 !
@@ -33,21 +50,10 @@ ip dhcp pool dhcppool
  default-router 10.0.100.3
  lease 7
 !
-!
 ip route 0.0.0.0 0.0.0.0 10.0.100.1
 ip route 10.0.0.0 255.0.0.0 Null0
 !
-!
-!
-!
-!
-!
-!
 lldp run
-!
-!
-!
-!
 !
 spanning-tree mode pvst
 spanning-tree portfast default
@@ -55,225 +61,95 @@ spanning-tree extend system-id
 !
 vlan internal allocation policy ascending
 !
+vlan 10
+ name Red1
 !
+vlan 20
+ name Red2
 !
+vlan 30
+ name Red3
+!
+vlan 40
+ name Blue1
+!
+vlan 50
+ name Blue2
+!
+vlan 60
+ name Blue3
+!
+vlan 100
+ name Field
+!
+! Driver stations. One access port per alliance station, in station order.
 interface GigabitEthernet0/1
- switchport trunk encapsulation dot1q
- switchport trunk native vlan 100
- switchport mode trunk
-!
-interface GigabitEthernet0/2
- switchport trunk encapsulation dot1q
- switchport trunk native vlan 100
- switchport mode trunk
-!
-interface GigabitEthernet0/3
- switchport trunk encapsulation dot1q
- switchport trunk native vlan 100
- switchport mode trunk
-!
-interface GigabitEthernet0/4
- switchport trunk encapsulation dot1q
- switchport trunk native vlan 100
- switchport mode trunk
-!
-interface GigabitEthernet0/5
- switchport trunk encapsulation dot1q
- switchport trunk native vlan 100
- switchport mode trunk
-!
-interface GigabitEthernet0/6
- switchport trunk encapsulation dot1q
- switchport trunk native vlan 100
- switchport mode trunk
-!
-interface GigabitEthernet0/7
- switchport access vlan 100
+ description R1 driver station
+ switchport access vlan 10
  switchport mode access
 !
+interface GigabitEthernet0/2
+ description R2 driver station
+ switchport access vlan 20
+ switchport mode access
+!
+interface GigabitEthernet0/3
+ description R3 driver station
+ switchport access vlan 30
+ switchport mode access
+!
+interface GigabitEthernet0/4
+ description B1 driver station
+ switchport access vlan 40
+ switchport mode access
+!
+interface GigabitEthernet0/5
+ description B2 driver station
+ switchport access vlan 50
+ switchport mode access
+!
+interface GigabitEthernet0/6
+ description B3 driver station
+ switchport access vlan 60
+ switchport mode access
+!
+! Access point. The VH-113 tags each team's SSID onto that team's VLAN, so all six have to
+! reach it -- an access port here leaves every robot associated to WiFi and unable to reach
+! anything. No "switchport trunk encapsulation dot1q": the 3560-CX is 802.1Q-only and does
+! not have the command.
+interface GigabitEthernet0/7
+ description Field access point
+ switchport trunk native vlan 100
+ switchport trunk allowed vlan 10,20,30,40,50,60,100
+ switchport mode trunk
+!
 interface GigabitEthernet0/8
+ description Field controller Pi (FMS)
  switchport access vlan 100
  switchport mode access
 !
 interface GigabitEthernet0/9
+ description Art-Net node
  switchport access vlan 100
  switchport mode access
 !
 interface GigabitEthernet0/10
+ description Spare
  switchport access vlan 100
  switchport mode access
 !
 interface GigabitEthernet0/11
- switchport access vlan 10
+ description Spare
+ switchport access vlan 100
  switchport mode access
 !
 interface GigabitEthernet0/12
- switchport access vlan 40
- switchport mode access
-!
-interface GigabitEthernet0/13
- switchport access vlan 20
- switchport mode access
-!
-interface GigabitEthernet0/14
- switchport access vlan 50
- switchport mode access
-!
-interface GigabitEthernet0/15
- switchport access vlan 30
- switchport mode access
-!
-interface GigabitEthernet0/16
- switchport access vlan 60
- switchport mode access
-!
-interface GigabitEthernet0/17
+ description Spare
  switchport access vlan 100
  switchport mode access
 !
-interface GigabitEthernet0/18
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/19
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/20
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/21
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/22
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/23
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/24
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/25
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/26
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/27
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/28
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/29
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/30
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/31
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/32
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/33
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/34
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/35
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/36
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/37
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/38
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/39
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/40
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/41
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/42
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/43
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/44
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/45
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/46
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/47
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/48
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/49
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/50
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/51
- switchport access vlan 100
- switchport mode access
-!
-interface GigabitEthernet0/52
- switchport access vlan 100
- switchport mode access
-!
-interface Vlan1
- ip address 10.0.0.3 255.255.255.0
-!
+! Team SVIs. Placeholders only -- bioarena replaces the address on each one at match load,
+! or swaps in a 172.16.<vlan>.0/24 staging subnet when the station has no team.
 interface Vlan10
  ip address 10.0.1.4 255.255.255.0
  ip access-group DS-FMS in
@@ -305,8 +181,13 @@ ip classless
 ip http server
 ip http secure-server
 !
+! Applied inbound on the team VLANs: a driver station may reach the FMS and nothing else.
 !
-!
+! The 0.255.255.0 wildcard on the second icmp line is discontiguous and deliberate. It
+! matches the first and last octets only -- 10.*.*.4 -- which is every team subnet's
+! gateway, switchTeamGatewayAddress in network/switch.go. One ACE covers all six VLANs
+! whatever team numbers are loaded, so a driver station can always ping its own gateway.
+! It is not a typo for 0.0.0.255; do not "correct" it.
 ip access-list extended DS-FMS
  permit udp any eq 1145 10.0.100.0 0.0.0.255 eq 1160
  permit tcp any 10.0.100.0 0.0.0.255 eq 1750
@@ -316,8 +197,6 @@ ip access-list extended DS-FMS
  permit udp any any eq bootps
 !
 snmp-server community 1234Five RO
-!
-vstack
 !
 line con 0
  exec-timeout 0 0
