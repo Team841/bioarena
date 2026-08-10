@@ -167,52 +167,59 @@ sudo chown bioarena:bioarena /opt/bioarena/event.db
 `event.db` stays with the service account because that is the one file bioarena must
 write. Carrying a database over from another Pi means chowning it the same way.
 
-**Faster deploys**
+**Deploying**
 
-The steps above are what a deploy does; [deploy-pi.sh](deploy-pi.sh) and
-[deploy-pi.ps1](deploy-pi.ps1) do them for you — the same script for Git Bash and for
-PowerShell. The common case is a code change with no asset change, so that is the default
-and it copies one file:
+Two scripts, one per kind of Pi. Both take the address and work out the rest.
 
 ```bash
-./deploy-pi.sh
+./deploy-fms.sh 10.0.100.5
 ```
 
 ```bash
-./deploy-pi.sh --assets              # static/ or templates/ changed too
-./deploy-pi.sh --assets --service    # and bioarena.service
-./deploy-pi.sh --target 10.2.100.5   # another site
-./deploy-pi.sh --panel 10.0.100.11   # an e-stop panel Pi instead
+./deploy-panel.sh 10.0.100.11 red
+./deploy-panel.sh 10.0.100.12 blue
 ```
 
-In PowerShell the same flags are `-Assets`, `-Service`, `-Target`, `-Panel`:
+The panel script needs the alliance because a panel Pi is not interchangeable: it takes the
+static address the field controller polls for that alliance, and it writes that address into
+the service file for you. Getting it wrong by hand puts two panels on one address.
 
-```powershell
-.\deploy-pi.ps1 -Assets -Service
+Each script does everything, every time — builds, creates the service account if that Pi has
+never been deployed to, copies the binary and the assets, installs the service, starts it,
+and confirms it stayed up. There are no flags for which parts to copy, because a deploy that
+needs you to remember a flag eventually goes out missing a file. They are safe to run
+repeatedly and safe to run on a Pi that has never seen bioarena, so "run it again" is always
+a reasonable answer.
+
+If a step fails the script stops there and says which one, leaving the Pi running whatever
+it was running before. If the service starts and then dies, it prints the last twenty log
+lines rather than making you go looking.
+
+Add a login user as the last argument if you do not log in as `admin`:
+
+```bash
+./deploy-fms.sh 10.0.100.5 sam
+./deploy-panel.sh 10.0.100.11 red sam
 ```
 
-It builds, stops the service, copies, makes the binary executable, starts it, and reports
-whether the unit came up. Any step that fails stops the run — continuing past a failed copy
-would restart the service on whichever binary happened to be there, which looks like a
-successful deploy of code that was never pushed.
-
-Assets and the service file are opt-in rather than guessed. Copying `static` and `templates`
-every time is most of the wall clock, and installing the service file needs a sudo move and
-a `daemon-reload` that are wasted when it has not changed.
-
-**Set up key authentication first**, or every deploy asks for a password three times. On
+**Set up key authentication first**, or every deploy asks for a password several times. On
 your development machine:
 
-```powershell
+```bash
 ssh-keygen -t ed25519 -C "bioarena deploy"
 ```
 
-```powershell
-type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh <USER>@10.0.100.5 "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+```bash
+ssh-copy-id <USER>@10.0.100.5
 ```
 
-Windows has no `ssh-copy-id`, which is why that is a pipe into `cat` rather than one
-command. After it, deploys are silent and take a few seconds.
+On Windows there is no `ssh-copy-id`, so from Git Bash:
+
+```bash
+cat ~/.ssh/id_ed25519.pub | ssh <USER>@10.0.100.5 "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+```
+
+After that a deploy is one command and no prompts.
 
 **Install the systemd service (run on the Pi)**
 
