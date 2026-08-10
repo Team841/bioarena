@@ -28,20 +28,19 @@ if [ -z "$TARGET" ]; then
 fi
 
 REMOTE="$LOGIN@$TARGET"
-STAGING="~/.bioarena-deploy"
+STAGING=".bioarena-deploy"
 step=0
 
 announce() {
 	step=$((step + 1))
 	echo ""
-	echo "[$step/7] $1"
+	echo "[$step/4] $1"
 }
 
 fail() {
 	echo "" >&2
 	echo "DEPLOY FAILED: $1" >&2
 	echo "" >&2
-	echo "Nothing was started, so the Pi is running whatever it was running before." >&2
 	echo "Fix the cause and run this again -- repeating it is safe." >&2
 	exit 1
 }
@@ -52,57 +51,49 @@ announce "Building for the Pi"
 GOOS=linux GOARCH=arm64 go build -o bioarena-pi .
 echo "      bioarena-pi built"
 
-announce "Checking $TARGET is reachable"
-ssh -o ConnectTimeout=10 "$REMOTE" "true"
-echo "      $REMOTE answers"
-
-announce "Preparing /opt/bioarena"
-# Idempotent: creates the service account and directory the first time, does nothing
-# after. The account is a system user with no login, so a field controller does not
-# depend on which username the SD card was flashed with.
-ssh "$REMOTE" "
-	set -e
-	id bioarena >/dev/null 2>&1 || sudo useradd --system --home-dir /opt/bioarena --shell /usr/sbin/nologin bioarena
-	sudo mkdir -p /opt/bioarena $STAGING
-	sudo chown bioarena:bioarena /opt/bioarena
-"
-echo "      service account and directory ready"
-
-announce "Stopping bioarena"
-# Before the copy, not after: Linux refuses to overwrite a running executable, and scp
-# reports that as a bare "Failure" that reads like a permissions problem.
-ssh "$REMOTE" "sudo systemctl stop bioarena 2>/dev/null || true"
-echo "      stopped (or was not running)"
-
-announce "Copying files"
-scp -q bioarena-pi bioarena.service "$REMOTE:$STAGING/"
-scp -qr static templates "$REMOTE:$STAGING/"
+announce "Copying to $TARGET"
+# Into the login user's home first, which needs no privileges. Everything that does is
+# done in one go below, so the Pi asks for a sudo password once rather than at every step.
+ssh -o ConnectTimeout=10 "$REMOTE" "rm -rf ~/$STAGING && mkdir -p ~/$STAGING"
+scp -q bioarena-pi bioarena.service "$REMOTE:~/$STAGING/"
+scp -qr static templates "$REMOTE:~/$STAGING/"
 echo "      binary, service file, static, templates"
 
-announce "Installing"
-# Installed with sudo rather than copied straight into /opt, so the files end up owned by
-# the service account without the deploying user needing to be in its group -- which would
-# otherwise mean logging out and back in before the first deploy could work.
-ssh "$REMOTE" "
+announce "Installing (the Pi may ask for your password)"
+# -t so sudo has a terminal to prompt on: without it sudo refuses with "a terminal is
+# required to read the password", which reads like a bug in the deploy rather than a
+# missing tty.
+ssh -t "$REMOTE" "
 	set -e
-	sudo install -o bioarena -g bioarena -m 755 $STAGING/bioarena-pi /opt/bioarena/bioarena-pi
-	sudo cp -r $STAGING/static $STAGING/templates /opt/bioarena/
+	# Idempotent: creates the service account the first time, does nothing after. It is a
+	# system user with no login, so a field controller does not depend on which username
+	# the SD card was flashed with.
+	id bioarena >/dev/null 2>&1 || sudo useradd --system --home-dir /opt/bioarena --shell /usr/sbin/nologin bioarena
+	sudo mkdir -p /opt/bioarena
+	sudo chown bioarena:bioarena /opt/bioarena
+
+	# Stopped before the binary is replaced: Linux refuses to overwrite a running
+	# executable, and the error reads like a permissions problem.
+	sudo systemctl stop bioarena 2>/dev/null || true
+
+	sudo install -o bioarena -g bioarena -m 755 ~/$STAGING/bioarena-pi /opt/bioarena/bioarena-pi
+	sudo cp -r ~/$STAGING/static ~/$STAGING/templates /opt/bioarena/
 	sudo chown -R bioarena:bioarena /opt/bioarena/static /opt/bioarena/templates
-	sudo cp $STAGING/bioarena.service /etc/systemd/system/bioarena.service
+	sudo cp ~/$STAGING/bioarena.service /etc/systemd/system/bioarena.service
 	sudo systemctl daemon-reload
 	sudo systemctl enable bioarena >/dev/null 2>&1
-	rm -rf $STAGING
+	sudo systemctl start bioarena
+	rm -rf ~/$STAGING
 "
 echo "      installed to /opt/bioarena"
 
-announce "Starting bioarena"
-ssh "$REMOTE" "sudo systemctl start bioarena"
+announce "Checking it stayed up"
 sleep 2
 if ! ssh "$REMOTE" "systemctl is-active --quiet bioarena"; then
 	echo "" >&2
-	echo "DEPLOY FAILED: the service did not stay running." >&2
+	echo "DEPLOY FAILED: the service started and then stopped." >&2
 	echo "" >&2
-	ssh "$REMOTE" "sudo journalctl -u bioarena -n 20 --no-pager" >&2 || true
+	ssh "$REMOTE" "journalctl -u bioarena -n 20 --no-pager" >&2 || true
 	exit 1
 fi
 
