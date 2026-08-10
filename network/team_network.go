@@ -1,7 +1,7 @@
 // Copyright 2014 Team 254. All Rights Reserved.
 // Portions Copyright Team 841. All Rights Reserved.
 //
-// Interface shared by the per-match team network implementations.
+// Shared helpers for the per-match team networks.
 
 package network
 
@@ -12,45 +12,18 @@ import (
 	"github.com/team841/bioarena/model"
 )
 
-// TeamNetwork applies the per-match team subnets: one VLAN and one DHCP scope per
-// alliance station, each addressed 10.TE.AM.0/24 from the team number.
-//
-// The work can live in either of two places. Switch pushes the configuration to a Layer 3
-// Cisco over Telnet, which is what a competition field uses. LocalNetwork does the same
-// job on the Pi with VLAN subinterfaces and dnsmasq, leaving the switch to carry tagged
-// frames and nothing else -- which any managed Layer 2 switch can do.
-type TeamNetwork interface {
-	// ConfigureTeamEthernet applies the given teams' subnets in station order
-	// (R1, R2, R3, B1, B2, B3). A nil entry leaves that station without a subnet.
-	ConfigureTeamEthernet(teams [6]*model.Team) error
-
-	// GetStationForTeamId reports which alliance station a team is physically wired to,
-	// or "" when that cannot be determined.
-	GetStationForTeamId(teamId int) (string, error)
-
-	// GetStatus reports the outcome of the last configuration for the status badge:
-	// UNKNOWN, DISABLED, CONFIGURING, ACTIVE, or ERROR.
-	GetStatus() string
+// teamIds reduces the teams to their numbers, with 0 for an empty station. Comparing
+// numbers rather than pointers keeps an unrelated edit to a team record -- a WPA key
+// changed from the Teams page, say -- from counting as a network change.
+func teamIds(teams [6]*model.Team) [6]int {
+	var ids [6]int
+	for i, team := range teams {
+		if team != nil {
+			ids[i] = team.Id
+		}
+	}
+	return ids
 }
-
-var (
-	_ TeamNetwork = (*Switch)(nil)
-	_ TeamNetwork = (*LocalNetwork)(nil)
-)
-
-// StationLinkReporter is implemented by team networks that can see the physical link state
-// of the driver station ports, and so can tell a laptop plugged into the wrong station
-// from one not plugged in at all.
-//
-// Optional rather than part of TeamNetwork because only a switch can answer it. On
-// team_network_driver: local the Pi sees the trunk, not the individual station ports, and
-// has nothing useful to report.
-type StationLinkReporter interface {
-	// GetStationPortLinks reports link per alliance station, in station order.
-	GetStationPortLinks() ([6]bool, error)
-}
-
-var _ StationLinkReporter = (*Switch)(nil)
 
 // vlanForStation lists the VLAN carrying each alliance station, in station order.
 var vlanForStation = [6]int{red1Vlan, red2Vlan, red3Vlan, blue1Vlan, blue2Vlan, blue3Vlan}
@@ -79,8 +52,7 @@ func describeStations(teamIds [6]int, rebuilt [6]bool) string {
 }
 
 // teamSubnet returns the first three octets of a team's subnet: Team 841 gets 10.8.41,
-// Team 1114 gets 10.11.14. This is the same split switch.go applies inline when it builds
-// its DHCP pools; the two must agree, since a field can be run either way.
+// Team 1114 gets 10.11.14.
 func teamSubnet(teamId int) string {
 	return fmt.Sprintf("10.%d.%d", teamId/100, teamId%100)
 }

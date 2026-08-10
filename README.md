@@ -10,7 +10,7 @@ A Raspberry Pi service for running FRC practice sessions. Controls up to 6 robot
 - [Go 1.23+](https://golang.org/dl/) on your build machine
 - Vivid-Hosting VH-113 field access point (running OpenWRT)
 - Vivid-Hosting VH-109 radio on each robot
-- Layer 3 managed switch with the IOS DHCP server (Catalyst 3560-CX or similar; see [Step 2](#step-2--configure-the-managed-switch)) — or any VLAN-capable Layer 2 switch, with the Pi doing the routing and DHCP instead (see [Team networks on the Pi](#team-networks-on-the-pi-layer-2-switches))
+- Catalyst 3560-CX switch, IP Base, wired as [Step 2](#step-2--configure-the-managed-switch) describes
 - Static IP assigned to Pi (recommend `10.0.100.5`)
 
 ## Install
@@ -30,7 +30,7 @@ first boot.
 - **Set the keyboard layout and locale.** A mismatched layout is why keys like `|` end up
   missing when you are working at the Pi directly.
 - **Set the WiFi credentials** if the Pi needs to reach the internet before it joins the
-  field network. It does — dnsmasq has to be installed while it still has a route out.
+  field network. It does — chrony has to be installed while it still has a route out.
 
 After first boot, in this order:
 
@@ -47,18 +47,7 @@ After first boot, in this order:
    switch and the controller timestamp their logs years apart. See
    [Step 5](#step-5--serve-time-from-the-pi).
 
-   ```bash
-   sudo apt install dnsmasq
-   ```
-
-   Dnsmasq only for `team_network_driver: local`, where the Pi serves DHCP itself. On the
-   Cisco path the switch does that and dnsmasq is unused — but installing it anyway costs
-   nothing and leaves the option open, which is worth more than the disk space when the
-   switch fails on a Saturday.
-
-2. Set the static field address, and install the NetworkManager drop-in if using
-   `team_network_driver: local` — see [Raspberry Pi OS releases](#raspberry-pi-os-releases)
-   and [Step 1](#step-1--assign-a-static-ip-to-the-pi).
+2. Set the static field address — see [Step 1](#step-1--assign-a-static-ip-to-the-pi).
 3. Install the chrony drop-in and point the switch at the Pi, per
    [Step 5](#step-5--serve-time-from-the-pi).
 4. Copy the binary, assets, and service file (below), plus `config.yaml`. Carry `event.db`
@@ -414,9 +403,6 @@ Turn it off with **Auto-Configure Teams** under Arena → Settings, which leaves
 subnets in place but stops bioarena acting on what connects to them. Registration is also
 skipped once a match is running.
 
-Staging is a Cisco-path feature. On `team_network_driver: local` an unregistered station
-has no subnet, as before.
-
 **Check the license level** with `show version`. Bioarena needs six concurrent SVIs with
 addresses and the IOS DHCP server. IP Base has both; verify before wiring a field on
 LAN Base.
@@ -511,135 +497,6 @@ VLAN assignments (fixed, managed automatically):
 | Blue 3  | 60   |
 
 When a match loads, the controller pushes DHCP pool and IP configurations for each team's subnet over Telnet.
-
-#### Team networks on the Pi (Layer 2 switches)
-
-Everything above assumes a Layer 3 switch. If yours cannot route — anything with one SVI
-and no DHCP server — the Pi can do that work instead.
-Set in `config.yaml`:
-
-```yaml
-team_network_driver: local
-local_network:
-  trunk_interface: eth0
-```
-
-On every match load bioarena then rebuilds, on the Pi:
-
-- `eth0.10` … `eth0.60` — one 802.1Q subinterface per station, each holding `10.TE.AM.4`,
-  the same gateway address the switch would have handed out
-- `/etc/dnsmasq.d/bioarena.conf` — one DHCP scope per station, `.20`–`.199`, matching the
-  switch's pool bounds
-- `net.ipv4.ip_forward=1` — the Pi routes between the team subnets and the FMS address
-
-Only stations whose team actually changed are touched; an unchanged team list does
-nothing at all. Registering one station therefore does not disturb a robot being driven
-from another, which is what makes this usable in free practice, where teams come and go
-while others are on the field. The first configuration after a restart rebuilds
-everything, since subinterfaces left by the previous run outlive the process.
-
-Leases are five minutes, deliberately shorter than the switch's seven days. The switch can
-force a laptop to re-request by bouncing its port; the Pi cannot, because the laptop's
-carrier is to the switch rather than to us. A short lease is the only self-correction
-available, so a laptop moved between stations picks up its new subnet within a couple of
-renewals instead of holding a dead address.
-
-Team addressing does not change. Only the switch's job does: carry VLANs 10–60 tagged on
-the Pi's port, and put each driver station port in its station's VLAN as an access port.
-No routing, no DHCP, no SVIs.
-
-**One-time setup on the Pi**
-
-```bash
-sudo apt install dnsmasq
-sudo touch /etc/dnsmasq.d/bioarena.conf
-sudo chown bioarena /etc/dnsmasq.d/bioarena.conf
-```
-
-The service runs `ip`, `sysctl`, and `systemctl restart dnsmasq`. `AmbientCapabilities=CAP_NET_ADMIN`
-in `bioarena.service` covers the first two — the kernel grants `CAP_NET_ADMIN` holders the
-same access as root under `/proc/sys/net`, so `ip_forward` is writable — but not the
-restart, which systemd authorises over D-Bus.
-
-Authorise that one unit for the service account in
-`/etc/polkit-1/rules.d/50-bioarena-dnsmasq.rules`:
-
-```javascript
-polkit.addRule(function (action, subject) {
-  if (action.id == "org.freedesktop.systemd1.manage-units" &&
-      action.lookup("unit") == "dnsmasq.service" &&
-      subject.user == "bioarena") {
-    return polkit.Result.YES;
-  }
-});
-```
-
-The blunter alternative is `User=root` in `bioarena.service`, which needs no rule at all.
-The polkit route grants exactly one unit to one account and is worth the extra file.
-
-Polkit, not sudo: bioarena invokes `systemctl` directly, so a `sudoers` entry would never
-be consulted. The JavaScript rule format needs polkit 0.106 or newer, which Trixie and
-Bookworm have and Buster does not.
-
-**Trade-offs.** Station detection still works — it reads the Pi's own ARP table rather
-than the switch's, and reports the same stations. The switch address and password under
-**Arena → Settings** go unused. All six teams' traffic now crosses the Pi's single NIC, so
-this is a practice-field arrangement, not a competition one.
-
-#### Half field on a Layer 2 switch
-
-A reduced-station field on an eight-port Layer 2 switch — four driver stations
-(R1, R2, R3, B1) with `team_network_driver: local` above. The port map below is the shape
-any VLAN-capable switch follows; port numbers and the names its firmware gives membership
-and PVID will differ.
-
-Both the Pi and the AP are trunks. The VH-113 tags each team's SSID onto that team's
-VLAN, so VLANs 10–60 have to reach it — an access port there leaves every robot
-associated to WiFi and unable to reach anything.
-
-| Port | Role | Membership | PVID |
-|------|------|------------|------|
-| 1 | Pi | untagged 1, tagged 10–60 | 1 |
-| 2 | VH-113 AP | untagged 1, tagged 10–60 | 1 |
-| 3 | R1 driver station | untagged 10 | 10 |
-| 4 | R2 driver station | untagged 20 | 20 |
-| 5 | R3 driver station | untagged 30 | 30 |
-| 6 | B1 driver station | untagged 40 | 40 |
-| 7–8 | spare (laptop, future station) | untagged 1 | 1 |
-
-Carry all six VLANs on the two trunks even though 50 and 60 have nowhere to go yet. It
-costs nothing, and adding B2 later is then one PVID change on port 7 rather than editing
-trunk membership on two ports.
-
-Bioarena still thinks in six stations: B2 and B3 need **BYP** checked in Match Play or the
-match will not start. Nothing else needs configuring — a station with no team gets no
-subinterface and no DHCP scope, so VLANs 50 and 60 stay dark on their own.
-
-Set the switch's own management address statically to `10.0.100.3/24`, matching the address
-reserved for the site switch above, and do that on an isolated link — smart switches
-generally ship on a default address that collides with the usual home router range.
-
-**Layer 2 footguns**
-
-- **Membership and PVID are usually two separate settings.** Set membership only and
-  untagged frames from the driver station laptops still land in the default VLAN — they get
-  no lease, while the field badge stays green and the switch reports no error. If a station
-  gets no address, check its PVID before anything else.
-- **Keep the management port reachable while you work.** On a unit with no console port,
-  moving the switch's own port out of the management VLAN can leave a factory reset as the
-  only way back in, taking every VLAN with it.
-- **Leave Switch Address blank** under **Arena → Settings**. There is nothing to Telnet.
-  The badge reads `DISABLED` (blue) rather than red, which is the honest state — no switch
-  configured, as opposed to a switch that cannot be reached.
-
-**Keep a switch backup per site.** Export the configuration once the field works, and
-restore it after a factory reset rather than re-entering the VLAN tables by hand. Re-export
-whenever the port map changes: a backup that no longer matches the field restores cleanly
-and then fails in ways that look like cabling.
-
-Site records live in [docs/sites/](docs/sites) — one file per deployment, with its port
-map, addresses, and switch backup. [docs/sites/richmond.md](docs/sites/richmond.md) is a
-worked example to copy when standing up another field.
 
 ### Step 3 — Configure the field access point
 
@@ -1139,39 +996,14 @@ Pi). Add `ARCH=arm GOARM=7` for a 32-bit image.
 
 ### Raspberry Pi OS releases
 
-Bioarena needs systemd, `ip(8)`, and — for `team_network_driver: local` — dnsmasq. All
-three are present on every current release, so the OS choice comes down to what else it
-changes.
+Bioarena needs systemd and `ip(8)`, present on every current release, so the OS choice
+comes down to what else changes.
 
 | | Trixie / Bookworm | Buster and earlier |
 |---|---|---|
 | Build flag | `./build-pi.sh` (arm64) | `ARCH=arm GOARM=7 ./build-pi.sh` |
 | Static IP | `nmcli` (NetworkManager) | `/etc/dhcpcd.conf` |
-| VLAN subinterfaces | Need the NetworkManager drop-in below | Nothing extra |
 | apt | Works | End of life; repositories moved to `archive.debian.org` |
-
-**The NetworkManager drop-in is required for `team_network_driver: local`.**
-NetworkManager claims every interface that appears, including the VLAN subinterfaces
-bioarena creates on each match load. Left managed, it starts a DHCP client on each one and
-can strip the gateway address bioarena just assigned — so a station loses its subnet
-seconds after being registered, which reads as a flaky field rather than a configuration
-problem.
-
-```bash
-scp docs/99-bioarena-unmanaged.conf <USER>@10.0.100.5:~/
-```
-
-On the Pi:
-
-```bash
-sudo mv ~/99-bioarena-unmanaged.conf /etc/NetworkManager/conf.d/
-```
-
-```bash
-sudo systemctl reload NetworkManager
-```
-
-Edit the interface pattern inside if the field NIC is not `eth0`.
 
 **Verify the GPIO chip name** if you use e-stop panels or GPIO field lights. Both default
 to `gpiochip0`, which is correct for a Pi 4 today, but chip numbering has moved between
@@ -1184,7 +1016,6 @@ kernel versions and hardware generations. Confirm on the Pi with `gpiodetect`, a
 - [docs/prd-half-field-match-simulation.md](docs/prd-half-field-match-simulation.md) — requirements for 1v0 half-field REBUILT 2026 simulation: AUTO outcome selection, FMS Game Data, DMX HUB light.
 - [docs/upstream-divergences.md](docs/upstream-divergences.md) — where this fork differs from cheesy-arena, which differences are candidates to send upstream, and which files are kept byte-identical.
 - [docs/console.py](docs/console.py) — serial console for the field switch, standard library only; Linux and macOS.
-- [docs/99-bioarena-unmanaged.conf](docs/99-bioarena-unmanaged.conf) — NetworkManager drop-in keeping it away from the VLAN subinterfaces, required on Trixie and Bookworm with `team_network_driver: local`.
 - [docs/chrony-bioarena.conf](docs/chrony-bioarena.conf) — chrony drop-in making the Pi the field's time source, so switch and controller logs can be correlated.
 - [docs/switch-bootstrap.py](docs/switch-bootstrap.py) — brings a factory or reset Catalyst to the point bioarena can configure it over Telnet: address, passwords, boot image. Console cable, one command.
 - [docs/sites/](docs/sites) — one record per deployed field: addresses, switch port map, and switch backup. [richmond.md](docs/sites/richmond.md) is the example to copy.

@@ -27,32 +27,6 @@ http_port: 8080
 # reads as the network silently not working.
 network_security_enabled: true
 
-# Where the per-match team subnets (10.TE.AM.0/24, one VLAN per station) are applied.
-#
-# "switch" — pushed to a Layer 3 switch over Telnet, using its SVIs and DHCP server.
-#            Requires a 3550/3560/3750-class unit. This is the default.
-# "local"  — applied on this Pi with VLAN subinterfaces and dnsmasq. The switch then only
-#            has to carry tagged frames, so a Layer 2 unit (3500XL, TP-Link smart switch)
-#            is enough. See "Team networks on the Pi" in the README for the one-time
-#            dnsmasq, sudo, and trunk-port setup this needs.
-team_network_driver: switch
-
-# Used only when team_network_driver is "local".
-# local_network:
-#   trunk_interface: eth0                            # NIC facing the switch's trunk port
-#   dnsmasq_conf_path: /etc/dnsmasq.d/bioarena.conf  # rewritten on every match load
-#   dnsmasq_service: dnsmasq                         # systemd unit restarted afterwards
-
-# Field lights driver.
-# "none"   — no lights output (default for bench testing).
-# "serial" — Arduino on USB serial; sends field_lights_command at match start.
-field_lights_driver: none
-
-# Serial port settings (used when field_lights_driver is "serial").
-# field_lights_port: /dev/ttyACM0
-# field_lights_baud: 9600
-# field_lights_command: "START\n"
-
 # E-stop panel Pis (one per alliance).
 # Set host to the panel Pi's address and port, e.g. "http://10.0.100.11:8765"
 # Leave host empty ("") to skip polling that alliance's panel.

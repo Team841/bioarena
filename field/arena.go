@@ -53,8 +53,7 @@ type Arena struct {
 	Database           *model.Database
 	EventSettings      *model.EventSettings
 	accessPoint        network.AccessPoint
-	teamNetwork        network.TeamNetwork
-	localNetworkConfig *network.LocalNetworkConfig
+	teamNetwork        teamNetwork
 	Plc                plc.Plc
 	FieldLights        hardware.FieldLights
 	Leds               *led.Controller
@@ -150,17 +149,17 @@ func NewArena(dbPath string) (*Arena, error) {
 	return arena, nil
 }
 
-// Loads or reloads the event settings upon initial setup or change.
-// SetLocalTeamNetwork moves the per-match team networks off a Layer 3 switch and onto
-// this host: VLAN subinterfaces and dnsmasq instead of Telnet. The switch address and
-// password under Arena > Settings go unused once this is set.
-//
-// Call it before LoadSettings; LoadSettings is what builds the implementation, and it
-// runs again on every settings save.
-func (arena *Arena) SetLocalTeamNetwork(config network.LocalNetworkConfig) {
-	arena.localNetworkConfig = &config
+// teamNetwork is what the arena needs from the field switch. An interface only so tests
+// can substitute one; there is a single implementation, network.Switch, because there is a
+// single supported field: a Catalyst 3560-CX wired as the README describes.
+type teamNetwork interface {
+	ConfigureTeamEthernet(teams [6]*model.Team) error
+	GetStationForTeamId(teamId int) (string, error)
+	GetStationPortLinks() ([6]bool, error)
+	GetStatus() string
 }
 
+// Loads or reloads the event settings upon initial setup or change.
 func (arena *Arena) LoadSettings() error {
 	settings, err := arena.Database.GetEventSettings()
 	if err != nil {
@@ -184,21 +183,13 @@ func (arena *Arena) LoadSettings() error {
 		settings.NetworkSecurityEnabled,
 		accessPointWifiStatuses,
 	)
-	if arena.localNetworkConfig != nil {
-		// The DNS server is a per-field setting either way, so it stays in the database
-		// and is applied over whatever config.yaml supplied at startup.
-		localConfig := *arena.localNetworkConfig
-		localConfig.DnsServer = settings.SwitchDnsServer
-		arena.teamNetwork = network.NewLocalNetwork(localConfig)
-	} else {
-		arena.teamNetwork = network.NewSwitch(
-			network.SwitchConfig{
-				Address:   settings.SwitchAddress,
-				Password:  settings.SwitchPassword,
-				DnsServer: settings.SwitchDnsServer,
-			},
-		)
-	}
+	arena.teamNetwork = network.NewSwitch(
+		network.SwitchConfig{
+			Address:   settings.SwitchAddress,
+			Password:  settings.SwitchPassword,
+			DnsServer: settings.SwitchDnsServer,
+		},
+	)
 
 	if settings.FieldEStopPin != 0 {
 		panel, err := hardware.NewGpioFieldEStopPanel("gpiochip0", settings.FieldEStopNcPin, settings.FieldEStopPin)
@@ -1112,13 +1103,7 @@ func (arena *Arena) pollStationPortLinks() {
 	if arena.MatchState != PreMatch {
 		return
 	}
-	reporter, ok := arena.teamNetwork.(network.StationLinkReporter)
-	if !ok {
-		// team_network_driver: local, which cannot see the station ports.
-		return
-	}
-
-	links, err := reporter.GetStationPortLinks()
+	links, err := arena.teamNetwork.GetStationPortLinks()
 	if err != nil {
 		// Logged only on the transition. An unconfigured switch would otherwise report
 		// the same thing every thirty seconds for as long as the field runs.

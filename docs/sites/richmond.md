@@ -11,7 +11,7 @@ Copy this file when standing up another site and change the values.
 |---|---|
 | Stations | 4 — R1, R2, R3, B1 |
 | Site number | 1 (team subnets on `10.0.100.0/24` management) |
-| Team networks | `team_network_driver: switch` — the switch routes and serves DHCP |
+| Team networks | The switch routes and serves DHCP; bioarena configures it |
 
 B2 and B3 need **BYP** checked in Match Play, since bioarena always thinks in six
 stations.

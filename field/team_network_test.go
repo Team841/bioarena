@@ -15,7 +15,7 @@ import (
 	"github.com/team841/bioarena/model"
 )
 
-// fakeTeamNetwork records what would have been applied to the wired network.
+// fakeTeamNetwork records what would have been applied to the switch.
 type fakeTeamNetwork struct {
 	mutex       sync.Mutex
 	applied     [][6]*model.Team
@@ -24,6 +24,12 @@ type fakeTeamNetwork struct {
 	station     string
 	stationErr  error
 	statusValue string
+	links       [6]bool
+	linksErr    error
+}
+
+func (f *fakeTeamNetwork) GetStationPortLinks() ([6]bool, error) {
+	return f.links, f.linksErr
 }
 
 func (f *fakeTeamNetwork) ConfigureTeamEthernet(teams [6]*model.Team) error {
@@ -47,23 +53,11 @@ func (f *fakeTeamNetwork) GetStatus() string {
 	return f.statusValue
 }
 
-// fakeLinkReporter is a team network that can also report driver station port link, as the
-// switch does and the local network cannot.
-type fakeLinkReporter struct {
-	fakeTeamNetwork
-	links [6]bool
-	err   error
-}
-
-func (f *fakeLinkReporter) GetStationPortLinks() ([6]bool, error) {
-	return f.links, f.err
-}
-
 // A laptop in the wrong station never gets an address, so it never connects, so no
 // wrong-station check can fire. Link state is what catches it.
 func TestPollStationPortLinks(t *testing.T) {
 	arena := setupTestArena(t)
-	reporter := &fakeLinkReporter{links: [6]bool{true, false, false, true, false, false}}
+	reporter := &fakeTeamNetwork{links: [6]bool{true, false, false, true, false, false}}
 	arena.teamNetwork = reporter
 
 	arena.pollStationPortLinks()
@@ -78,7 +72,7 @@ func TestPollStationPortLinks(t *testing.T) {
 // information nobody is looking at.
 func TestPollStationPortLinksSkippedDuringMatch(t *testing.T) {
 	arena := setupTestArena(t)
-	arena.teamNetwork = &fakeLinkReporter{links: [6]bool{true, true, true, true, true, true}}
+	arena.teamNetwork = &fakeTeamNetwork{links: [6]bool{true, true, true, true, true, true}}
 
 	for _, state := range []MatchState{TeleopPeriod, FreePractice, PostMatch} {
 		arena.MatchState = state
@@ -91,12 +85,12 @@ func TestPollStationPortLinksSkippedDuringMatch(t *testing.T) {
 // same complaint every thirty seconds for as long as the field runs.
 func TestPollStationPortLinksForgetsOnError(t *testing.T) {
 	arena := setupTestArena(t)
-	reporter := &fakeLinkReporter{links: [6]bool{true, false, false, false, false, false}}
+	reporter := &fakeTeamNetwork{links: [6]bool{true, false, false, false, false, false}}
 	arena.teamNetwork = reporter
 	arena.pollStationPortLinks()
 	assert.True(t, arena.stationLinksKnown.Load())
 
-	reporter.err = fmt.Errorf("connection refused")
+	reporter.linksErr = fmt.Errorf("connection refused")
 	arena.pollStationPortLinks()
 	assert.False(t, arena.stationLinksKnown.Load())
 }
@@ -188,16 +182,6 @@ func TestRegisterStagingTeamSkippedDuringMatch(t *testing.T) {
 
 	assert.Equal(t, "", arena.registerStagingTeam(841, 0))
 	assert.Nil(t, arena.AllianceStations["R1"].Team)
-}
-
-// The local team network cannot see individual station ports, so it reports nothing rather
-// than guessing.
-func TestPollStationPortLinksSkippedWithoutReporter(t *testing.T) {
-	arena := setupTestArena(t)
-	arena.teamNetwork = &fakeTeamNetwork{}
-
-	arena.pollStationPortLinks()
-	assert.False(t, arena.stationLinksKnown.Load())
 }
 
 // lastApplied reports the most recent configuration, waiting briefly for the background

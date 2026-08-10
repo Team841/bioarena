@@ -18,7 +18,6 @@ import (
 
 	"github.com/team841/bioarena/field"
 	"github.com/team841/bioarena/hardware"
-	"github.com/team841/bioarena/network"
 	"github.com/team841/bioarena/web"
 	"gopkg.in/yaml.v3"
 )
@@ -31,30 +30,20 @@ type EStopPanelConfig struct {
 	Host string `yaml:"host"`
 }
 
-// LocalNetworkConfig holds the settings for team_network_driver: local, where this host
-// applies the team subnets itself rather than pushing them to a Layer 3 switch.
-type LocalNetworkConfig struct {
-	TrunkInterface  string `yaml:"trunk_interface"`
-	DnsmasqConfPath string `yaml:"dnsmasq_conf_path"`
-	DnsmasqService  string `yaml:"dnsmasq_service"`
-}
-
 // Config is the in-memory representation of config.yaml.
 type Config struct {
-	AutoDurationSec             int                `yaml:"auto_duration_seconds"`
-	PauseDurationSec            int                `yaml:"pause_duration_seconds"`
-	TeleopDurationSec           int                `yaml:"teleop_duration_seconds"`
-	WarningRemainingDurationSec int                `yaml:"warning_remaining_seconds"`
-	HttpPort                    int                `yaml:"http_port"`
-	NetworkSecurityEnabled      bool               `yaml:"network_security_enabled"`
-	TeamNetworkDriver           string             `yaml:"team_network_driver"`
-	LocalNetwork                LocalNetworkConfig `yaml:"local_network"`
-	FieldLightsDriver           string             `yaml:"field_lights_driver"`
-	FieldLightsPort             string             `yaml:"field_lights_port"`
-	FieldLightsBaud             int                `yaml:"field_lights_baud"`
-	FieldLightsCommand          string             `yaml:"field_lights_command"`
-	RedEStopPanel               EStopPanelConfig   `yaml:"red_estop_panel"`
-	BlueEStopPanel              EStopPanelConfig   `yaml:"blue_estop_panel"`
+	AutoDurationSec             int              `yaml:"auto_duration_seconds"`
+	PauseDurationSec            int              `yaml:"pause_duration_seconds"`
+	TeleopDurationSec           int              `yaml:"teleop_duration_seconds"`
+	WarningRemainingDurationSec int              `yaml:"warning_remaining_seconds"`
+	HttpPort                    int              `yaml:"http_port"`
+	NetworkSecurityEnabled      bool             `yaml:"network_security_enabled"`
+	FieldLightsDriver           string           `yaml:"field_lights_driver"`
+	FieldLightsPort             string           `yaml:"field_lights_port"`
+	FieldLightsBaud             int              `yaml:"field_lights_baud"`
+	FieldLightsCommand          string           `yaml:"field_lights_command"`
+	RedEStopPanel               EStopPanelConfig `yaml:"red_estop_panel"`
+	BlueEStopPanel              EStopPanelConfig `yaml:"blue_estop_panel"`
 }
 
 func defaultConfig() *Config {
@@ -63,9 +52,9 @@ func defaultConfig() *Config {
 		PauseDurationSec:            3,
 		TeleopDurationSec:           140,
 		WarningRemainingDurationSec: 30,
-		HttpPort:           8080,
-		FieldLightsBaud:    9600,
-		FieldLightsCommand: "START\n",
+		HttpPort:                    8080,
+		FieldLightsBaud:             9600,
+		FieldLightsCommand:          "START\n",
 
 		// On unless config.yaml says otherwise. A key absent from the file leaves this
 		// default in place, so a Pi carrying an older config.yaml still configures the
@@ -117,28 +106,6 @@ func buildFieldLights(cfg *Config) hardware.FieldLights {
 	default:
 		log.Fatalf("unknown field_lights_driver: %q", cfg.FieldLightsDriver)
 		return nil
-	}
-}
-
-// applyTeamNetworkDriver selects where the per-match team subnets are applied. "switch"
-// pushes them to a Layer 3 Cisco over Telnet; "local" applies them on this host with VLAN
-// subinterfaces and dnsmasq, which asks nothing of the switch beyond carrying tagged
-// frames.
-func applyTeamNetworkDriver(arena *field.Arena, cfg *Config) {
-	switch cfg.TeamNetworkDriver {
-	case "", "switch":
-		return
-	case "local":
-		arena.SetLocalTeamNetwork(
-			network.LocalNetworkConfig{
-				TrunkInterface:  cfg.LocalNetwork.TrunkInterface,
-				DnsmasqConfPath: cfg.LocalNetwork.DnsmasqConfPath,
-				DnsmasqService:  cfg.LocalNetwork.DnsmasqService,
-			},
-		)
-		log.Println("Team networks applied locally: VLAN subinterfaces and dnsmasq on this host.")
-	default:
-		log.Fatalf("unknown team_network_driver: %q (expected \"switch\" or \"local\")", cfg.TeamNetworkDriver)
 	}
 }
 
@@ -197,11 +164,6 @@ func main() {
 	if err = arena.Database.UpdateEventSettings(arena.EventSettings); err != nil {
 		log.Fatalln("Error saving config to DB:", err)
 	}
-
-	// Where the team subnets get applied is a property of the field's hardware, not
-	// something to change mid-event, so it lives in config.yaml rather than the Settings
-	// page. Must precede LoadSettings, which builds the implementation.
-	applyTeamNetworkDriver(arena, cfg)
 
 	if err = arena.LoadSettings(); err != nil {
 		log.Fatalln("Error reloading settings:", err)
