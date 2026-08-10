@@ -104,14 +104,34 @@ ssh "$REMOTE" '
 	mkdir -p ~/.local/bin ~/.config/autostart
 	install -m 755 ~/bioarena-kiosk.sh ~/.local/bin/bioarena-kiosk.sh
 	rm -f ~/bioarena-kiosk.sh
+	KIOSK="$HOME/.local/bin/bioarena-kiosk.sh"
+
+	# Every autostart mechanism the Pi desktop might be using, because they disagree and
+	# the wrong one fails by simply never running: an XDG entry under a compositor that
+	# ignores XDG looks exactly like a broken script.
 	{
 		echo "[Desktop Entry]"
 		echo "Type=Application"
 		echo "Name=Bioarena field"
 		echo "Comment=Open the field controller full screen at startup"
-		echo "Exec=$HOME/.local/bin/bioarena-kiosk.sh"
+		echo "Exec=$KIOSK"
 		echo "X-GNOME-Autostart-enabled=true"
 	} > ~/.config/autostart/bioarena-kiosk.desktop
+
+	# labwc, the Trixie default, runs its own shell script and ignores XDG entries.
+	if command -v labwc >/dev/null 2>&1; then
+		mkdir -p ~/.config/labwc
+		touch ~/.config/labwc/autostart
+		grep -q bioarena-kiosk ~/.config/labwc/autostart || echo "$KIOSK &" >> ~/.config/labwc/autostart
+		chmod +x ~/.config/labwc/autostart
+	fi
+
+	# wayfire, the Bookworm default on a Pi 4, takes an [autostart] section in its ini.
+	if command -v wayfire >/dev/null 2>&1; then
+		touch ~/.config/wayfire.ini
+		grep -q "^\[autostart\]" ~/.config/wayfire.ini || echo "[autostart]" >> ~/.config/wayfire.ini
+		grep -q bioarena-kiosk ~/.config/wayfire.ini || sed -i "/^\[autostart\]/a bioarena = $KIOSK" ~/.config/wayfire.ini
+	fi
 '
 echo "      the display will open http://localhost:8080 at login"
 
