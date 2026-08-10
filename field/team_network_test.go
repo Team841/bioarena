@@ -26,10 +26,26 @@ type fakeTeamNetwork struct {
 	statusValue string
 	links       [6]bool
 	linksErr    error
+	cycled      []int
 }
 
 func (f *fakeTeamNetwork) GetStationPortLinks() ([6]bool, error) {
 	return f.links, f.linksErr
+}
+
+func (f *fakeTeamNetwork) CycleStationPort(station int) error {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+	f.cycled = append(f.cycled, station)
+	return nil
+}
+
+// cycledPorts reports the stations whose ports were cycled, waiting briefly for the
+// background goroutine that does it.
+func (f *fakeTeamNetwork) cycledPorts() []int {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+	return append([]int(nil), f.cycled...)
 }
 
 func (f *fakeTeamNetwork) ConfigureTeamEthernet(teams [6]*model.Team) error {
@@ -68,17 +84,22 @@ func TestPollStationPortLinks(t *testing.T) {
 	assert.True(t, arena.AllianceStations["B1"].PortLinked.Load())
 }
 
-// Setup only: during a match this would open a Telnet session every thirty seconds for
-// information nobody is looking at.
+// Not during a match: this reads the switch every thirty seconds and can cycle a port,
+// neither of which belongs anywhere near a running match. Free practice does poll, because
+// that is where a driver station most often needs rescuing.
 func TestPollStationPortLinksSkippedDuringMatch(t *testing.T) {
 	arena := setupTestArena(t)
 	arena.teamNetwork = &fakeTeamNetwork{links: [6]bool{true, true, true, true, true, true}}
 
-	for _, state := range []MatchState{TeleopPeriod, FreePractice, PostMatch} {
+	for _, state := range []MatchState{StartMatch, WarmupPeriod, AutoPeriod, PausePeriod, TeleopPeriod, PostMatch} {
 		arena.MatchState = state
 		arena.pollStationPortLinks()
 		assert.False(t, arena.stationLinksKnown.Load(), "state %d", state)
 	}
+
+	arena.MatchState = FreePractice
+	arena.pollStationPortLinks()
+	assert.True(t, arena.stationLinksKnown.Load(), "free practice should poll")
 }
 
 // An unreadable switch must not leave stale link state on display, and must not log the
@@ -93,6 +114,87 @@ func TestPollStationPortLinksForgetsOnError(t *testing.T) {
 	reporter.linksErr = fmt.Errorf("connection refused")
 	arena.pollStationPortLinks()
 	assert.False(t, arena.stationLinksKnown.Load())
+}
+
+// The driver station releases its address when a match ends and then waits for something
+// to change before asking for another, so a station sits with a cable, a team, and no
+// driver station until someone replugs it. Cycling the port is that change.
+func TestRecoverMissingDriverStation(t *testing.T) {
+	arena, fake := setupTeamNetworkTestArena(t)
+	assert.NoError(t, arena.EnterFreePractice())
+	assert.NoError(t, arena.SetFreePracticeSlot("R2", 841, "key"))
+	fake.links = [6]bool{false, true, false, false, false, false}
+
+	arena.pollStationPortLinks()
+
+	assert.Eventually(
+		t,
+		func() bool { return len(fake.cycledPorts()) == 1 },
+		2*time.Second,
+		5*time.Millisecond,
+		"R2 should have had its port cycled",
+	)
+	assert.Equal(t, 1, fake.cycledPorts()[0], "R2 is the second station")
+}
+
+// Narrow on purpose: nothing is wrong with a station that has no team, no cable, or a
+// working driver station, and cycling its port would break a connection rather than fix one.
+func TestRecoverMissingDriverStationLeavesHealthyStations(t *testing.T) {
+	arena, fake := setupTeamNetworkTestArena(t)
+	assert.NoError(t, arena.EnterFreePractice())
+
+	// R1: no team, but a cable.
+	// R2: a team, no cable.
+	assert.NoError(t, arena.SetFreePracticeSlot("R2", 841, "key"))
+	fake.links = [6]bool{true, false, false, false, false, false}
+
+	arena.pollStationPortLinks()
+	time.Sleep(50 * time.Millisecond)
+	assert.Empty(t, fake.cycledPorts())
+}
+
+// A laptop with its driver station software closed would otherwise have its port cycled
+// every time round.
+func TestRecoverMissingDriverStationCooldown(t *testing.T) {
+	arena, fake := setupTeamNetworkTestArena(t)
+	assert.NoError(t, arena.EnterFreePractice())
+	assert.NoError(t, arena.SetFreePracticeSlot("R2", 841, "key"))
+	fake.links = [6]bool{false, true, false, false, false, false}
+
+	arena.pollStationPortLinks()
+	assert.Eventually(
+		t,
+		func() bool { return len(fake.cycledPorts()) == 1 },
+		2*time.Second,
+		5*time.Millisecond,
+	)
+
+	arena.pollStationPortLinks()
+	time.Sleep(50 * time.Millisecond)
+	assert.Len(t, fake.cycledPorts(), 1, "the cooldown should have held the second attempt")
+
+	// Past the cooldown it tries again, because the station is still broken.
+	arena.lastPortBounce[1] = time.Now().Add(-2 * portBounceCooldown)
+	arena.pollStationPortLinks()
+	assert.Eventually(
+		t,
+		func() bool { return len(fake.cycledPorts()) == 2 },
+		2*time.Second,
+		5*time.Millisecond,
+	)
+}
+
+// Never during a match: cycling a port mid-match would disconnect a driving robot.
+func TestRecoverMissingDriverStationSkippedDuringMatch(t *testing.T) {
+	arena, fake := setupTeamNetworkTestArena(t)
+	assert.NoError(t, arena.EnterFreePractice())
+	assert.NoError(t, arena.SetFreePracticeSlot("R2", 841, "key"))
+	fake.links = [6]bool{false, true, false, false, false, false}
+	arena.MatchState = TeleopPeriod
+
+	arena.pollStationPortLinks()
+	time.Sleep(50 * time.Millisecond)
+	assert.Empty(t, fake.cycledPorts())
 }
 
 // A controller that has just started is otherwise inert: nothing configures the field

@@ -468,6 +468,35 @@ func (sw *Switch) applyBaseline() error {
 	return nil
 }
 
+// CycleStationPort shuts and reopens one station's driver station port.
+//
+// This exists to rescue a driver station that released its address and did not ask for
+// another. The driver station releases on the match-end transition by its own logic, and
+// Windows then sits there unaddressed until something changes -- replugging the cable
+// works, and so does this, because the link event is what prompts it to re-request.
+func (sw *Switch) CycleStationPort(station int) error {
+	sw.mutex.Lock()
+	defer sw.mutex.Unlock()
+
+	if sw.address == "" {
+		return errSwitchNotConfigured
+	}
+
+	var only [6]bool
+	only[station] = true
+
+	if _, err := sw.runConfigCommand(portCommands(only, "shutdown")); err != nil {
+		return fmt.Errorf("shutting %s: %w", dsPortInterfaces[station], err)
+	}
+	time.Sleep(sw.configPauseDuration)
+	if _, err := sw.runConfigCommand(portCommands(only, "no shutdown")); err != nil {
+		// Leaving a station's port down is worse than never having touched it, so this
+		// failure is reported loudly rather than folded into the caller's silence.
+		return fmt.Errorf("reopening %s: %w", dsPortInterfaces[station], err)
+	}
+	return nil
+}
+
 // portCommands builds an interface block applying the given verb to each selected
 // station's driver station port.
 func portCommands(stations [6]bool, verb string) string {

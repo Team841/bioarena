@@ -735,8 +735,19 @@ behind it, it does *not* happen when Clear Match tears the network down, and it 
 happen when a robot is e-stopped at the end of a match — the same network treatment, a
 different internal state.
 
-Expect a few seconds of "No DS" after every match. It is worth recognising because it looks
-exactly like a field fault, and chasing it through switch logs finds nothing.
+It does not recover on its own. Windows releases the address and then waits for something
+to change before asking for another — `ipconfig /renew` on the laptop brings it straight
+back, and so does replugging the cable, because the link event is what prompts it.
+
+So the field does that for you. Every thirty seconds, outside a match, a station that has a
+team, a cable, and no driver station has its port cycled once, which produces the link event
+and the laptop re-requests. A station with no team, no cable, or a working driver station is
+left alone, and a sixty-second cooldown keeps a laptop with its driver station software
+closed from being cycled repeatedly.
+
+Expect up to half a minute of "No DS" after a match before it comes back by itself. It is
+worth recognising because it looks exactly like a field fault, and chasing it through switch
+logs finds nothing.
 
 The one thing the field can do to make it worse is reconfigure while the driver station is
 mid-renew. `preLoadNextMatch` runs five seconds after a match ends and rebuilds for the

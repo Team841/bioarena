@@ -32,7 +32,12 @@ const (
 	preLoadNextMatchDelaySec = 5
 	scheduledBreakDelaySec   = 5
 	earlyLateThresholdMin    = 2.5
-	MaxMatchGapMin           = 20
+
+	// portBounceCooldown bounds how often a station's port can be cycled to rescue a
+	// missing driver station. Long enough that a laptop with its driver station software
+	// closed is not cycled repeatedly, short enough to be worth waiting for.
+	portBounceCooldown = 60 * time.Second
+	MaxMatchGapMin     = 20
 )
 
 // Progression of match states.
@@ -50,20 +55,20 @@ const (
 )
 
 type Arena struct {
-	Database           *model.Database
-	EventSettings      *model.EventSettings
-	accessPoint        network.AccessPoint
-	teamNetwork        teamNetwork
-	Plc                plc.Plc
-	FieldLights        hardware.FieldLights
-	Leds               *led.Controller
-	hubLedFallback     led.Fallback
-	EStopPanels        []hardware.EStopPanel
-	FieldEStop         hardware.FieldEStopPanel
-	AutoWinner         hardware.Alliance
-	AutoWinnerMode     AutoWinnerMode
-	GameData           string
-	AllianceStations   map[string]*AllianceStation
+	Database         *model.Database
+	EventSettings    *model.EventSettings
+	accessPoint      network.AccessPoint
+	teamNetwork      teamNetwork
+	Plc              plc.Plc
+	FieldLights      hardware.FieldLights
+	Leds             *led.Controller
+	hubLedFallback   led.Fallback
+	EStopPanels      []hardware.EStopPanel
+	FieldEStop       hardware.FieldEStopPanel
+	AutoWinner       hardware.Alliance
+	AutoWinnerMode   AutoWinnerMode
+	GameData         string
+	AllianceStations map[string]*AllianceStation
 	ArenaNotifiers
 	MatchState
 	lastMatchState       MatchState
@@ -87,6 +92,7 @@ type Arena struct {
 	fieldEStopFault           atomic.Uint32   // hardware.FaultKind of the field e-stop; FaultNone when healthy
 	fieldDisabled             atomic.Bool     // operator halt: robots disabled, field networking untouched
 	stationLinksKnown         atomic.Bool     // true once the switch has reported driver station port links
+	lastPortBounce            [6]time.Time    // when each station's port was last cycled to rescue a driver station
 	stationDetectorOverride   stationDetector // nil in production; injected in tests
 }
 
@@ -156,6 +162,7 @@ type teamNetwork interface {
 	ConfigureTeamEthernet(teams [6]*model.Team) error
 	GetStationForTeamId(teamId int) (string, error)
 	GetStationPortLinks() ([6]bool, error)
+	CycleStationPort(station int) error
 	GetStatus() string
 }
 
@@ -1100,7 +1107,8 @@ func (arena *Arena) runPeriodicTasks() {
 // switch every thirty seconds for information nobody is looking at, and the wiring is
 // settled by then anyway.
 func (arena *Arena) pollStationPortLinks() {
-	if arena.MatchState != PreMatch {
+	// Never during a match: this reads the switch, and the recovery below cycles ports.
+	if arena.MatchState != PreMatch && arena.MatchState != FreePractice {
 		return
 	}
 	links, err := arena.teamNetwork.GetStationPortLinks()
@@ -1118,6 +1126,43 @@ func (arena *Arena) pollStationPortLinks() {
 	}
 	arena.stationLinksKnown.Store(true)
 	arena.ArenaStatusNotifier.Notify()
+
+	arena.recoverMissingDriverStations(links)
+}
+
+// recoverMissingDriverStations cycles the port of any station that has a team, has a cable,
+// and has no driver station.
+//
+// The driver station releases its address on the match-end transition -- its own logic, not
+// anything the field does -- and Windows then waits for something to change before asking
+// for another. Replugging the cable works because the link event is what prompts it. So
+// does this.
+//
+// Deliberately narrow: a station with no team, no cable, or a working driver station is
+// left alone, and the cooldown keeps a laptop with its driver station software closed from
+// having its port cycled every time round.
+func (arena *Arena) recoverMissingDriverStations(links [6]bool) {
+	for i, station := range stationOrder {
+		allianceStation := arena.AllianceStations[station]
+		if allianceStation.Team == nil || allianceStation.DsConn != nil || !links[i] {
+			continue
+		}
+		if time.Since(arena.lastPortBounce[i]) < portBounceCooldown {
+			continue
+		}
+		arena.lastPortBounce[i] = time.Now()
+
+		log.Printf(
+			"%s has a cable and Team %d registered but no driver station; cycling its port to prompt a renewal.",
+			station,
+			allianceStation.Team.Id,
+		)
+		go func(index int, name string) {
+			if err := arena.teamNetwork.CycleStationPort(index); err != nil {
+				log.Printf("Could not cycle the %s port: %v", name, err)
+			}
+		}(i, station)
+	}
 }
 
 // trussLightWarningSequence generates the sequence of truss light states during the "sonar ping" warning sound. It
