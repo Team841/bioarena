@@ -6,8 +6,8 @@
 ! Port map -- see docs/sites/richmond.md:
 !
 !   Gi0/1-6    driver stations R1, R2, R3, B1, B2, B3   access vlan 10/20/30/40/50/60
-!   Gi0/7      field access point                       trunk, native vlan 100
-!   Gi0/8      field controller Pi (FMS, 10.0.100.5)    access vlan 100
+!   Gi0/7      field controller Pi (FMS, 10.0.100.5)    trunk, native vlan 100
+!   Gi0/8      field access point                       trunk, native vlan 100
 !   Gi0/9      Art-Net node (10.0.100.100)              access vlan 100
 !   Gi0/10-12  spare, for troubleshooting               access vlan 100
 !
@@ -118,15 +118,16 @@ interface GigabitEthernet0/6
 ! anything. No "switchport trunk encapsulation dot1q": the 3560-CX is 802.1Q-only and does
 ! not have the command.
 interface GigabitEthernet0/7
- description Field access point
+ description Field controller Pi (FMS)
  switchport trunk native vlan 100
  switchport trunk allowed vlan 10,20,30,40,50,60,100
  switchport mode trunk
 !
 interface GigabitEthernet0/8
- description Field controller Pi (FMS)
- switchport access vlan 100
- switchport mode access
+ description Field access point
+ switchport trunk native vlan 100
+ switchport trunk allowed vlan 10,20,30,40,50,60,100
+ switchport mode trunk
 !
 interface GigabitEthernet0/9
  description Art-Net node
