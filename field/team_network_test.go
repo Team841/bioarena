@@ -101,6 +101,36 @@ func TestPollStationPortLinksForgetsOnError(t *testing.T) {
 	assert.False(t, arena.stationLinksKnown.Load())
 }
 
+// A controller that has just started is otherwise inert: nothing configures the field
+// until someone loads a match, so the switch has no VLANs, a driver station plugged into
+// it gets no address, and it cannot register itself.
+func TestStartupConfiguresTheField(t *testing.T) {
+	arena, fake := setupTeamNetworkTestArena(t)
+
+	// What Run does before entering its loop, which a test cannot call directly.
+	arena.setupNetwork(arena.currentTeams(), false)
+
+	assert.Eventually(
+		t,
+		func() bool { return fake.applyCount() > 0 },
+		2*time.Second,
+		5*time.Millisecond,
+		"the field should be configured at startup, not on the first match load",
+	)
+}
+
+func TestCurrentTeams(t *testing.T) {
+	arena, _ := setupTeamNetworkTestArena(t)
+	assert.Equal(t, [6]*model.Team{}, arena.currentTeams())
+
+	assert.NoError(t, arena.EnterFreePractice())
+	assert.NoError(t, arena.SetFreePracticeSlot("R3", 841, "key"))
+
+	teams := arena.currentTeams()
+	assert.Equal(t, 841, teams[2].Id, "R3 is the third station")
+	assert.Nil(t, teams[0])
+}
+
 // A laptop on a staging network says which team it is, and its address says which port it
 // is in — the only identification that survives driver stations being shared between teams.
 func TestRegisterStagingTeam(t *testing.T) {

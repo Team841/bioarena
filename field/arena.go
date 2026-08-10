@@ -275,17 +275,7 @@ func (arena *Arena) LoadMatch(match *model.Match) error {
 		return err
 	}
 
-	arena.setupNetwork(
-		[6]*model.Team{
-			arena.AllianceStations["R1"].Team,
-			arena.AllianceStations["R2"].Team,
-			arena.AllianceStations["R3"].Team,
-			arena.AllianceStations["B1"].Team,
-			arena.AllianceStations["B2"].Team,
-			arena.AllianceStations["B3"].Team,
-		},
-		false,
-	)
+	arena.setupNetwork(arena.currentTeams(), false)
 
 	// Reset the arena state.
 	arena.soundsPlayed = make(map[*game.MatchSound]struct{})
@@ -353,17 +343,7 @@ func (arena *Arena) SubstituteTeams(red1, red2, red3, blue1, blue2, blue3 int) e
 	arena.CurrentMatch.Blue1 = blue1
 	arena.CurrentMatch.Blue2 = blue2
 	arena.CurrentMatch.Blue3 = blue3
-	arena.setupNetwork(
-		[6]*model.Team{
-			arena.AllianceStations["R1"].Team,
-			arena.AllianceStations["R2"].Team,
-			arena.AllianceStations["R3"].Team,
-			arena.AllianceStations["B1"].Team,
-			arena.AllianceStations["B2"].Team,
-			arena.AllianceStations["B3"].Team,
-		},
-		false,
-	)
+	arena.setupNetwork(arena.currentTeams(), false)
 	arena.MatchLoadNotifier.Notify()
 
 	if arena.CurrentMatch.Type != model.Test {
@@ -661,6 +641,15 @@ func (arena *Arena) Run() {
 	go arena.accessPoint.Run()
 	go arena.Plc.Run()
 
+	// Configure the field for whatever is loaded, rather than waiting for someone to load
+	// a match. A controller that has just started is otherwise inert: the switch has no
+	// VLANs, so a driver station plugged into it gets no address and cannot register
+	// itself, and the badges report UNKNOWN because nothing has been attempted.
+	//
+	// In a goroutine because the access point takes seconds to answer and the arena loop
+	// below should not wait for it.
+	go arena.setupNetwork(arena.currentTeams(), false)
+
 	ticker := time.NewTicker(time.Millisecond * arenaLoopPeriodMs)
 	defer ticker.Stop()
 	for range ticker.C {
@@ -799,6 +788,16 @@ func (arena *Arena) preLoadNextMatch() {
 		}
 	}
 	arena.setupNetwork(teams, true)
+}
+
+// currentTeams is the team in each alliance station, in station order, which is what the
+// network drivers take.
+func (arena *Arena) currentTeams() [6]*model.Team {
+	var teams [6]*model.Team
+	for i, station := range stationOrder {
+		teams[i] = arena.AllianceStations[station].Team
+	}
+	return teams
 }
 
 // Asynchronously reconfigures the networking hardware for the new set of teams.
@@ -1605,11 +1604,7 @@ func (arena *Arena) registerTeamAtStation(teamId int, station string) error {
 	}
 	arena.setMatchTeam(station, teamId)
 
-	arena.setupNetwork([6]*model.Team{
-		arena.AllianceStations["R1"].Team, arena.AllianceStations["R2"].Team,
-		arena.AllianceStations["R3"].Team, arena.AllianceStations["B1"].Team,
-		arena.AllianceStations["B2"].Team, arena.AllianceStations["B3"].Team,
-	}, false)
+	arena.setupNetwork(arena.currentTeams(), false)
 	arena.MatchLoadNotifier.Notify()
 	arena.ArenaStatusNotifier.Notify()
 	if arena.CurrentMatch.Type != model.Test {
