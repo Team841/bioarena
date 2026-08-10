@@ -64,6 +64,18 @@ func defaultConfig() *Config {
 	}
 }
 
+// retiredConfigKeys are settings this version no longer has. They are ignored with a
+// warning rather than rejected, because the file on a field Pi outlives the binary: a
+// setting removed here would otherwise stop the field from starting after a deploy, and
+// the operator would be reading a YAML error at the moment they wanted a match.
+//
+// A key that was never valid still fails. The point of the strict decode is catching
+// typos, and a typo is not the same thing as a setting that has been retired.
+var retiredConfigKeys = map[string]string{
+	"team_network_driver": "the field is always configured through the switch",
+	"local_network":       "the Pi-routed team network was removed",
+}
+
 // loadConfig reads config.yaml. If the file is absent, defaults are returned.
 // Unknown keys produce a fatal error to catch typos early.
 func loadConfig(path string) (*Config, error) {
@@ -76,12 +88,42 @@ func loadConfig(path string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	data, err = stripRetiredKeys(data)
+	if err != nil {
+		return nil, err
+	}
+
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true) // error on unrecognized keys — catches typos
 	if err = dec.Decode(cfg); err != nil {
 		return nil, err
 	}
 	return cfg, nil
+}
+
+// stripRetiredKeys removes settings this version has dropped, naming each one so the
+// operator learns it is being ignored rather than silently obeyed.
+func stripRetiredKeys(data []byte) ([]byte, error) {
+	var raw map[string]any
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		// Malformed YAML: leave it to the strict decode below, whose error message points
+		// at the line.
+		return data, nil
+	}
+
+	stripped := false
+	for key, reason := range retiredConfigKeys {
+		if _, present := raw[key]; present {
+			log.Printf("config.yaml: ignoring retired setting %q — %s. Remove it to silence this.", key, reason)
+			delete(raw, key)
+			stripped = true
+		}
+	}
+	if !stripped {
+		return data, nil
+	}
+	return yaml.Marshal(raw)
 }
 
 // buildFieldLights constructs the FieldLights driver from config.

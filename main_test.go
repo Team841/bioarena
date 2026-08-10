@@ -47,6 +47,31 @@ func TestLoadConfigUnknownKey(t *testing.T) {
 	assert.Contains(t, err.Error(), "auto_duraton_seconds")
 }
 
+// A config.yaml on a field Pi outlives the binary. A setting this version has dropped must
+// not stop the field from starting, or a deploy strands the operator reading a YAML error
+// at the moment they wanted a match.
+func TestLoadConfigRetiredKeyIgnored(t *testing.T) {
+	yaml := "auto_duration_seconds: 25\nteam_network_driver: switch\nlocal_network:\n  trunk_interface: eth0\n"
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	assert.Nil(t, os.WriteFile(path, []byte(yaml), 0644))
+
+	cfg, err := loadConfig(path)
+	assert.Nil(t, err)
+	assert.Equal(t, 25, cfg.AutoDurationSec, "the rest of the file still applies")
+}
+
+// A key that was never valid still fails: the strict decode is there to catch typos, and a
+// typo is not a retired setting.
+func TestLoadConfigRetiredKeysDoNotExcuseTypos(t *testing.T) {
+	yaml := "team_network_driver: switch\nauto_duraton_seconds: 20\n" // intentional typo
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	assert.Nil(t, os.WriteFile(path, []byte(yaml), 0644))
+
+	_, err := loadConfig(path)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "auto_duraton_seconds")
+}
+
 func TestLoadConfigFieldLightsDefaults(t *testing.T) {
 	cfg, err := loadConfig(filepath.Join(t.TempDir(), "nonexistent.yaml"))
 	assert.Nil(t, err)
