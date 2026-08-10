@@ -169,19 +169,26 @@ write. Carrying a database over from another Pi means chowning it the same way.
 
 **Faster deploys**
 
-The steps above are what a deploy does; [deploy-pi.ps1](deploy-pi.ps1) does them for you.
-The common case is a code change with no asset change, so that is the default and it copies
-one file:
+The steps above are what a deploy does; [deploy-pi.sh](deploy-pi.sh) and
+[deploy-pi.ps1](deploy-pi.ps1) do them for you — the same script for Git Bash and for
+PowerShell. The common case is a code change with no asset change, so that is the default
+and it copies one file:
 
-```powershell
-.\deploy-pi.ps1
+```bash
+./deploy-pi.sh
 ```
 
+```bash
+./deploy-pi.sh --assets              # static/ or templates/ changed too
+./deploy-pi.sh --assets --service    # and bioarena.service
+./deploy-pi.sh --target 10.2.100.5   # another site
+./deploy-pi.sh --panel 10.0.100.11   # an e-stop panel Pi instead
+```
+
+In PowerShell the same flags are `-Assets`, `-Service`, `-Target`, `-Panel`:
+
 ```powershell
-.\deploy-pi.ps1 -Assets            # static/ or templates/ changed too
-.\deploy-pi.ps1 -Assets -Service   # and bioarena.service
-.\deploy-pi.ps1 -Target 10.2.100.5 # another site
-.\deploy-pi.ps1 -Panel 10.0.100.11 # an e-stop panel Pi instead
+.\deploy-pi.ps1 -Assets -Service
 ```
 
 It builds, stops the service, copies, makes the binary executable, starts it, and reports
