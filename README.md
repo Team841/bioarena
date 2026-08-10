@@ -128,6 +128,16 @@ The service runs as a system account with no login, so a field controller does n
 on which username the SD card was flashed with. It installs to `/opt/bioarena` and writes
 `event.db`, `logs/` and `db/backups/` there.
 
+**The display opens the field automatically.** The deploy installs a kiosk autostart entry
+for your login user, so a Pi with a monitor logs in, waits for the service to answer, and
+opens `http://localhost:8080` full screen. It waits rather than racing: the desktop session
+comes up before bioarena has finished configuring the switch, and a browser that opened
+first would sit on a connection error.
+
+Needs a desktop image and Chromium (`sudo apt install chromium`), and auto-login enabled in
+`raspi-config` if you want it without a keyboard. On a headless Pi the entry is simply never
+read. Turn it off by deleting `~/.config/autostart/bioarena-kiosk.desktop`.
+
 **Set up key authentication first**, or every deploy asks for a password several times. On
 your development machine:
 

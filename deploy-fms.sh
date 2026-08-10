@@ -34,7 +34,7 @@ step=0
 announce() {
 	step=$((step + 1))
 	echo ""
-	echo "[$step/4] $1"
+	echo "[$step/5] $1"
 }
 
 fail() {
@@ -93,6 +93,27 @@ ssh -t "$REMOTE" "
 	rm -rf ~/$STAGING
 "
 echo "      installed to /opt/bioarena"
+
+announce "Installing the kiosk browser autostart"
+# Into the login user's home, because it runs in their desktop session rather than as the
+# service. Harmless on a headless Pi: the autostart entry is simply never read.
+scp -q docs/kiosk/bioarena-kiosk.sh "$REMOTE:~/bioarena-kiosk.sh"
+# Single-quoted so $HOME is the Pi's, not this machine's.
+ssh "$REMOTE" '
+	set -e
+	mkdir -p ~/.local/bin ~/.config/autostart
+	install -m 755 ~/bioarena-kiosk.sh ~/.local/bin/bioarena-kiosk.sh
+	rm -f ~/bioarena-kiosk.sh
+	{
+		echo "[Desktop Entry]"
+		echo "Type=Application"
+		echo "Name=Bioarena field"
+		echo "Comment=Open the field controller full screen at startup"
+		echo "Exec=$HOME/.local/bin/bioarena-kiosk.sh"
+		echo "X-GNOME-Autostart-enabled=true"
+	} > ~/.config/autostart/bioarena-kiosk.desktop
+'
+echo "      the display will open http://localhost:8080 at login"
 
 announce "Checking it stayed up"
 sleep 2
