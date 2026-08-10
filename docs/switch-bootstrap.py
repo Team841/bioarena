@@ -38,6 +38,11 @@ DEFAULT_MASK = "255.255.255.0"
 DEFAULT_HOSTNAME = "FieldSwitch"
 READ_TIMEOUT_SEC = 5
 
+# "dir /recursive" walks the whole flash, and "write memory" erases and rewrites it,
+# answering with progress dots for as long as it takes. Both routinely outlast the default.
+DIR_TIMEOUT_SEC = 30
+WRITE_TIMEOUT_SEC = 60
+
 
 def open_port(device, baud=9600):
     """Open the console at 9600 8N1, no flow control -- Cisco's console defaults."""
@@ -65,6 +70,11 @@ def read_until_idle(fd, idle_sec=0.6, timeout_sec=READ_TIMEOUT_SEC):
     configuration proceeds, an unconfigured switch may be offering its setup dialog, and
     "write memory" answers with progress dots. Idleness is the one signal that means the
     same thing in every state.
+
+    The timeout is a backstop for a switch that never stops talking, not a budget for how
+    long a command may take -- a command that hits it returns truncated output, which for
+    "dir" means not finding the image and skipping the boot setting without saying so.
+    Slow commands are given their own.
     """
     output = ""
     deadline = time.time() + timeout_sec
@@ -78,16 +88,49 @@ def read_until_idle(fd, idle_sec=0.6, timeout_sec=READ_TIMEOUT_SEC):
                 last_data = time.time()
                 continue
         if time.time() - last_data >= idle_sec:
-            break
+            return output
+    print("  WARNING: the switch was still talking after %ds; output may be truncated." % timeout_sec)
     return output
 
 
-def send(fd, line, echo=True):
+# IOS reports a rejected command in its output and carries on, so nothing fails visibly
+# unless the output is read. These are the openings of its complaints.
+ERROR_MARKERS = (
+    "% Invalid input",
+    "% Incomplete command",
+    "% Ambiguous command",
+    "% Unknown command",
+    "% Bad",
+    "% Error",
+)
+
+
+def report_errors(line, output):
+    """Print any complaint the switch made about a command, and report whether it did."""
+    failed = False
+    for reply in output.splitlines():
+        reply = reply.strip()
+        if any(reply.startswith(marker) for marker in ERROR_MARKERS):
+            print("  REJECTED: %s" % (line if line else "<enter>"))
+            print("            %s" % reply)
+            failed = True
+    return failed
+
+
+def send(fd, line, echo=True, timeout_sec=READ_TIMEOUT_SEC):
     os.write(fd, (line + "\r").encode())
-    output = read_until_idle(fd)
+    output = read_until_idle(fd, timeout_sec=timeout_sec)
     if echo and line:
         print("  %s" % line)
+    if report_errors(line, output):
+        # Not fatal: a switch that rejects one line usually accepts the rest, and stopping
+        # here would leave it half configured with no record of how far it got. The count
+        # is reported at the end so a bootstrap that did not fully take says so.
+        send.rejections += 1
     return output
+
+
+send.rejections = 0
 
 
 def find_boot_image(fd):
@@ -96,13 +139,35 @@ def find_boot_image(fd):
     A switch whose BOOT variable is unset stops at the boot loader on every power cycle,
     which reads as a dead switch on the morning of a practice session.
     """
-    output = send(fd, "dir /recursive flash:", echo=False)
-    images = re.findall(r"\S+\.bin", output)
-    if not images:
-        return None
-    image = images[0]
-    directories = re.findall(r"\s(\S*%s)\s" % re.escape(image), output)
-    return directories[0] if directories else image
+    # Slow on a full flash, and truncating it means silently skipping the boot setting --
+    # which surfaces as a switch that stops at the boot loader on some later power cycle.
+    output = send(fd, "dir /recursive flash:", echo=False, timeout_sec=DIR_TIMEOUT_SEC)
+    return parse_boot_image(output)
+
+
+def parse_boot_image(output):
+    """Find the IOS image in "dir /recursive flash:" output, with its directory.
+
+    The image is usually inside a directory named for it, and the listing names that
+    directory in a header line rather than beside the file:
+
+        Directory of flash:/c3560cx-universalk9-mz.152-7.E/
+           3  -rwx  24582144  Jun 2 2004  c3560cx-universalk9-mz.152-7.E.bin
+
+    Taking the filename alone yields a path that does not exist, and "boot system" accepts
+    it without complaint until the next reboot stops at the boot loader.
+    """
+    directory = ""
+    for line in output.splitlines():
+        header = re.search(r"Directory of flash:/?(\S*)", line)
+        if header:
+            directory = header.group(1).strip("/")
+            continue
+        image = re.search(r"(\S+\.bin)\b", line)
+        if image:
+            name = image.group(1)
+            return "%s/%s" % (directory, name) if directory else name
+    return None
 
 
 def bootstrap(fd, args):
@@ -153,12 +218,19 @@ def bootstrap(fd, args):
     send(fd, "end", echo=False)
 
     print("Saving...")
-    send(fd, "write memory", echo=False)
+    send(fd, "write memory", echo=False, timeout_sec=WRITE_TIMEOUT_SEC)
 
     print("")
+    if send.rejections:
+        print("%d command(s) were rejected -- see REJECTED above." % send.rejections)
+        print("The switch is partly configured. Fix the cause and run this again; it is")
+        print("safe to repeat.")
+        return 1
+
     print("Done. The switch answers Telnet at %s." % args.address)
     print("Enter that address and the password under Arena > Settings; bioarena applies")
     print("the VLANs, station ports, trunks and routing itself on the next match load.")
+    return 0
 
 
 def main():
@@ -185,7 +257,7 @@ def main():
         )
 
     try:
-        bootstrap(fd, args)
+        sys.exit(bootstrap(fd, args))
     finally:
         os.close(fd)
 
