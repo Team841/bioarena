@@ -10,7 +10,7 @@ Copy this file when standing up another site and change the values.
 | | |
 |---|---|
 | Stations | 4 — R1, R2, R3, B1 |
-| Site number | 1 (team subnets on `10.0.100.0/24` management) |
+| Management subnet | `10.0.100.0/24`, on VLAN 1 |
 | Team networks | The switch routes and serves DHCP; bioarena configures it |
 
 B2 and B3 need **BYP** checked in Match Play, since bioarena always thinks in six
@@ -28,14 +28,15 @@ stations.
 
 ## Hardware
 
-**Switch — Catalyst 3560-CX**, IP Base, hostname `ChezySwitch`, management `10.0.100.3`.
+**Switch — Catalyst 3560-CX**, IP Base, hostname `RichmondSwitch`, management `10.0.100.3`
+on VLAN 1.
 Boot image lives in `flash:c3560cx-universalk9-mz.152-7.E/`, with `boot system` set so it
 does not stop at the boot loader.
 
-The AP is the only trunk. The VH-113 tags each team's SSID onto that team's VLAN, so
+Both Gi0/7 and Gi0/8 are trunks. The VH-113 tags each team's SSID onto that team's VLAN, so
 VLANs 10–60 have to reach it — an access port there leaves every robot associated to WiFi
-and unable to reach anything. The Pi needs only VLAN 100; with the `switch` driver it does
-no routing, so it sits on an access port like any other field device.
+and unable to reach anything. The Pi takes its management address untagged on the native
+VLAN, so a trunk serves it identically to an access port and both ends match.
 
 | Port | Role | Mode |
 |------|------|------|
@@ -45,10 +46,10 @@ no routing, so it sits on an access port like any other field device.
 | Gi0/4 | B1 driver station | access vlan 40 |
 | Gi0/5 | B2 driver station | access vlan 50 |
 | Gi0/6 | B3 driver station | access vlan 60 |
-| Gi0/7 | VH-113 AP | trunk, native vlan 100 |
-| Gi0/8 | Field controller Pi | access vlan 100 |
-| Gi0/9 | Art-Net node | access vlan 100 |
-| Gi0/10–12 | spare, for troubleshooting | access vlan 100 |
+| Gi0/7 | Field controller Pi | trunk, native vlan 1 |
+| Gi0/8 | VH-113 AP | trunk, native vlan 1 |
+| Gi0/9 | Art-Net node | access vlan 1 |
+| Gi0/10–12 | spare, for troubleshooting | access vlan 1 |
 
 Gi0/1–6 are not a site choice. [`dsPortInterfaces`](../../network/switch.go) hardcodes them
 in station order and shuts and reopens each one around a VLAN change, which is what makes a
@@ -58,10 +59,10 @@ previous match's address.
 B2 and B3 have ports and VLANs but no driver stations yet; a station with no team gets no
 subnet, so VLANs 50 and 60 stay dark until one is registered.
 
-Baseline to load before bioarena connects: [switch_config.txt](../../switch_config.txt),
-which is written for exactly this port map. Re-export the running config whenever the map
-changes — a backup that no longer matches the field restores cleanly and then fails in
-ways that look like cabling.
+Nothing here is configured by hand. [docs/switch-bootstrap.py](../switch-bootstrap.py)
+brings the switch to the point bioarena can reach it, and bioarena pushes the VLANs, ports,
+portfast and routing on its first configuration.
+[switch_config.txt](../../switch_config.txt) records what the result looks like.
 
 **Access point — Vivid-Hosting VH-113.** No API password; the practice firmware exposes no
 token, so **AP Password** under Arena → Settings is blank.
@@ -73,6 +74,10 @@ Arena → Settings → LEDs.
 
 ## Notes
 
-Driver station laptops are statically addressed at present. `10.TE.AM.5` is the address to
-use — station detection looks for exactly that, and both DHCP implementations reserve
-`.1`–`.19` so it never collides with a pool.
+Driver station laptops take their addresses from the switch. Plugging one into any station
+port registers its team there: it gets a staging address, its driver station announces the
+team number, and bioarena rebuilds that station onto the team's own subnet.
+
+A laptop used for both driving and development ends up on the field and on WiFi at once,
+and the field's DHCP hands out a default route to a network with no way off it. Raise the
+metric on its wired adapter or unplug it before expecting the internet to work.

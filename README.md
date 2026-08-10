@@ -95,101 +95,38 @@ Check which you need with `uname -m` on the Pi: `aarch64` for the default, `armv
 the override. The wrong one does not fail informatively — the Pi reports
 `cannot execute binary file: Exec format error`.
 
-**Create the service account (once per Pi)**
-
-Bioarena runs as a dedicated system account and installs to `/opt/bioarena`, so the
-deployment does not depend on which login user the SD card was flashed with. Run on the
-Pi, replacing `<USER>` with your login name:
-
-```bash
-sudo useradd --system --home-dir /opt/bioarena --shell /usr/sbin/nologin bioarena
-sudo mkdir -p /opt/bioarena
-sudo chown -R bioarena:bioarena /opt/bioarena
-sudo chmod 2775 /opt/bioarena
-sudo usermod -aG bioarena <USER>
-```
-
-Log out and back in for the group to take effect. `2775` is setgid and group-writable, so
-your login user can `scp` straight into `/opt/bioarena` and the files land in the
-`bioarena` group.
-
-**Copy files to the Pi**
-
-If bioarena is already installed, stop it first — Linux refuses to overwrite a running
-executable, and `scp` reports that as a bare `Failure`:
-
-```bash
-ssh <USER>@<PI_IP> "sudo systemctl stop bioarena"
-```
-
-```bash
-scp bioarena-pi <USER>@<PI_IP>:/opt/bioarena/
-scp -r static templates <USER>@<PI_IP>:/opt/bioarena/
-scp bioarena.service <USER>@<PI_IP>:~/
-```
-
-Keep the `bioarena-pi` filename — `bioarena.service` runs
-`/opt/bioarena/bioarena-pi`, so renaming it on copy leaves the service unable to
-start.
-
-Then make the binary executable:
-
-```bash
-chmod +x /opt/bioarena/bioarena-pi
-```
-
-**Leave the copied files owned by your login user.** The service only needs to read the
-binary and the assets; the files it writes — `event.db`, `logs/`, `db/backups/` — it
-creates itself and therefore already owns. Chowning the deploy artifacts to `bioarena`
-gains nothing and breaks the next deploy: `scp` overwrites a file by opening it for
-writing, so a file owned by the service account with mode 644 refuses the write no matter
-what the directory permissions say. The error is `dest open ... Permission denied`, which
-reads like a directory problem and is not one.
-
-If a previous deploy did chown them, undo it once:
-
-```bash
-sudo chown -R <USER>:bioarena /opt/bioarena
-sudo chown bioarena:bioarena /opt/bioarena/event.db
-```
-
-`event.db` stays with the service account because that is the one file bioarena must
-write. Carrying a database over from another Pi means chowning it the same way.
-
-**Deploying**
-
-Two scripts, one per kind of Pi. Both take the address and work out the rest.
+**Deploy**
 
 ```bash
 ./deploy-fms.sh 10.0.100.5
 ```
 
-```bash
-./deploy-panel.sh 10.0.100.11 red
-./deploy-panel.sh 10.0.100.12 blue
-```
+That is the whole thing. It builds, creates the `bioarena` service account and
+`/opt/bioarena` if this Pi has never been deployed to, copies the binary and the web
+assets, installs and enables the service, starts it, and checks it stayed up. Nothing is
+optional and nothing is remembered between runs, because a deploy that needs you to
+remember a flag eventually goes out missing a file.
 
-The panel script needs the alliance because a panel Pi is not interchangeable: it takes the
-static address the field controller polls for that alliance, and it writes that address into
-the service file for you. Getting it wrong by hand puts two panels on one address.
+Safe to run repeatedly, and safe on a Pi that has never seen bioarena, so "run it again" is
+always a reasonable answer. A failed step stops the run and names itself, leaving the Pi on
+whatever it was running before; a service that starts and then dies prints its last twenty
+log lines.
 
-Each script does everything, every time — builds, creates the service account if that Pi has
-never been deployed to, copies the binary and the assets, installs the service, starts it,
-and confirms it stayed up. There are no flags for which parts to copy, because a deploy that
-needs you to remember a flag eventually goes out missing a file. They are safe to run
-repeatedly and safe to run on a Pi that has never seen bioarena, so "run it again" is always
-a reasonable answer.
-
-If a step fails the script stops there and says which one, leaving the Pi running whatever
-it was running before. If the service starts and then dies, it prints the last twenty log
-lines rather than making you go looking.
-
-Add a login user as the last argument if you do not log in as `admin`:
+Add your login user if it is not `admin`:
 
 ```bash
 ./deploy-fms.sh 10.0.100.5 sam
-./deploy-panel.sh 10.0.100.11 red sam
 ```
+
+Panels take the alliance as well — see [Field hardware](#field-hardware):
+
+```bash
+./deploy-panel.sh 10.0.100.11 red
+```
+
+The service runs as a system account with no login, so a field controller does not depend
+on which username the SD card was flashed with. It installs to `/opt/bioarena` and writes
+`event.db`, `logs/` and `db/backups/` there.
 
 **Set up key authentication first**, or every deploy asks for a password several times. On
 your development machine:
@@ -210,24 +147,18 @@ cat ~/.ssh/id_ed25519.pub | ssh <USER>@10.0.100.5 "mkdir -p ~/.ssh && cat >> ~/.
 
 After that a deploy is one command and no prompts.
 
-**Install the systemd service (run on the Pi)**
+**What the service does at startup**
 
-```bash
-sudo mv ~/bioarena.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable bioarena
-sudo systemctl start bioarena
-```
+`bioarena.service` is installed by the deploy script, so there is nothing to move by hand.
+Confirm what is installed with `systemctl cat bioarena`. Before starting the binary it:
 
-The service file is **moved**, not copied, so it ends up at
-`/etc/systemd/system/bioarena.service` and will not be found in `/opt/bioarena/`. Confirm
-it is installed with:
+- assigns `10.0.100.5/24` to `eth0` — the address driver stations are hardcoded to look for
+- assigns `192.168.69.5/24` as well, so the access point is reachable where it lives
+- routes `10.0.0.0/8` and `172.16.0.0/12` via the switch, so replies to driver stations on
+  team and staging subnets have a way back
 
-```bash
-systemctl cat bioarena
-```
-
-The service automatically assigns `10.0.100.5/24` to `eth0` on startup.
+Each is prefixed `-` in the unit, so a restart with the addresses already present carries
+on rather than failing.
 
 **Open the web UI**
 
@@ -249,38 +180,34 @@ This mirrors a competition field: **driver station laptops are wired**, **robots
 wireless** through their own radios.
 
 ```
-                        ┌─────────────────────────────────────┐
-                        │   Cisco L3 Managed Switch            │
-                        │                                       │
-          ┌─────────────┤ Access ports      6 x access ports   │
-          │             │ (Pi, AP)          (one per station)   │
-          │             └──────────────────────┬────────────────┘
-          │                                    │ (wired)
-    ┌─────┴──────┐                      ┌──────┴─────────────┐
-    │ Raspberry  │                      │  DS Laptops        │
-    │ Pi 4       │                      │  (one per station) │
-    │ 10.0.100.5 │                      │  10.TE.AM.5        │
-    └─────┬──────┘                      └────────────────────┘
-          │
-          │ (HTTP to AP, Telnet to switch)
-          │
-    ┌─────┴────────────┐
-    │ Vivid-Hosting    │
-    │ VH-113 AP        │
-    │ (OpenWRT)        │
-    └─────┬────────────┘
-          │ (WiFi — one SSID per team, named for the team number)
-          │
-    ┌─────┴──────────────┐
-    │  Robot radios      │
-    │  (VH-109)          │
-    │  10.TE.AM.xx       │
-    └────────────────────┘
+                        Catalyst 3560-CX
+   ┌──────────────────────────────────────────────────────────────┐
+   │  Gi0/1-6                          Gi0/7          Gi0/8       │
+   │  access, VLAN 10..60              trunk          trunk       │
+   └─────┬───────────────────────────────┬──────────────┬─────────┘
+         │ one per station               │              │
+         │                               │              │
+ ┌───────┴────────────┐      ┌───────────┴──────┐  ┌────┴──────────────┐
+ │ DS laptops         │      │ Raspberry Pi 4   │  │ VH-113 AP         │
+ │ one per station    │      │ FMS 10.0.100.5   │  │ 192.168.69.1      │
+ │ 10.TE.AM.20-.199   │      │ and 192.168.69.5 │  └────┬──────────────┘
+ │ (DHCP from switch) │      └──────────────────┘       │
+ └────────────────────┘                                 │ WiFi, one SSID
+                                                        │ per team
+                                              ┌─────────┴────────┐
+                                              │ Robot radios     │
+                                              │ VH-109           │
+                                              │ 10.TE.AM.x       │
+                                              └──────────────────┘
 ```
 
 Each station's laptop and its robot land on the same VLAN and team subnet — the laptop
 over its wired port, the robot over WiFi. Sharing a subnet is what lets the driver
 station find the roboRIO by mDNS, which does not cross subnet boundaries.
+
+The switch routes between those team subnets and the FMS, and serves each of them a DHCP
+scope, so a laptop needs no configuration at all: plug it in, and it is addressed and
+registered to whichever station it is plugged into.
 
 ### Step 1 — Assign a static IP to the Pi
 
@@ -881,37 +808,21 @@ Build and deploy:
 ./build-pi.sh          # produces estop-panel-pi alongside bioarena-pi
 ```
 
-On the panel Pi, once: create the same service account as the field controller but with
-`/opt/estop-panel`, and add it to the `gpio` group so it can read the pins.
+Deploy it the same way as the field controller, with the alliance:
 
 ```bash
-sudo useradd --system --home-dir /opt/estop-panel --shell /usr/sbin/nologin bioarena
-sudo usermod -aG gpio bioarena
-sudo mkdir -p /opt/estop-panel
-sudo chown -R bioarena:bioarena /opt/estop-panel
-sudo chmod 2775 /opt/estop-panel
-sudo usermod -aG bioarena <USER>
+./deploy-panel.sh 10.0.100.11 red
 ```
-
-Then deploy:
 
 ```bash
-scp estop-panel-pi <USER>@10.0.100.11:/opt/estop-panel/estop-panel
-scp estop-panel.yaml <USER>@10.0.100.11:/opt/estop-panel/
-# Edit ExecStartPre IP in estop-panel.service, then:
-scp cmd/estop-panel/estop-panel.service <USER>@10.0.100.11:~/
-# On the panel Pi:
-chmod +x /opt/estop-panel/estop-panel
-sudo mv ~/estop-panel.service /etc/systemd/system/
-sudo systemctl daemon-reload && sudo systemctl enable --now estop-panel
+./deploy-panel.sh 10.0.100.12 blue
 ```
 
-As on the field controller, leave the copied files owned by your login user — the panel
-only reads them, and chowning them to the service account makes the next `scp` fail.
-
-The `gpio` group membership is the one that bites: without it the panel starts, logs that
-it cannot open the GPIO chip, and reports no stops — a field that looks fine and has no
-working e-stops.
+The alliance is required because a panel Pi is not interchangeable: the script writes that
+alliance's static address into the service file, creates the service account, and puts it
+in the `gpio` group. That last one is what bites when it is done by hand — without it the
+panel starts, logs that it cannot open the GPIO chip, and reports no stops, which is a
+field that looks fine and has no working e-stops.
 
 Wire the main bioarena to the panel by adding to `config.yaml` and restarting:
 
