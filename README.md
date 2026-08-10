@@ -275,34 +275,56 @@ Do not put the Pi on a robot subnet (`10.TE.AM.x`). Use a dedicated management s
 
 ### Step 2 — Configure the managed switch
 
-Bioarena reconfigures the switch over Telnet at every match load. You do the one-time
-setup by hand; bioarena does the per-match VLAN and DHCP work.
+**Nobody configures this switch by hand.** Bioarena owns its configuration: the VLAN
+database, the station and trunk ports, portfast, `ip routing`, and the per-match VLANs and
+DHCP pools. What a person does is wire it and run one script.
 
 **Switch requirements.** Bioarena issues six concurrent SVIs with IP addresses and six
 DHCP pools, so the switch must be Layer 3 capable with the IOS DHCP server — a
-3550/3560/3750-class unit. A 2960 will not work: it allows only one active SVI, and the
-LAN Lite images have no DHCP server.
+3550/3560/3750-class unit, IP Base rather than LAN Base. A 2960 will not work: it allows
+only one active SVI, and the LAN Lite images have no DHCP server. Check with
+`show version` before wiring a field around one.
 
-One-time setup:
+**Wire it like this.** These are the only decisions left to a person, because the code
+assumes them:
 
-1. Enable Telnet on the VTY lines with a password (`transport input telnet`). Recent IOS
-   images ship SSH-only or with the lines unconfigured.
-2. **Set the enable password to the same value as the VTY password.** Bioarena has a
-   single password field and sends it for both. Different passwords fail silently: it
-   authenticates to the VTY line, never reaches privileged mode, and every configuration
-   command is discarded with no error.
-3. Create VLANs 10, 20, 30, 40, 50, 60 (one per alliance station).
-4. Set the Pi's port as a trunk carrying all VLANs.
-5. **Wire the driver stations to `GigabitEthernet0/1` through `0/6`, in station order:**
-   R1, R2, R3, B1, B2, B3. Set each as an access port in that station's VLAN. This wiring
-   is assumed by the code, not configured — bioarena shuts and reopens these ports around
-   a VLAN change, so a station wired elsewhere gets its VLAN rebuilt without its port ever
-   being cycled.
-6. Put the Pi and the access point on trunk ports above those six, carrying all VLANs.
-7. Enable `ip routing`.
+| Port | Role |
+|------|------|
+| `GigabitEthernet0/1`–`0/6` | Driver stations, in station order: R1, R2, R3, B1, B2, B3 |
+| `GigabitEthernet0/7` | Raspberry Pi |
+| `GigabitEthernet0/8` | Vivid-Hosting VH-113 access point |
 
-The switch address and password are the only switch settings in the web UI, under
-**Arena → Settings**.
+**Then bootstrap it over the console.** A switch out of the box has no address and no
+password, so nothing can reach it over the network — that part is console-only by
+definition. [docs/switch-bootstrap.py](docs/switch-bootstrap.py) does it without anyone
+composing IOS:
+
+```bash
+scp docs/switch-bootstrap.py <USER>@10.0.100.5:~/
+```
+
+```bash
+sudo python3 ~/switch-bootstrap.py --password <SWITCH_PASSWORD> --hostname RichmondSwitch
+```
+
+That sets the management address (`10.0.100.3` by default), the enable and VTY passwords to
+the same value, enables Telnet, points the boot loader at the installed IOS image so the
+switch stops halting at the `switch:` prompt, and saves. Run it again any time; it changes
+nothing the second time.
+
+**Then enter the address and password** under **Arena → Settings**. They are the only
+switch settings in the web UI. On its first configuration bioarena pushes the standing
+configuration — VLANs named per station, the six access ports with portfast, the two
+trunks carrying all six VLANs, `ip routing` — and saves it, so a power cycle brings the
+switch back ready to run a field on its own.
+
+That saving happens once, before any team is on the field. Bioarena never writes the
+configuration later, and neither should you: doing it mid-session bakes whichever teams
+were loaded into the startup config, and their DHCP pools come back after every reboot as
+state nobody put there.
+
+[switch_config.txt](switch_config.txt) records what the result looks like, for reference or
+for a switch you would rather set up by hand.
 
 Cycling a station's port is what makes its laptop re-request an address on the new subnet
 rather than keep the previous match's. Only the stations whose team changed are cycled, so
@@ -438,8 +460,8 @@ When a match loads, the controller pushes DHCP pool and IP configurations for ea
 
 #### Team networks on the Pi (Layer 2 switches)
 
-Everything above assumes a Layer 3 switch. If yours cannot route — a TP-Link
-smart switch, anything with one SVI and no DHCP server — the Pi can do that work instead.
+Everything above assumes a Layer 3 switch. If yours cannot route — anything with one SVI
+and no DHCP server — the Pi can do that work instead.
 Set in `config.yaml`:
 
 ```yaml
@@ -513,8 +535,9 @@ this is a practice-field arrangement, not a competition one.
 #### Half field on a Layer 2 switch
 
 A reduced-station field on an eight-port Layer 2 switch — four driver stations
-(R1, R2, R3, B1) with `team_network_driver: local` above. The worked example is a TP-Link
-TL-SG108E; any VLAN-capable switch follows the same shape.
+(R1, R2, R3, B1) with `team_network_driver: local` above. The port map below is the shape
+any VLAN-capable switch follows; port numbers and the names its firmware gives membership
+and PVID will differ.
 
 Both the Pi and the AP are trunks. The VH-113 tags each team's SSID onto that team's
 VLAN, so VLANs 10–60 have to reach it — an access port there leaves every robot
@@ -538,50 +561,27 @@ Bioarena still thinks in six stations: B2 and B3 need **BYP** checked in Match P
 match will not start. Nothing else needs configuring — a station with no team gets no
 subinterface and no DHCP scope, so VLANs 50 and 60 stay dark on their own.
 
-**First-time TL-SG108E configuration**
+Set the switch's own management address statically to `10.0.100.3/24`, matching the address
+reserved for the site switch above, and do that on an isolated link — smart switches
+generally ship on a default address that collides with the usual home router range.
 
-Do this on an isolated link, before the switch touches any other network — it ships on an
-address that collides with the usual home router range.
+**Layer 2 footguns**
 
-1. Laptop straight into any port, nothing else connected. Give the laptop a static
-   `192.168.0.100/24`; the switch runs no DHCP server. Browse to `http://192.168.0.1` and
-   log in with `admin`/`admin`. Recent firmware forces a password change here.
-2. **VLAN → 802.1Q VLAN** — enable it and create the station VLANs, with the membership in
-   the table above. Ports 1, 2, 7 and 8 stay untagged in VLAN 1.
-3. **VLAN → 802.1Q PVID Setting** — a different page. Set ports 3–6 to their station VLAN.
-4. **System → IP Setting** — static `10.0.100.3/24`, matching the address reserved for the
-   site switch above. This drops the web session; the switch answers on the new address
-   from then on.
-5. **System Tools → Backup and Restore** — export the configuration and keep the file.
-
-If the unit is second-hand and the password is unknown, hold the front-panel pinhole for
-5–10 seconds with the switch powered on, until the LEDs flash together. That restores
-`192.168.0.1` and `admin`/`admin`, and wipes everything else.
-
-**TL-SG108E footguns**
-
-- **PVID is a separate page, and it defaults to 1.** Membership is set under *802.1Q VLAN*;
-  the port's own VLAN is set under *802.1Q PVID Setting*. Set membership only and untagged
-  frames from the driver station laptops still land in VLAN 1 — they get no lease, while
-  the field badge stays green and the switch reports no error. If a station gets no
-  address, check its PVID before anything else.
-- **There is no console port, and the only recovery wipes the configuration.** Management
-  is over the network alone. Take the switch's own port out of the management VLAN and the
-  pinhole reset is the sole way back in, taking every VLAN with it. Leave port 1 untagged
-  in VLAN 1 while you work, and keep an exported backup once the field runs.
-- **Settings persist on *Apply*.** There is no separate save-to-flash step on this
-  firmware. Confirm it on your own unit with a power cycle before trusting a field to it.
-- **It ships on 192.168.0.1 with `admin`/`admin`.** That collides with the usual home
-  router range, which is often the network you are setting it up from. Configure it on an
-  isolated link, or move it off `192.168.0.x` before it ever joins one.
+- **Membership and PVID are usually two separate settings.** Set membership only and
+  untagged frames from the driver station laptops still land in the default VLAN — they get
+  no lease, while the field badge stays green and the switch reports no error. If a station
+  gets no address, check its PVID before anything else.
+- **Keep the management port reachable while you work.** On a unit with no console port,
+  moving the switch's own port out of the management VLAN can leave a factory reset as the
+  only way back in, taking every VLAN with it.
 - **Leave Switch Address blank** under **Arena → Settings**. There is nothing to Telnet.
   The badge reads `DISABLED` (blue) rather than red, which is the honest state — no switch
   configured, as opposed to a switch that cannot be reached.
 
-**Keep a switch backup per site.** Export from *System Tools → Backup and Restore* once the
-field works, and restore it after a factory reset rather than re-entering the VLAN tables
-by hand. Re-export whenever the port map changes: a backup that no longer matches the field
-restores cleanly and then fails in ways that look like cabling.
+**Keep a switch backup per site.** Export the configuration once the field works, and
+restore it after a factory reset rather than re-entering the VLAN tables by hand. Re-export
+whenever the port map changes: a backup that no longer matches the field restores cleanly
+and then fails in ways that look like cabling.
 
 Site records live in [docs/sites/](docs/sites) — one file per deployment, with its port
 map, addresses, and switch backup. [docs/sites/richmond.md](docs/sites/richmond.md) is a
@@ -1099,6 +1099,7 @@ kernel versions and hardware generations. Confirm on the Pi with `gpiodetect`, a
 - [docs/console.py](docs/console.py) — serial console for the field switch, standard library only; Linux and macOS.
 - [docs/99-bioarena-unmanaged.conf](docs/99-bioarena-unmanaged.conf) — NetworkManager drop-in keeping it away from the VLAN subinterfaces, required on Trixie and Bookworm with `team_network_driver: local`.
 - [docs/chrony-bioarena.conf](docs/chrony-bioarena.conf) — chrony drop-in making the Pi the field's time source, so switch and controller logs can be correlated.
+- [docs/switch-bootstrap.py](docs/switch-bootstrap.py) — brings a factory or reset Catalyst to the point bioarena can configure it over Telnet: address, passwords, boot image. Console cable, one command.
 - [docs/sites/](docs/sites) — one record per deployed field: addresses, switch port map, and switch backup. [richmond.md](docs/sites/richmond.md) is the example to copy.
 
 ## Contributing

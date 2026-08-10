@@ -18,8 +18,7 @@ import (
 // The work can live in either of two places. Switch pushes the configuration to a Layer 3
 // Cisco over Telnet, which is what a competition field uses. LocalNetwork does the same
 // job on the Pi with VLAN subinterfaces and dnsmasq, leaving the switch to carry tagged
-// frames and nothing else -- which any managed Layer 2 switch can do, including the
-// small TP-Link smart switches and other Layer 2 hardware.
+// frames and nothing else -- which any managed Layer 2 switch can do.
 type TeamNetwork interface {
 	// ConfigureTeamEthernet applies the given teams' subnets in station order
 	// (R1, R2, R3, B1, B2, B3). A nil entry leaves that station without a subnet.

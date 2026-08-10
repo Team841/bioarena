@@ -38,6 +38,16 @@ const (
 	blue3Vlan = 60
 )
 
+// switchTrunkInterfaces carry every VLAN: the Pi on the first, the access point on the
+// second. Both need all six team VLANs -- the access point tags each team's SSID onto that
+// team's VLAN, so an access port there leaves every robot associated and unable to reach
+// anything.
+var switchTrunkInterfaces = [2]string{"GigabitEthernet0/7", "GigabitEthernet0/8"}
+
+// vlanNames label the VLAN database, so "show vlan brief" on the switch reads as the field
+// rather than as VLAN0010 through VLAN0060.
+var vlanNames = [6]string{"Red1", "Red2", "Red3", "Blue1", "Blue2", "Blue3"}
+
 // Staging subnets keep an unregistered station usable: a laptop plugged into it still gets
 // an address and can still reach the FMS, so its driver station announces which team it
 // belongs to. Without them an unregistered station is a dead port, and a laptop in the
@@ -179,6 +189,15 @@ func (sw *Switch) ConfigureTeamEthernet(teams [6]*model.Team) error {
 	}
 
 	sw.setStatus("CONFIGURING")
+
+	// The standing configuration goes on once per run, alongside the full reconciliation
+	// that happens for the same reason: the switch outlives this process, and what it is
+	// holding cannot be assumed.
+	if full {
+		if err := sw.applyBaseline(); err != nil {
+			return sw.fail(err)
+		}
+	}
 
 	rebuild := [6]bool{}
 	for i := range rebuild {
@@ -364,6 +383,66 @@ func portNumericSuffix(name string) string {
 		return name[i:]
 	}
 	return ""
+}
+
+// baselineCommands builds the switch's standing configuration: the VLAN database, the
+// station and trunk ports, and routing between them. Everything a field needs that does
+// not change from match to match.
+//
+// Bioarena applies this itself so that setting up a switch is wiring plus a bootstrap
+// script, with nobody composing IOS by hand. It is idempotent -- every line states a
+// desired end state rather than a change -- so re-applying it costs nothing.
+func baselineCommands() string {
+	command := "ip routing\n"
+
+	for i, vlan := range vlanForStation {
+		command += fmt.Sprintf("vlan %d\nname %s\nexit\n", vlan, vlanNames[i])
+	}
+
+	// Access ports, one per station. Portfast matters more here than it looks: bioarena
+	// shuts and reopens these ports on every reconfiguration, and without it each one
+	// walks through spanning-tree convergence on the way back up, so the laptop's DHCP
+	// request goes out into a port that is not forwarding yet.
+	for i, port := range dsPortInterfaces {
+		command += fmt.Sprintf(
+			"interface %s\nswitchport mode access\nswitchport access vlan %d\n"+
+				"spanning-tree portfast\nno shutdown\nexit\n",
+			port, vlanForStation[i],
+		)
+	}
+
+	allowed := "1"
+	for _, vlan := range vlanForStation {
+		allowed += fmt.Sprintf(",%d", vlan)
+	}
+	for _, port := range switchTrunkInterfaces {
+		// No "switchport trunk encapsulation dot1q": a 3560-CX speaks only 802.1Q and
+		// rejects the command older platforms require.
+		command += fmt.Sprintf(
+			"interface %s\nswitchport mode trunk\nswitchport trunk allowed vlan %s\nno shutdown\nexit\n",
+			port, allowed,
+		)
+	}
+
+	return command
+}
+
+// applyBaseline pushes the standing configuration and saves it, so a power cycle brings the
+// switch back ready to run a field without bioarena having to be there.
+//
+// Saved here and only here. Writing the configuration later would bake in whichever teams
+// happened to be on the field at the time, and those pools would return after every reboot
+// as stale state -- a DHCP scope for a team that left, surfacing weeks later as an address
+// nobody can account for.
+func (sw *Switch) applyBaseline() error {
+	if _, err := sw.runConfigCommand(baselineCommands()); err != nil {
+		return fmt.Errorf("applying switch baseline: %w", err)
+	}
+	if _, err := sw.runCommand("write memory\n"); err != nil {
+		return fmt.Errorf("saving switch baseline: %w", err)
+	}
+	log.Println("Switch baseline configuration applied and saved.")
+	return nil
 }
 
 // portCommands builds an interface block applying the given verb to each selected
