@@ -72,6 +72,13 @@ ssh -t "$REMOTE" "
 	sudo mkdir -p /opt/bioarena
 	sudo chown bioarena:bioarena /opt/bioarena
 
+	# The directories the service writes into, owned by the service. It creates them
+	# itself on a clean install, but only if it can write to /opt/bioarena -- and a
+	# directory left owned by someone else makes match logging fail mid-match with a
+	# permission error, which is a poor time to find out.
+	sudo install -d -o bioarena -g bioarena /opt/bioarena/logs /opt/bioarena/db
+	[ -f /opt/bioarena/event.db ] && sudo chown bioarena:bioarena /opt/bioarena/event.db || true
+
 	# Stopped before the binary is replaced: Linux refuses to overwrite a running
 	# executable, and the error reads like a permissions problem.
 	sudo systemctl stop bioarena 2>/dev/null || true
