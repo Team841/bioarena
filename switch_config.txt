@@ -1,15 +1,25 @@
-! Baseline configuration for the Catalyst 3560-CX (12-port, IP Base). Load this into the
-! switch before pointing bioarena at it. Telnet password and enable secret are both
-! 1234Five; the same password goes in Switch Address / Switch Password under
-! Arena -> Settings.
+! Reference configuration for the Catalyst 3560-CX (12-port, IP Base): what a working field
+! switch looks like, recorded for comparison and for a switch you would rather set up by
+! hand.
+!
+! Setting one up does not need this file. docs/switch-bootstrap.py brings a factory switch
+! to the point bioarena can reach it -- address, passwords, boot image -- and bioarena
+! pushes the VLANs, ports, portfast and routing itself on its first configuration. Telnet
+! password and enable secret must match each other; the same value goes in Switch Password
+! under Arena -> Settings.
 !
 ! Port map -- see docs/sites/richmond.md:
 !
 !   Gi0/1-6    driver stations R1, R2, R3, B1, B2, B3   access vlan 10/20/30/40/50/60
-!   Gi0/7      field controller Pi (FMS, 10.0.100.5)    trunk, native vlan 100
-!   Gi0/8      field access point                       trunk, native vlan 100
-!   Gi0/9      Art-Net node (10.0.100.100)              access vlan 100
-!   Gi0/10-12  spare, for troubleshooting               access vlan 100
+!   Gi0/7      field controller Pi (FMS, 10.0.100.5)    trunk, native vlan 1
+!   Gi0/8      field access point                       trunk, native vlan 1
+!   Gi0/9      Art-Net node (10.0.100.100)              access vlan 1
+!   Gi0/10-12  spare, for troubleshooting               access vlan 1
+!
+! Management is VLAN 1, which is what the hardware runs: docs/switch-bootstrap.py sets the
+! address on interface Vlan1, and bioarena's baseline adds the access point's subnet there
+! as a secondary. A dedicated management VLAN would be tidier, but nothing here uses one
+! and a file that describes a field nobody has built is worse than an untidy one.
 !
 ! Gi0/1-6 are not arbitrary. network/switch.go hardcodes them as dsPortInterfaces in
 ! station order and shuts and reopens each one around a VLAN change, which is what makes a
@@ -79,9 +89,6 @@ vlan 50
 vlan 60
  name Blue3
 !
-vlan 100
- name Field
-!
 ! Driver stations. One access port per alliance station, in station order.
 interface GigabitEthernet0/1
  description R1 driver station
@@ -119,34 +126,34 @@ interface GigabitEthernet0/6
 ! not have the command.
 interface GigabitEthernet0/7
  description Field controller Pi (FMS)
- switchport trunk native vlan 100
- switchport trunk allowed vlan 10,20,30,40,50,60,100
+ switchport trunk native vlan 1
+ switchport trunk allowed vlan 1,10,20,30,40,50,60
  switchport mode trunk
 !
 interface GigabitEthernet0/8
  description Field access point
- switchport trunk native vlan 100
- switchport trunk allowed vlan 10,20,30,40,50,60,100
+ switchport trunk native vlan 1
+ switchport trunk allowed vlan 1,10,20,30,40,50,60
  switchport mode trunk
 !
 interface GigabitEthernet0/9
  description Art-Net node
- switchport access vlan 100
+ switchport access vlan 1
  switchport mode access
 !
 interface GigabitEthernet0/10
  description Spare
- switchport access vlan 100
+ switchport access vlan 1
  switchport mode access
 !
 interface GigabitEthernet0/11
  description Spare
- switchport access vlan 100
+ switchport access vlan 1
  switchport mode access
 !
 interface GigabitEthernet0/12
  description Spare
- switchport access vlan 100
+ switchport access vlan 1
  switchport mode access
 !
 ! Team SVIs. Placeholders only -- bioarena replaces the address on each one at match load,
@@ -175,8 +182,13 @@ interface Vlan60
  ip address 10.0.6.4 255.255.255.0
  ip access-group DS-FMS in
 !
-interface Vlan100
+! Management, and the access point's fixed subnet as a secondary. The VH-113 answers on
+! 192.168.69.1 and cannot be moved, so the field carries that subnet rather than the other
+! way round; the Pi holds 192.168.69.5 on the same VLAN, which is the address that actually
+! talks to it.
+interface Vlan1
  ip address 10.0.100.3 255.255.255.0
+ ip address 192.168.69.2 255.255.255.0 secondary
 !
 ip classless
 ip http server
