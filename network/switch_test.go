@@ -40,6 +40,10 @@ func TestConfigureSwitch(t *testing.T) {
 	assert.Contains(t, commands.at(2), "interface GigabitEthernet0/1\nshutdown\n")
 	assert.Equal(t, expectedResetCommand, commands.at(3))
 	assert.Contains(t, commands.at(4), "ip dhcp pool staging10\nnetwork 172.16.10.0 255.255.255.0\n")
+
+	// "lease 0 0 5" is five minutes. IOS reads a bare number as days, so "lease 5" would
+	// hold an address for five days that a laptop should keep for seconds.
+	assert.Contains(t, commands.at(4), "lease 0 0 5\n")
 	assert.Contains(t, commands.at(4), "interface Vlan60\nip address 172.16.60.1 255.255.255.0\n")
 	assert.Contains(t, commands.at(5), "interface GigabitEthernet0/1\nno shutdown\n")
 	assert.Equal(t, "ACTIVE", sw.Status)

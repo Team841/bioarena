@@ -72,10 +72,13 @@ const (
 // own address is, only that it can reach the FMS.
 const stagingSubnetPrefix = "172.16"
 
-// stagingLease is deliberately short. A laptop only holds a staging address until its team
-// is registered and the station is rebuilt, and the port cycling forces a renewal anyway;
-// this bounds the damage if it does not.
-const stagingLease = "5"
+// stagingLease is deliberately short: a laptop holds a staging address only until its team
+// is registered and the station is rebuilt beneath it.
+//
+// IOS reads "lease <n>" as n DAYS -- the syntax is "lease {days [hours [minutes]]}", so
+// five minutes is "0 0 5". Written as bare "5" this was a five-day lease on an address the
+// laptop should hold for seconds.
+const stagingLease = "0 0 5"
 
 // stagingSubnet returns the staging network for a VLAN: 172.16.<vlan>.0/24.
 func stagingSubnet(vlan int) string {
