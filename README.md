@@ -725,6 +725,25 @@ Match timing defaults (2026 REBUILT):
 | Pause   | 3 s      |
 | Teleop  | 140 s    |
 
+### Driver station behaviour worth knowing
+
+**The driver station releases its IP address when a match ends.** Its log shows
+`Warning 44000 ipconfig /release`, followed by lost communication with the robot and a
+brief FMS disconnect, and then it recovers on its own. This is the driver station's own
+state machine, not the field: it happens on the match-end transition with no network change
+behind it, it does *not* happen when Clear Match tears the network down, and it does *not*
+happen when a robot is e-stopped at the end of a match — the same network treatment, a
+different internal state.
+
+Expect a few seconds of "No DS" after every match. It is worth recognising because it looks
+exactly like a field fault, and chasing it through switch logs finds nothing.
+
+The one thing the field can do to make it worse is reconfigure while the driver station is
+mid-renew. `preLoadNextMatch` runs five seconds after a match ends and rebuilds for the
+next match's teams, cycling their station ports. With the same teams loaded the diff makes
+that a no-op; with a changed lineup it lands in the recovery window, and those stations take
+longer to come back.
+
 ### Running free practice
 
 Free practice has no timers: registered robots are drivable continuously until the
