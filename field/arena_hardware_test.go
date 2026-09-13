@@ -440,3 +440,36 @@ func TestFieldEStopMonitoredReflectsRealHardware(t *testing.T) {
 	assert.True(t, monitored.IsValid(), "arena status should carry FieldEStopMonitored")
 	assert.False(t, monitored.Bool())
 }
+
+// --- e-stop panel badges ---
+
+// statusPanel is an EStopPanel that also reports a status, standing in for a network panel.
+type statusPanel struct {
+	alliance string
+	status   string
+}
+
+func (p *statusPanel) Poll() []hardware.InputState { return nil }
+func (p *statusPanel) Alliance() string            { return p.alliance }
+func (p *statusPanel) Status() string              { return p.status }
+
+// The badges answer "is the panel on?" per alliance, in the same vocabulary as the access
+// point and switch so they share colours. An alliance with no panel reads DISABLED rather
+// than red: not configured is not the same as broken.
+func TestArenaStatusCarriesPanelStatusPerAlliance(t *testing.T) {
+	arena := setupTestArena(t)
+	arena.EStopPanels = []hardware.EStopPanel{
+		&statusPanel{alliance: "red", status: hardware.PanelStatusActive},
+	}
+
+	status := reflect.ValueOf(arena.generateArenaStatusMessage()).Elem()
+	assert.Equal(t, hardware.PanelStatusActive, status.FieldByName("RedPanelStatus").String())
+	assert.Equal(t, hardware.PanelStatusDisabled, status.FieldByName("BluePanelStatus").String(),
+		"no blue panel configured")
+
+	// A panel that does not report a status -- the plain interface -- has no badge to show,
+	// and must not be mistaken for the other alliance's.
+	arena.EStopPanels = append(arena.EStopPanels, &recordingPanel{})
+	status = reflect.ValueOf(arena.generateArenaStatusMessage()).Elem()
+	assert.Equal(t, hardware.PanelStatusDisabled, status.FieldByName("BluePanelStatus").String())
+}

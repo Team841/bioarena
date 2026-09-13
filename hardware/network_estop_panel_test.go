@@ -143,3 +143,38 @@ func TestNetworkEStopPanelUnknownAllianceDefaultsToBlue(t *testing.T) {
 	panel := NewNetworkEStopPanel("http://127.0.0.1:1", "")
 	assertAllFaulted(t, panel.Poll(), FaultUnreachable, "B1", "B2", "B3")
 }
+
+// --- status, for the operating page's badge ---
+
+// The badge is meant to answer "is the panel on?" at a glance, so it has to track every
+// outcome Poll can have, and start from a state that is neither.
+func TestNetworkEStopPanelStatusFollowsPolls(t *testing.T) {
+	inputs := []InputState{{Station: "B1", State: StopOK}}
+	srv := snapshotServer(t, PanelSnapshot{Alliance: "blue", AgeMs: 5, Inputs: inputs})
+	defer srv.Close()
+
+	panel := NewNetworkEStopPanel(srv.URL, "blue")
+	assert.Equal(t, "blue", panel.Alliance())
+	assert.Equal(t, PanelStatusUnknown, panel.Status(), "nothing has been polled yet")
+
+	panel.Poll()
+	assert.Equal(t, PanelStatusActive, panel.Status())
+
+	// Every failure path funnels through faulted(), so one is enough to prove the wiring.
+	srv.Close()
+	panel.Poll()
+	assert.Equal(t, PanelStatusError, panel.Status())
+}
+
+// A stale sample is a failure too: the panel's HTTP server is up but its sampler has
+// stalled, and a badge that stayed green there would be lying about the buttons.
+func TestNetworkEStopPanelStaleSampleIsError(t *testing.T) {
+	srv := snapshotServer(t, PanelSnapshot{
+		Alliance: "red", AgeMs: 5000, Inputs: []InputState{{Station: "R1", State: StopOK}},
+	})
+	defer srv.Close()
+
+	panel := NewNetworkEStopPanel(srv.URL, "red")
+	panel.Poll()
+	assert.Equal(t, PanelStatusError, panel.Status())
+}

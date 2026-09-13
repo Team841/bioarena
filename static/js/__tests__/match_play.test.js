@@ -79,6 +79,8 @@ function buildDom() {
     ).join("")}
     <button id="btnRegister" disabled></button>
     <button id="btnResetField"></button>
+    <span id="redPanelStatus"></span>
+    <span id="bluePanelStatus"></span>
   `;
 }
 

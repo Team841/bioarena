@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -24,8 +25,45 @@ const maxSnapshotAge = 250 * time.Millisecond
 // match on.
 type NetworkEStopPanel struct {
 	url      string
+	alliance string
 	stations [3]string
 	client   *http.Client
+
+	// status is the outcome of the most recent Poll, for the badge on the operating page.
+	// Poll already fails closed by synthesising faults, so the field is safe either way;
+	// this exists so an operator can see at a glance that a panel is up, rather than
+	// inferring it from three stations that have not faulted.
+	status atomic.Value // string: one of the PanelStatus* values
+}
+
+// Panel status values, sharing the access point's and switch's vocabulary so the badges
+// on the operating page render them with the same colours.
+const (
+	PanelStatusUnknown  = "UNKNOWN"  // never polled
+	PanelStatusActive   = "ACTIVE"   // last poll answered with a fresh sample
+	PanelStatusError    = "ERROR"    // last poll failed: unreachable, stale, or empty
+	PanelStatusDisabled = "DISABLED" // no panel configured for this alliance
+)
+
+// PanelStatusReporter is implemented by a panel that can say whether it is reachable, so
+// the operating page can show it. Optional: a panel that does not implement it simply has
+// no badge.
+type PanelStatusReporter interface {
+	Alliance() string
+	Status() string
+}
+
+// Alliance is "red" or "blue": which three stations this panel is responsible for.
+func (n *NetworkEStopPanel) Alliance() string {
+	return n.alliance
+}
+
+// Status is the outcome of the most recent Poll.
+func (n *NetworkEStopPanel) Status() string {
+	if v, ok := n.status.Load().(string); ok {
+		return v
+	}
+	return PanelStatusUnknown
 }
 
 // Compile-time interface assertion.
@@ -46,11 +84,14 @@ func NewNetworkEStopPanel(host, alliance string) *NetworkEStopPanel {
 	if alliance == "red" {
 		stations = [3]string{"R1", "R2", "R3"}
 	}
-	return &NetworkEStopPanel{
+	panel := &NetworkEStopPanel{
 		url:      strings.TrimRight(host, "/") + "/poll",
+		alliance: alliance,
 		stations: stations,
 		client:   &http.Client{Timeout: 200 * time.Millisecond},
 	}
+	panel.status.Store(PanelStatusUnknown)
+	return panel
 }
 
 // Poll calls GET /poll on the panel Pi and returns the state of every input it
@@ -82,6 +123,7 @@ func (n *NetworkEStopPanel) Poll() []InputState {
 		log.Printf("NetworkEStopPanel: %s reported no configured inputs", n.url)
 		return n.faulted(FaultUnreachable)
 	}
+	n.status.Store(PanelStatusActive)
 	return snapshot.Inputs
 }
 
@@ -90,6 +132,7 @@ func (n *NetworkEStopPanel) Poll() []InputState {
 // synthesising an a-stop press on a network blip would strand the field in a
 // state the operator cannot clear.
 func (n *NetworkEStopPanel) faulted(kind FaultKind) []InputState {
+	n.status.Store(PanelStatusError)
 	inputs := make([]InputState, 0, len(n.stations))
 	for _, station := range n.stations {
 		inputs = append(inputs, InputState{

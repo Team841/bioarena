@@ -96,7 +96,12 @@ func (arena *Arena) generateArenaStatusMessage() any {
 		// noop panel reports StopOK forever, so without this the badge reads the same
 		// whether the field e-stop is working or was never configured.
 		FieldEStopMonitored bool
-		StationLinksKnown   bool
+		// Per-alliance e-stop panel reachability, in the access point's and switch's
+		// vocabulary so the badges share their colours. DISABLED when no panel is
+		// configured for that alliance.
+		RedPanelStatus    string
+		BluePanelStatus   string
+		StationLinksKnown bool
 		// CurrentView is the operating page every kiosk should be showing, so that a
 		// field with several displays does not have them disagreeing about what is
 		// being run.
@@ -114,6 +119,8 @@ func (arena *Arena) generateArenaStatusMessage() any {
 		arena.fieldEStopActive.Load(),
 		faultDescription(arena.fieldEStopFault.Load()),
 		arena.fieldEStopMonitored.Load(),
+		arena.panelStatus("red"),
+		arena.panelStatus("blue"),
 		arena.stationLinksKnown.Load(),
 		// Locked variant: this generator runs from Update with the arena lock held.
 		arena.currentViewLocked(),
@@ -150,4 +157,17 @@ func (arena *Arena) generateMatchTimeMessage() any {
 
 func (arena *Arena) generateMatchTimingMessage() any {
 	return &game.MatchTiming
+}
+
+// panelStatus reports the reachability of the e-stop panel for one alliance, or DISABLED
+// when none is configured. Panels are identified by what they report about themselves
+// rather than by position in EStopPanels, which carries no order.
+func (arena *Arena) panelStatus(alliance string) string {
+	for _, panel := range arena.EStopPanels {
+		reporter, ok := panel.(hardware.PanelStatusReporter)
+		if ok && reporter.Alliance() == alliance {
+			return reporter.Status()
+		}
+	}
+	return hardware.PanelStatusDisabled
 }

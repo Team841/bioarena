@@ -318,6 +318,20 @@ const handleArenaStatus = function (data) {
   // Hardware status badges.
   document.getElementById("apStatus").dataset.status = data.AccessPointStatus || "";
   document.getElementById("swStatus").dataset.status = data.SwitchStatus || "";
+
+  // Panel reachability, so "is it on?" is answered by a colour rather than by waiting to see
+  // whether three stations fault. The same status vocabulary as the AP and switch.
+  for (const [alliance, id] of [["Red", "redPanelStatus"], ["Blue", "bluePanelStatus"]]) {
+    const badge = document.getElementById(id);
+    const status = data[alliance + "PanelStatus"] || "";
+    badge.dataset.status = status;
+    badge.title = {
+      ACTIVE: "Panel is answering",
+      ERROR: "Panel is not answering -- its stations are held stopped",
+      DISABLED: "No panel configured for this alliance (Setup > Settings)",
+      UNKNOWN: "Not yet polled",
+    }[status] || "";
+  }
   // Three states, not two. A field with no e-stop hardware configured reports "not
   // stopped" exactly like a healthy one at rest, so green there would claim a working
   // field e-stop that does not exist. Grey says nothing is watching.
