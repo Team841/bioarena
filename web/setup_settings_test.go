@@ -175,6 +175,47 @@ func TestSetupSettingsOmittedFieldBehavior(t *testing.T) {
 	assert.Equal(t, "", web.arena.EventSettings.ApPassword)
 }
 
+// The trigger pins round-trip through the form and land on the LEDs tab beside the DMX
+// settings. On this platform there is no GPIO to open, so saving them must still succeed:
+// the driver is logged as unavailable and the field carries on.
+func TestSetupSettingsHubLightsPins(t *testing.T) {
+	web := setupTestWeb(t)
+
+	recorder := web.getHttpResponse("/setup/settings")
+	assert.Equal(t, 200, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "Arduino Hub Lights")
+	assert.Contains(t, recorder.Body.String(), `name="hubLightsTriggerPin"`)
+
+	recorder = web.postHttpResponse(
+		"/setup/settings", "name=Test&hubLightsTriggerPin=16&hubLightsRedWinPin=0&hubLightsBlueWinPin=20",
+	)
+	assert.Equal(t, 303, recorder.Code)
+	assert.Equal(t, 16, web.arena.EventSettings.HubLightsTriggerPin)
+	assert.Equal(t, 0, web.arena.EventSettings.HubLightsRedWinPin)
+	assert.Equal(t, 20, web.arena.EventSettings.HubLightsBlueWinPin)
+
+	recorder = web.getHttpResponse("/setup/settings")
+	assert.Regexp(t, `name="hubLightsTriggerPin"\s+value="16"`, recorder.Body.String())
+	assert.Regexp(t, `name="hubLightsBlueWinPin"\s+value="20"`, recorder.Body.String())
+}
+
+// A pin given two jobs is refused on the form, naming both, rather than failing at the
+// kernel and leaving whichever opened second silently disabled.
+func TestSetupSettingsRejectsSharedGpioPin(t *testing.T) {
+	web := setupTestWeb(t)
+
+	recorder := web.postHttpResponse("/setup/settings", "name=Test&fieldEStopPin=24&hubLightsTriggerPin=24")
+	assert.Equal(t, 200, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "GPIO pin 24 is assigned to both Field E-Stop NO and Hub Lights Trigger")
+	saved, err := web.arena.Database.GetEventSettings()
+	assert.Nil(t, err)
+	assert.Equal(t, 0, saved.HubLightsTriggerPin, "nothing persisted")
+
+	// Zero is unconfigured, not a pin, and several roles may share it.
+	recorder = web.postHttpResponse("/setup/settings", "name=Test&fieldEStopPin=0&hubLightsTriggerPin=0&hubLightsRedWinPin=0")
+	assert.Equal(t, 303, recorder.Code)
+}
+
 func (web *Web) postFileHttpResponse(path string, paramName string, file *bytes.Buffer) *httptest.ResponseRecorder {
 	body := new(bytes.Buffer)
 	writer := multipart.NewWriter(body)

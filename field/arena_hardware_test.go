@@ -3,6 +3,7 @@ package field
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/team841/bioarena/game"
@@ -128,6 +129,22 @@ func TestComputeLightingStatePhaseMapping(t *testing.T) {
 	ls = arena.computeLightingState(160)
 	assert.Equal(t, hardware.PhaseFinished, ls.Phase)
 	assert.Equal(t, game.ShiftPostMatch, ls.Shift)
+}
+
+// A driver with its own match clock sees the clock end for itself; an abort is the one
+// end it has to be told about. The flag is scoped to the finished phase because
+// matchAborted lingers until the next reset, and an idle field is not an aborted one.
+func TestComputeLightingStateFlagsAbort(t *testing.T) {
+	arena := setupTestArena(t)
+
+	arena.MatchState = PostMatch
+	assert.False(t, arena.computeLightingState(163).Aborted, "ran to the end")
+
+	arena.matchAborted = true
+	assert.True(t, arena.computeLightingState(40).Aborted)
+
+	arena.MatchState = PreMatch
+	assert.False(t, arena.computeLightingState(0).Aborted, "idle, whatever the last match did")
 }
 
 // --- EStopPanel polling integration ---
@@ -439,6 +456,59 @@ func TestFieldEStopMonitoredReflectsRealHardware(t *testing.T) {
 	monitored := reflect.ValueOf(status).Elem().FieldByName("FieldEStopMonitored")
 	assert.True(t, monitored.IsValid(), "arena status should carry FieldEStopMonitored")
 	assert.False(t, monitored.Bool())
+}
+
+// --- hub lights trigger ---
+
+// mockHubLights records what the arena feeds the trigger and whether it was released.
+type mockHubLights struct {
+	states []hardware.LightingState
+	closed bool
+}
+
+func (m *mockHubLights) SetState(state hardware.LightingState) error {
+	m.states = append(m.states, state)
+	return nil
+}
+
+func (m *mockHubLights) Close() { m.closed = true }
+
+// Same lifecycle as the field e-stop: the lines go back to the kernel on every settings
+// save, and with no trigger pin configured nothing replaces them.
+func TestLoadSettingsReleasesThePreviousHubLights(t *testing.T) {
+	arena := setupTestArena(t)
+
+	previous := &mockHubLights{}
+	arena.hubLights = previous
+	assert.Nil(t, arena.LoadSettings())
+
+	assert.True(t, previous.closed, "the previous driver's GPIO lines were never released")
+	assert.Nil(t, arena.hubLights, "no trigger pin configured, so no driver")
+}
+
+// The trigger is fed from the same transition as FieldLights, and an abort reaches it
+// marked as one: that is what tells it to press the Arduino's button a second time.
+func TestHubLightsSeesTheAbort(t *testing.T) {
+	arena := setupTestArena(t)
+	trigger := &mockHubLights{}
+	arena.hubLights = trigger
+	for _, station := range stationOrder {
+		arena.AllianceStations[station].Bypass.Store(true)
+	}
+
+	assert.Nil(t, arena.StartMatch())
+	arena.Update()
+	arena.MatchStartTime = time.Now().Add(-time.Duration(game.MatchTiming.WarmupDurationSec) * time.Second)
+	arena.Update()
+	assert.Equal(t, AutoPeriod, arena.MatchState)
+	assert.NotEmpty(t, trigger.states)
+	assert.Equal(t, hardware.PhaseAuto, trigger.states[len(trigger.states)-1].Phase)
+
+	assert.Nil(t, arena.AbortMatch())
+	arena.Update()
+	last := trigger.states[len(trigger.states)-1]
+	assert.Equal(t, hardware.PhaseFinished, last.Phase)
+	assert.True(t, last.Aborted)
 }
 
 // --- e-stop panel badges ---

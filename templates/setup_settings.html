@@ -324,6 +324,48 @@ UI for configuring event settings.
                 fixture placed inside that block would be overwritten. Invalid spacing is rejected on save.
               </p>
             </fieldset>
+            <fieldset class="mb-4">
+              <legend>Arduino Hub Lights (GPIO trigger)</legend>
+              <p class="text-body-secondary">
+                For the self-timed Arduino strips (<code>rebuilt-hub-lights</code>). The controller stands in for
+                the operator's hand: it presses the Arduino's start button when AUTO begins and again on an abort,
+                and sets its auto-winner switch to match the field's result. Each line runs from a controller GPIO
+                pin to the matching Arduino input, open-drain, with the grounds joined. BCM numbers, as for the
+                field e-stop.
+              </p>
+              <div class="row mb-3">
+                <label class="col-lg-6 control-label" for="hubLightsTriggerPin">
+                  Trigger GPIO Pin &rarr; Arduino pin 2<br/>(BCM number; 0 = disabled)
+                </label>
+                <div class="col-lg-4">
+                  <input type="number" class="form-control" id="hubLightsTriggerPin" name="hubLightsTriggerPin"
+                    value="{{.HubLightsTriggerPin}}" min="0">
+                </div>
+              </div>
+              <div class="row mb-3">
+                <label class="col-lg-6 control-label" for="hubLightsRedWinPin">
+                  Red Wins GPIO Pin &rarr; Arduino pin 4<br/>(BCM number; 0 = not wired)
+                </label>
+                <div class="col-lg-4">
+                  <input type="number" class="form-control" id="hubLightsRedWinPin" name="hubLightsRedWinPin"
+                    value="{{.HubLightsRedWinPin}}" min="0">
+                </div>
+              </div>
+              <div class="row mb-3">
+                <label class="col-lg-6 control-label" for="hubLightsBlueWinPin">
+                  Blue Wins GPIO Pin &rarr; Arduino pin 5<br/>(BCM number; 0 = not wired)
+                </label>
+                <div class="col-lg-4">
+                  <input type="number" class="form-control" id="hubLightsBlueWinPin" name="hubLightsBlueWinPin"
+                    value="{{.HubLightsBlueWinPin}}" min="0">
+                  <small class="text-body-secondary">
+                    The Arduino reads neither line asserted as a red win, so the blue line alone covers both
+                    outcomes. Leave its physical toggle centred either way: a toggle left on one side overrides
+                    whatever the controller sets.
+                  </small>
+                </div>
+              </div>
+            </fieldset>
           </div>
           <div class="row justify-content-center">
             <div class="col-lg-3 align-items-center">

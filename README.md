@@ -840,6 +840,34 @@ field_lights_baud: 9600
 field_lights_command: "START\n"
 ```
 
+**Hub lights (Arduino, GPIO trigger)**
+
+For the self-timed Arduino strips
+([rebuilt-hub-lights](https://github.com/HighlanderRobotics/rebuilt-hub-lights)). That
+sketch runs its own 2:43 match clock and renders both hubs itself; its only inputs are a
+momentary start/stop button and a three-position auto-winner toggle, each an
+`INPUT_PULLUP` pin that a contact pulls to ground. The controller stands in for the
+operator's hand on both:
+
+| Controller GPIO | Arduino pin | Driven |
+|-----------------|-------------|--------|
+| Trigger         | 2 (`BUTTON_PIN`)  | Pulsed 250 ms when AUTO begins, and again on an abort |
+| Red wins        | 4 (`SWITCH_RED`)  | Held from match start to match end while red won AUTO |
+| Blue wins       | 5 (`SWITCH_BLUE`) | Likewise for blue |
+
+Configured under **Arena → Settings → LEDs → Arduino Hub Lights** as BCM pin numbers,
+like the field e-stop; the trigger pin at 0 disables the driver, and either winner pin at
+0 leaves that side unwired. The Arduino reads neither-asserted as a red win, so the blue
+line alone covers both outcomes. Wiring and recommended pins are in
+[docs/hardware-wiring.md](docs/hardware-wiring.md#8-main-pi-hub-lights-trigger).
+
+Two things follow from the Arduino keeping its own clock. A match that runs to the end is
+left alone — the sketch reaches `MATCH_OVER` by itself, and a press then would start
+another — so only an abort gets the second press. And the two clocks are not quite the
+same: the sketch's 10.5 s transition and 25.4 s shifts against bioarena's 10 and 25 put
+the hubs a second or two behind the field by endgame. Bring the sketch's constants into
+line if that matters.
+
 **E-stop panel**
 
 > For full wiring diagrams, component list, and step-by-step assembly, see **[docs/hardware-wiring.md](docs/hardware-wiring.md)**.

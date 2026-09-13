@@ -71,6 +71,17 @@ func (web *Web) settingsPostHandler(w http.ResponseWriter, r *http.Request) {
 	eventSettings.HubLedsRedAddress, _ = strconv.Atoi(r.PostFormValue("hubLedsRedAddress"))
 	eventSettings.HubLedsBlueUniverse, _ = strconv.Atoi(r.PostFormValue("hubLedsBlueUniverse"))
 	eventSettings.HubLedsBlueAddress, _ = strconv.Atoi(r.PostFormValue("hubLedsBlueAddress"))
+	eventSettings.HubLightsTriggerPin, _ = strconv.Atoi(r.PostFormValue("hubLightsTriggerPin"))
+	eventSettings.HubLightsRedWinPin, _ = strconv.Atoi(r.PostFormValue("hubLightsRedWinPin"))
+	eventSettings.HubLightsBlueWinPin, _ = strconv.Atoi(r.PostFormValue("hubLightsBlueWinPin"))
+
+	// Two roles on one GPIO pin would fail at the kernel, which hands a line to one
+	// requester, and whichever opened second would silently fall back to disabled. Caught
+	// here it is a sentence on the form instead of a warning in the journal.
+	if err := checkGpioPinsDistinct(eventSettings); err != nil {
+		web.renderSettings(w, r, err.Error())
+		return
+	}
 
 	// Reject a layout the controller cannot render before it is saved, so a bad address
 	// surfaces as a form error rather than silently wrong colours on the field.
@@ -127,6 +138,32 @@ func (web *Web) settingsPostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, "/setup/settings", 303)
+}
+
+// checkGpioPinsDistinct rejects settings that put two roles on one of the controller's
+// GPIO pins. Zero means unconfigured and is never a collision.
+func checkGpioPinsDistinct(settings *model.EventSettings) error {
+	roles := []struct {
+		name string
+		pin  int
+	}{
+		{"Field E-Stop NO", settings.FieldEStopPin},
+		{"Field E-Stop NC", settings.FieldEStopNcPin},
+		{"Hub Lights Trigger", settings.HubLightsTriggerPin},
+		{"Hub Lights Red Wins", settings.HubLightsRedWinPin},
+		{"Hub Lights Blue Wins", settings.HubLightsBlueWinPin},
+	}
+	seen := map[int]string{}
+	for _, role := range roles {
+		if role.pin == 0 {
+			continue
+		}
+		if other, taken := seen[role.pin]; taken {
+			return fmt.Errorf("GPIO pin %d is assigned to both %s and %s.", role.pin, other, role.name)
+		}
+		seen[role.pin] = role.name
+	}
+	return nil
 }
 
 // Sends a copy of the event database file to the client as a download.

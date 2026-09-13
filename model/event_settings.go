@@ -112,6 +112,14 @@ type EventSettings struct {
 	HubLedsRedAddress   int
 	HubLedsBlueUniverse int
 	HubLedsBlueAddress  int
+
+	// Hub lights trigger: the Arduino-driven strips, pressed into a match over the
+	// controller's own GPIO rather than lit over DMX. BCM pin numbers, as for the field
+	// e-stop. HubLightsTriggerPin at 0 disables the driver; either winner pin at 0 leaves
+	// that side of the Arduino's auto-winner switch unwired.
+	HubLightsTriggerPin int
+	HubLightsRedWinPin  int
+	HubLightsBlueWinPin int
 }
 
 // applyHubLedDefaults fills in Hub LED settings that a database predating them has no

@@ -15,11 +15,12 @@ E-stop buttons are wired **dual-channel**: each button's NC and NO contacts retu
 5. [Single Button Circuit](#5-single-button-circuit)
 6. [Wiring an E-Stop Panel Pi](#6-wiring-an-e-stop-panel-pi)
 7. [Main Pi Field E-Stop](#7-main-pi-field-e-stop)
-8. [Power and Indicator Lamps](#8-power-and-indicator-lamps)
-9. [Physical Panel Layout](#9-physical-panel-layout)
-10. [Software Configuration](#10-software-configuration)
-11. [Test Procedure](#11-test-procedure)
-12. [Troubleshooting](#12-troubleshooting)
+8. [Main Pi Hub Lights Trigger](#8-main-pi-hub-lights-trigger)
+9. [Power and Indicator Lamps](#9-power-and-indicator-lamps)
+10. [Physical Panel Layout](#10-physical-panel-layout)
+11. [Software Configuration](#11-software-configuration)
+12. [Test Procedure](#12-test-procedure)
+13. [Troubleshooting](#13-troubleshooting)
 
 ---
 
@@ -84,7 +85,7 @@ Quantities marked with **×2** mean one per alliance.
 | As needed | 10 nF–100 nF ceramic capacitors | 50 V | One per GPIO line to GND at the Pi end; debounce and ESD |
 | As needed | 10 kΩ resistors (1/4 W) | ±5% or better | Optional external pull-up per line; recommended for runs over ~2 m |
 | As needed | 22 AWG 3-conductor cable | Rated ≥ 24 V | One run per button: GND, NC, NO. Shielded or twisted improves noise immunity |
-| **×2** | 12 V 1 A regulated power adapter | 2.1 mm barrel connector | **Lamps only** — see [section 8](#8-power-and-indicator-lamps). Omit if your buttons are unlit |
+| **×2** | 12 V 1 A regulated power adapter | 2.1 mm barrel connector | **Lamps only** — see [section 9](#9-power-and-indicator-lamps). Omit if your buttons are unlit |
 | **×2** | 500 mA resettable polyfuse (PTC) | Rated ≥ 15 V | Inline on the +12 V lamp feed |
 | **×2** | DIN rail section, ~20 cm | 35 mm standard | Mounts inside enclosure |
 | **×2** | Small enclosure, ~150×100×60 mm | IP54 or better | Holds Pi and terminal strips |
@@ -112,7 +113,7 @@ graph LR
     MAIN -->|"GET /poll\n200 ms timeout"| BLUE
 ```
 
-Static IPs are set by the systemd service files (see [Software Configuration](#10-software-configuration)).
+Static IPs are set by the systemd service files (see [Software Configuration](#11-software-configuration)).
 
 ---
 
@@ -180,7 +181,7 @@ The series resistor limits current if a sense line ever meets 5 V or 12 V throug
 
 For cable runs over about 2 m, add a 10 kΩ external pull-up from each sense line to 3.3 V. The internal pull-up is weak enough that long unshielded runs start picking up noise.
 
-> **Do not connect the sense circuit to 12 V.** If your buttons have illuminated lamps, the lamp circuit is a completely separate loop — see [section 8](#8-power-and-indicator-lamps).
+> **Do not connect the sense circuit to 12 V.** If your buttons have illuminated lamps, the lamp circuit is a completely separate loop — see [section 9](#9-power-and-indicator-lamps).
 
 ---
 
@@ -214,7 +215,7 @@ BCM 16 and 26 are left free. Use the BCM numbers in `estop-panel.yaml`, not phys
 5. Fit the optional capacitor from each GPIO pin to GND, as close to the Pi header as you can manage.
 6. Do **not** add pull-down resistors anywhere. The internal pull-ups are what make the active-low logic work.
 
-> **Label the channels, not just the buttons.** `R1-ESTOP-NC` and `R1-ESTOP-NO` swapped at the terminal strip produces a panel that reads OK when released and OK when pressed — inverted, and much harder to diagnose than a dead line. The test procedure in [section 11](#11-test-procedure) catches this.
+> **Label the channels, not just the buttons.** `R1-ESTOP-NC` and `R1-ESTOP-NO` swapped at the terminal strip produces a panel that reads OK when released and OK when pressed — inverted, and much harder to diagnose than a dead line. The test procedure in [section 12](#12-test-procedure) catches this.
 
 ---
 
@@ -235,7 +236,62 @@ The field e-stop **latches**: once triggered it stays triggered until an operato
 
 ---
 
-## 8. Power and Indicator Lamps
+## 8. Main Pi Hub Lights Trigger
+
+The practice-field hub strips are run by an Arduino ([rebuilt-hub-lights](https://github.com/HighlanderRobotics/rebuilt-hub-lights)) that keeps its own 2:43 match clock and renders both hubs itself. Its only inputs are a momentary start/stop button on pin 2 and a three-position auto-winner toggle on pins 4 and 5, each an `INPUT_PULLUP` pin that a contact pulls to ground. The main Pi stands in for the operator's hand on both, over three GPIO lines. This is the reverse of everything else in this guide: these are **outputs**, and the pull-up they work against is the Arduino's 5 V one, not the Pi's.
+
+```mermaid
+flowchart LR
+    subgraph PI["Main Pi"]
+        GT["GPIO — trigger\nBCM 4 (phys 7)"]
+        GR["GPIO — red wins\nBCM 5 (phys 29)"]
+        GB["GPIO — blue wins\nBCM 6 (phys 31)"]
+        PGND["GND (phys 9)"]
+    end
+    RT["1 kΩ"]
+    RR["1 kΩ"]
+    RB["1 kΩ"]
+    subgraph ARD["Arduino Uno"]
+        A2["pin 2 BUTTON_PIN"]
+        A4["pin 4 SWITCH_RED"]
+        A5["pin 5 SWITCH_BLUE"]
+        AGND["GND"]
+    end
+    GT --> RT --> A2
+    GR --> RR --> A4
+    GB --> RB --> A5
+    PGND --- AGND
+```
+
+Each line is driven **open-drain**: pulled to ground to assert, left floating to release. The Pi never sources 3.3 V into a 5 V input, and when released it is invisible to the Arduino, so the physical button and toggle stay wired exactly as they are, in parallel. The 1 kΩ series resistor limits what flows into the Pi's protection diode from the 5 V pull-up while a line is released — a few tens of microamps — and protects both boards from a wiring mistake.
+
+Configure the pins in **Setup → Settings → LEDs → Arduino Hub Lights**, as BCM numbers:
+
+- **Trigger GPIO Pin** — recommended **BCM 4** (physical pin 7) → Arduino pin 2. 0 disables the driver.
+- **Red Wins GPIO Pin** — recommended **BCM 5** (physical pin 29) → Arduino pin 4. 0 leaves it unwired.
+- **Blue Wins GPIO Pin** — recommended **BCM 6** (physical pin 31) → Arduino pin 5. 0 leaves it unwired.
+
+**Why these three.** BCM 0–8 power up with an internal pull-*up*; BCM 9–27 power up with a pull-*down*. A released line is an input from the Arduino's point of view, and before bioarena has configured it, a pull-down there forms a divider with the Arduino's pull-up that settles around 2.9 V — right at a 5 V AVR's input threshold. On BCM 0–8 the boot-time state is a pull-up against a pull-up, unambiguously high, and the Arduino sees nothing when the Pi boots. bioarena switches the bias off once it has the lines, whichever pins are used. BCM 4–6 are also the only three of that group that carry no bus: 0–1 are the HAT EEPROM, 2–3 are I2C, 7–8 are SPI0 chip selects.
+
+**What it does.** When AUTO begins, bioarena sets the winner lines for the field's AUTO result — the Arduino reads neither-asserted as a red win, so the blue line alone covers both outcomes — and then pulses the trigger low for 250 ms, which the sketch sees as a press and starts its match. A match that runs to the end is left alone: the Arduino reaches `MATCH_OVER` on its own, and a press then would start another. An abort gets a second press, since that is the one ending the sketch cannot see for itself. The lines are released when the match ends, whichever way.
+
+**Leave the Arduino's toggle centred.** A toggle left on one side asserts that pin alongside whatever bioarena sets, and both-asserted also reads as red. The physical button still works; it is simply another contact on the same line.
+
+**The clocks are not the same.** The sketch's 10.5 s transition and 25.4 s shifts against bioarena's 10 and 25 put the hubs a second or two behind the field by endgame. Bring the sketch's constants into line if it matters.
+
+To test without a match, `gpioset` presses the button from the shell (the service must be stopped first, since the kernel gives a line to one requester):
+
+```bash
+sudo systemctl stop bioarena
+gpioset --mode=time --usec=250000 --drive=open-drain --bias=disable gpiochip0 4=0
+sudo systemctl start bioarena
+```
+
+The Arduino's serial monitor prints `>>> BTN: START` on each press it sees.
+
+---
+
+## 9. Power and Indicator Lamps
 
 The sense circuit needs no power supply of its own — it runs on the Pi's 3.3 V pull-ups.
 
@@ -262,7 +318,7 @@ Run each Pi from its own USB-C supply (≥ 3 A for a Pi 4).
 
 ---
 
-## 9. Physical Panel Layout
+## 10. Physical Panel Layout
 
 A typical alliance button panel has three driver stations across a table edge. Suggested layout:
 
@@ -285,7 +341,7 @@ A typical alliance button panel has three driver stations across a table edge. S
 
 ---
 
-## 10. Software Configuration
+## 11. Software Configuration
 
 ### Panel Pi: `estop-panel.yaml`
 
@@ -357,7 +413,7 @@ See [README.md](../README.md) for the full deployment steps, including the servi
 
 ---
 
-## 11. Test Procedure
+## 12. Test Procedure
 
 Work through this checklist before using the system for a match. The fault-injection steps matter as much as the button steps — dual-channel wiring you have never seen fault is dual-channel wiring you have not tested.
 
@@ -414,7 +470,7 @@ For at least one e-stop per panel, and for the main Pi field e-stop:
 
 ---
 
-## 12. Troubleshooting
+## 13. Troubleshooting
 
 | Symptom | Likely cause | Fix |
 |---------|-------------|-----|

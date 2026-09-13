@@ -61,6 +61,11 @@ type Arena struct {
 	teamNetwork      teamNetwork
 	Plc              plc.Plc
 	FieldLights      hardware.FieldLights
+	// hubLights is the GPIO trigger for the Arduino hub strips, fed the same lighting
+	// state as FieldLights. Separate from it because the two are owned differently:
+	// FieldLights is installed once from config.yaml, this is rebuilt from the database on
+	// every settings save. nil while no trigger pin is configured.
+	hubLights        hubLightsDriver
 	Leds             ledController
 	hubLedsArtNet    bool
 	hubLedsFailing   bool // true while Update is erroring, so the failure is logged once not 100x/s
@@ -170,6 +175,15 @@ func NewArena(dbPath string) (*Arena, error) {
 	return arena, nil
 }
 
+// hubLightsDriver is what the arena needs from the hub lights trigger: a FieldLights that
+// also holds GPIO lines, which have to be released before the next settings save can open
+// them again. An interface only so tests can substitute one; hardware.GpioHubLights is the
+// single implementation.
+type hubLightsDriver interface {
+	hardware.FieldLights
+	Close()
+}
+
 // teamNetwork is what the arena needs from the field switch. An interface only so tests
 // can substitute one; there is a single implementation, network.Switch, because there is a
 // single supported field: a Catalyst 3560-CX wired as the README describes.
@@ -256,6 +270,30 @@ func (arena *Arena) LoadSettings() error {
 	}
 	if addr := settings.BlueEStopPanelAddress; addr != "" {
 		arena.EStopPanels = append(arena.EStopPanels, hardware.NewNetworkEStopPanel(addr, "blue"))
+	}
+
+	// Same lifecycle as the field e-stop above: the old lines go back to the kernel before
+	// the new ones are asked for. Unlike the e-stop there is no noop to fall back to; a
+	// trigger that cannot be opened is simply absent, and the Arduino keeps its button.
+	if arena.hubLights != nil {
+		arena.hubLights.Close()
+		arena.hubLights = nil
+	}
+	if settings.HubLightsTriggerPin != 0 {
+		driver, err := hardware.NewGpioHubLights(
+			"gpiochip0", settings.HubLightsTriggerPin, settings.HubLightsRedWinPin, settings.HubLightsBlueWinPin,
+		)
+		if err != nil {
+			log.Printf(
+				"WARNING: Could not open hub lights GPIO pins (trigger %d, red %d, blue %d): %v",
+				settings.HubLightsTriggerPin,
+				settings.HubLightsRedWinPin,
+				settings.HubLightsBlueWinPin,
+				err,
+			)
+		} else {
+			arena.hubLights = driver
+		}
 	}
 
 	arena.applyHubLedSettings(settings)
@@ -814,6 +852,11 @@ func (arena *Arena) Update() {
 		}
 		if err := arena.FieldLights.SetState(ls); err != nil {
 			log.Printf("FieldLights.SetState: %v", err)
+		}
+		if arena.hubLights != nil {
+			if err := arena.hubLights.SetState(ls); err != nil {
+				log.Printf("Hub lights trigger: %v", err)
+			}
 		}
 		arena.lastLightingState = ls
 	}
@@ -1573,6 +1616,9 @@ func (arena *Arena) computeLightingState(matchTimeSec float64) hardware.Lighting
 		Shift:        shift,
 		AutoWinner:   arena.AutoWinner,
 		ShiftWarning: warning,
+		// Only meaningful for a finished match; matchAborted itself lingers until the
+		// next reset, and an idle field is not an aborted one.
+		Aborted: phase == hardware.PhaseFinished && arena.matchAborted,
 	}
 }
 

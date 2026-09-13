@@ -35,6 +35,10 @@ type LightingState struct {
 	Shift        game.Shift // spans the whole match; game.ShiftCount when not in one
 	AutoWinner   Alliance   // which alliance's HUB goes inactive first in Shift1
 	ShiftWarning bool       // true during 3s window before next HUB deactivation
+	// Aborted distinguishes a PhaseFinished reached by an abort from one reached by the
+	// clock. A driver that keeps its own match clock, as the Arduino hub lights do, needs
+	// to know: the clock ending is something it will see for itself, an abort is not.
+	Aborted bool
 }
 
 // FieldLights controls field indicator lighting.
