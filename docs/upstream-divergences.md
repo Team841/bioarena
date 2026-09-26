@@ -99,12 +99,13 @@ Deliberate, specific to a practice field, and not appropriate to send upstream.
 
 ## Kept byte-identical
 
-`led/` — all six ported files (`color.go`, `controller.go`, `controller_test.go`,
-`fixture.go`, `mode.go`, `zone.go`). Local behaviour goes in `led/override.go` instead.
+`led/` — all seven ported files (`color.go`, `controller.go`, `controller_test.go`,
+`fixture.go`, `mode.go`, `mode_test.go`, `zone.go`). Local behaviour goes in
+`led/override.go` and `led/artnet.go` instead.
 
 ```bash
 git diff upstream/main -- led/color.go led/controller.go led/controller_test.go \
-  led/fixture.go led/mode.go led/zone.go
+  led/fixture.go led/mode.go led/mode_test.go led/zone.go
 ```
 
 Empty output means the property still holds. If it ever stops being empty, either revert

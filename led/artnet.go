@@ -3,7 +3,7 @@
 // Art-Net output, as an alternative wire protocol to the E1.31 sACN that controller.go
 // speaks. Same pixels, same layout, same modes -- only the packets on the wire differ.
 //
-// A separate file and a separate type on purpose. The six ported led/ files are kept
+// A separate file and a separate type on purpose. The seven ported led/ files are kept
 // byte-identical to upstream so their lighting changes can be taken with a checkout rather
 // than a merge (see docs/upstream-divergences.md), and a protocol switch inside
 // controller.go would end that. Being in the same package, this can still reuse the zone
