@@ -238,7 +238,9 @@ The field e-stop **latches**: once triggered it stays triggered until an operato
 
 ## 8. Main Pi Hub Relays
 
-The alternative to DMX Hub lighting: one relay per HUB, each switching a plain red or blue lamp, driven from two GPIO pins on the main Pi. Select **Relays** as the output under **Setup → Settings → LEDs**; the lamp for a HUB is on while that HUB is active and off while it is not.
+The alternative to DMX Hub lighting: one relay per HUB, each switching a plain red or blue lamp, driven from two GPIO pins on the main Pi. Select **Relays** as the output under **Setup → Settings → LEDs**; the lamp for a HUB is on while that HUB is active and off while it is not, and blinks for the warning before it goes inactive and, during the transition shift, to mark the HUB that goes inactive first.
+
+**Relay wear.** Blinking costs up to about twenty on/off cycles per relay per match. That is nothing to a relay switching lamp-sized loads, but a solid-state relay board has no contacts to wear at all and drops in the same way.
 
 ```mermaid
 flowchart LR

@@ -817,8 +817,11 @@ agree on which HUB is active and when:
   E1.31 sACN or, with **Send Art-Net instead of sACN** ticked, Art-Net. Set **LED
   Receiver Address** to the gateway; blank sends nothing.
 - **Relays** — one relay per HUB on the controller's own GPIO, switching a plain red or
-  blue lamp: on while that HUB is active, off while it is not. Pulses and sweeps show as
-  steady on, and the end-of-match white as both lamps for three seconds. The pins default
+  blue lamp: on while that HUB is active, off while it is not. The two sequences that carry
+  game information blink rather than hold: the warning pulse before a HUB goes inactive
+  blinks every 1.4 s, and the transition-shift sweep marking the HUB that goes inactive
+  first blinks every 0.72 s, each its DMX sequence's own rhythm. The startup fill is
+  steady on, and the end-of-match white is both lamps for three seconds. The pins default
   to BCM 22 (red) and 23 (blue) and can be changed there; tick **Relays switch on when
   LOW** for a board that clicks on when its input is pulled low, as most opto-isolated
   modules do. Wiring is in

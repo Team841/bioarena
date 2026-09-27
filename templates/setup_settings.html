@@ -269,7 +269,9 @@ UI for configuring event settings.
               <legend>Relays</legend>
               <p class="text-body-secondary">
                 One relay per HUB on this controller's GPIO, switching a red or a blue lamp: on while that HUB is
-                active, off while it is not. Pulses and sweeps show as steady on.
+                active, off while it is not. The warning pulse before a HUB goes inactive blinks at the pulse's
+                rhythm, and the transition-shift sweep that marks the HUB going inactive first blinks faster, so
+                neither is lost.
               </p>
               <div class="row mb-3">
                 <label class="col-lg-6 control-label" for="hubRelayRedPin">Red Relay GPIO Pin<br/>(BCM number)</label>

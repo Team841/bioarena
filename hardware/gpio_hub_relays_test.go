@@ -3,6 +3,7 @@ package hardware
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/team841/bioarena/led"
@@ -35,12 +36,26 @@ func (l *recordingLine) last() int {
 	return l.values[len(l.values)-1]
 }
 
+// fakeClock is a clock the tests advance by hand.
+type fakeClock struct{ now time.Time }
+
+func (c *fakeClock) Now() time.Time                { return c.now }
+func (c *fakeClock) Advance(elapsed time.Duration) { c.now = c.now.Add(elapsed) }
+
 func newTestRelays() (*GpioHubRelays, *recordingLine, *recordingLine) {
-	red, blue := &recordingLine{}, &recordingLine{}
-	return newGpioHubRelays(red, blue), red, blue
+	relays, red, blue, _ := newTestRelaysWithClock()
+	return relays, red, blue
 }
 
-// Each relay follows its own HUB's mode: lit for anything but Off.
+func newTestRelaysWithClock() (*GpioHubRelays, *recordingLine, *recordingLine, *fakeClock) {
+	red, blue := &recordingLine{}, &recordingLine{}
+	clock := &fakeClock{now: time.Date(2026, 9, 26, 12, 0, 0, 0, time.UTC)}
+	relays := newGpioHubRelays(red, blue)
+	relays.now = clock.Now
+	return relays, red, blue, clock
+}
+
+// Each relay follows its own HUB's mode: lit for a steady mode, dark for Off.
 func TestGpioHubRelaysFollowModes(t *testing.T) {
 	relays, red, blue := newTestRelays()
 
@@ -49,7 +64,7 @@ func TestGpioHubRelaysFollowModes(t *testing.T) {
 	assert.Equal(t, 1, red.last())
 	assert.Equal(t, 0, blue.last())
 
-	relays.SetMode(led.OffMode, led.BluePulseMode)
+	relays.SetMode(led.OffMode, led.BlueMode)
 	assert.Nil(t, relays.Update())
 	assert.Equal(t, 0, red.last())
 	assert.Equal(t, 1, blue.last())
@@ -67,20 +82,58 @@ func TestGpioHubRelaysFirstUpdateDrivesBothLines(t *testing.T) {
 }
 
 // Update runs at 100 Hz. A relay clicked a hundred times a second would not last a match,
-// so the lines are only written when a lamp changes -- not when a mode changes to another
-// mode that lights the same lamp.
+// so a line is only written when its lamp changes -- not when a mode changes to another
+// steady mode that lights the same lamp, and not when the other lamp changes.
 func TestGpioHubRelaysWriteOnlyOnChange(t *testing.T) {
-	relays, red, _ := newTestRelays()
+	relays, red, blue := newTestRelays()
 	relays.SetMode(led.RedStartupMode, led.BlueStartupMode)
 	for i := 0; i < 50; i++ {
 		assert.Nil(t, relays.Update())
 	}
 	relays.SetMode(led.RedMode, led.BlueMode)
 	assert.Nil(t, relays.Update())
-	relays.SetMode(led.RedPulseMode, led.BlueMode)
+	relays.SetMode(led.RedMode, led.OffMode)
 	assert.Nil(t, relays.Update())
 
 	assert.Equal(t, []int{1}, red.values)
+	assert.Equal(t, []int{1, 0}, blue.values)
+}
+
+// The warning pulse is game information, so the relay blinks it: dark at once, then lit,
+// then dark, at the pulse's own rhythm. The other HUB holds steady throughout.
+func TestGpioHubRelaysBlinkThePulse(t *testing.T) {
+	relays, red, blue, clock := newTestRelaysWithClock()
+	relays.SetMode(led.RedMode, led.BlueMode)
+	assert.Nil(t, relays.Update())
+
+	relays.SetMode(led.RedMode, led.BluePulseMode)
+	assert.Nil(t, relays.Update())
+	assert.Equal(t, 0, blue.last(), "the warning starts dark, so it is seen at once")
+
+	clock.Advance(led.PulseBlinkHalfPeriod)
+	relays.SetMode(led.RedMode, led.BluePulseMode)
+	assert.Nil(t, relays.Update())
+	assert.Equal(t, 1, blue.last())
+
+	clock.Advance(led.PulseBlinkHalfPeriod)
+	relays.SetMode(led.RedMode, led.BluePulseMode)
+	assert.Nil(t, relays.Update())
+	assert.Equal(t, 0, blue.last())
+
+	assert.Equal(t, []int{1}, red.values, "the steady HUB is not touched")
+}
+
+// The arena sets the modes on every tick. Re-setting the mode a blink is already in must not
+// restart it, or the lamp would sit dark for as long as the warning lasts.
+func TestGpioHubRelaysBlinkSurvivesRepeatedSetMode(t *testing.T) {
+	relays, _, blue, clock := newTestRelaysWithClock()
+	relays.SetMode(led.OffMode, led.BluePulseMode)
+	for elapsed := time.Duration(0); elapsed <= led.PulseBlinkHalfPeriod; elapsed += 10 * time.Millisecond {
+		relays.SetMode(led.OffMode, led.BluePulseMode)
+		assert.Nil(t, relays.Update())
+		clock.Advance(10 * time.Millisecond)
+	}
+	assert.Equal(t, []int{0, 1}, blue.values)
 }
 
 // A write that fails is not remembered as having landed, so the next tick tries again.
