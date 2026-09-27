@@ -86,10 +86,13 @@ file. Wiring and pin assignments are in
 [docs/hardware-wiring.md](../hardware-wiring.md); once installed, record this field's
 actual pin map here, since it need not match that document's example.
 
-**Hub LEDs — undecided.** If a DMX gateway is added it goes on Gi0/9 at `10.0.100.100`,
-inside the switch's excluded `.1`–`.125` range so a static there can never collide with a
-lease. Record the model and whether it speaks Art-Net or sACN, since that drives the
-checkbox under Arena → Settings → LEDs.
+**Hub lights — undecided.** Two options under Arena → Settings → LEDs. A DMX gateway goes
+on Gi0/9 at `10.0.100.100`, inside the switch's excluded `.1`–`.125` range so a static there
+can never collide with a lease; record the model and whether it speaks Art-Net or sACN,
+since that drives the Art-Net checkbox. Relays go on the controller's GPIO, BCM 22 and 23 by
+default — clear of this field's e-stop on 24 and 25 — see
+[docs/hardware-wiring.md](../hardware-wiring.md#8-main-pi-hub-relays); record the pins and
+whether the board switches on LOW.
 
 **Switch — Catalyst 3560-CX**, PoE-capable, hostname `bioSwitch` unless overridden at
 bootstrap. Richmond's is a non-PoE SKU, so this is the one piece of hardware the two fields

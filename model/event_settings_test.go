@@ -35,15 +35,11 @@ func TestEventSettingsReadWrite(t *testing.T) {
 			CompanionAddress:            "",
 			CompanionPort:               0,
 
-			// Hub LEDs default to the standard arena: upstream's full-field layout,
-			// every sequence unmodified. The addresses below are only consulted when
-			// HubLedsSimplified is turned on.
-			HubLedsSimplified:   false,
-			HubLedsFallback:     "full",
-			HubLedsRedUniverse:  1,
-			HubLedsRedAddress:   1,
-			HubLedsBlueUniverse: 1,
-			HubLedsBlueAddress:  25,
+			// Hub lights default to DMX, with no address: nothing sent until a field is set
+			// up. The relay pins are filled in regardless, so choosing relays later starts
+			// from working pins rather than zeroes.
+			HubRelayRedPin:  22,
+			HubRelayBluePin: 23,
 		},
 		*eventSettings,
 	)
@@ -57,4 +53,29 @@ func TestEventSettingsReadWrite(t *testing.T) {
 	eventSettings2, err := db.GetEventSettings()
 	assert.Nil(t, err)
 	assert.Equal(t, eventSettings, eventSettings2)
+}
+
+// A database written before the relay settings existed has no pins stored. Loading it
+// fills in the defaults, so the Settings page never offers zeroes.
+func TestEventSettingsRelayPinDefaultsForOlderDatabase(t *testing.T) {
+	db := setupTestDb(t)
+	defer db.Close()
+
+	eventSettings, err := db.GetEventSettings()
+	assert.Nil(t, err)
+	eventSettings.HubRelayRedPin = 0
+	eventSettings.HubRelayBluePin = 0
+	assert.Nil(t, db.UpdateEventSettings(eventSettings))
+
+	eventSettings, err = db.GetEventSettings()
+	assert.Nil(t, err)
+	assert.Equal(t, 22, eventSettings.HubRelayRedPin)
+	assert.Equal(t, 23, eventSettings.HubRelayBluePin)
+
+	// A configured pin survives the reload untouched.
+	eventSettings.HubRelayRedPin = 17
+	assert.Nil(t, db.UpdateEventSettings(eventSettings))
+	eventSettings, err = db.GetEventSettings()
+	assert.Nil(t, err)
+	assert.Equal(t, 17, eventSettings.HubRelayRedPin)
 }

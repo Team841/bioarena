@@ -54,9 +54,9 @@ func TestShiftChangeSoundsOnlyOnHandovers(t *testing.T) {
 	}
 }
 
-// The cue is driven from the lighting transition, so the boundaries it fires on must be the
-// ones teleopShift produces. Walking the teleop second by second proves there are exactly
-// four, and that they sit where the lights change rather than near them.
+// The cue fires on the tick currentShift changes, so the boundaries it fires on are the ones
+// teleopShift produces. Walking the teleop second by second proves there are exactly four,
+// and that they sit on the shift boundaries rather than near them.
 func TestShiftChangeSoundsMatchLightingBoundaries(t *testing.T) {
 	var boundaries []int
 	previous := teleopShift(200) // before the first boundary
@@ -70,64 +70,29 @@ func TestShiftChangeSoundsMatchLightingBoundaries(t *testing.T) {
 	assert.Equal(t, []int{130, 105, 80, 55}, boundaries)
 }
 
-// --- shiftWarning ---
+// --- currentShift ---
 
-func TestShiftWarningWindows(t *testing.T) {
-	// Warning should fire for the 3s window BEFORE each shift boundary.
-	// Boundary at 130: warning at [130,133)
-	assert.True(t, shiftWarning(130), "130")
-	assert.True(t, shiftWarning(132), "132")
-	assert.False(t, shiftWarning(133), "133 — outside window")
-	assert.False(t, shiftWarning(129), "129 — already past boundary")
-
-	// Boundary at 105: warning at [105,108)
-	assert.True(t, shiftWarning(105))
-	assert.True(t, shiftWarning(107))
-	assert.False(t, shiftWarning(108))
-
-	// Boundary at 80: warning at [80,83)
-	assert.True(t, shiftWarning(80))
-	assert.True(t, shiftWarning(82))
-	assert.False(t, shiftWarning(83))
-
-	// Boundary at 55: warning at [55,58)
-	assert.True(t, shiftWarning(55))
-	assert.True(t, shiftWarning(57))
-	assert.False(t, shiftWarning(58))
-
-	// No warning for EndGame
-	assert.False(t, shiftWarning(29))
-	assert.False(t, shiftWarning(0))
-}
-
-// --- computeLightingState ---
-
-func TestComputeLightingStatePhaseMapping(t *testing.T) {
+// The shift spans the whole match, as upstream models it: AUTO and post-match have their own
+// shifts, and states that are not a shift report ShiftCount.
+func TestCurrentShift(t *testing.T) {
 	arena := setupTestArena(t)
-	arena.AutoWinner = hardware.AllianceRed
 
-	// The shift spans the whole match, as upstream models it: AUTO and post-match have
-	// their own shifts, and states that are not a shift report ShiftCount.
 	arena.MatchState = PreMatch
-	ls := arena.computeLightingState(0)
-	assert.Equal(t, hardware.PhaseIdle, ls.Phase)
-	assert.Equal(t, game.ShiftCount, ls.Shift)
+	assert.Equal(t, game.ShiftCount, arena.currentShift(0))
 
 	arena.MatchState = AutoPeriod
-	ls = arena.computeLightingState(3)
-	assert.Equal(t, hardware.PhaseAuto, ls.Phase)
-	assert.Equal(t, game.ShiftAuto, ls.Shift)
-	assert.Equal(t, hardware.AllianceRed, ls.AutoWinner)
+	assert.Equal(t, game.ShiftAuto, arena.currentShift(3))
 
 	arena.MatchState = PausePeriod
-	ls = arena.computeLightingState(18)
-	assert.Equal(t, hardware.PhasePause, ls.Phase)
-	assert.Equal(t, game.ShiftCount, ls.Shift)
+	assert.Equal(t, game.ShiftCount, arena.currentShift(21))
+
+	arena.MatchState = TeleopPeriod
+	teleopStart := game.GetDurationToTeleopStart().Seconds()
+	assert.Equal(t, game.ShiftTransition, arena.currentShift(teleopStart+5))
+	assert.Equal(t, game.Shift1, arena.currentShift(teleopStart+15))
 
 	arena.MatchState = PostMatch
-	ls = arena.computeLightingState(160)
-	assert.Equal(t, hardware.PhaseFinished, ls.Phase)
-	assert.Equal(t, game.ShiftPostMatch, ls.Shift)
+	assert.Equal(t, game.ShiftPostMatch, arena.currentShift(165))
 }
 
 // --- EStopPanel polling integration ---
@@ -390,23 +355,6 @@ func TestFieldEStopFaultBlocksMatchStart(t *testing.T) {
 
 	err := arena.checkCanStartMatch()
 	assert.ErrorContains(t, err, "wiring fault")
-}
-
-// --- NoopFieldLights integration ---
-
-func TestNoopFieldLightsIntegration(t *testing.T) {
-	arena := setupTestArena(t)
-	// Default is already Noop; confirm SetState never errors.
-	states := []hardware.LightingState{
-		{Phase: hardware.PhaseIdle},
-		{Phase: hardware.PhaseAuto},
-		{Phase: hardware.PhasePause},
-		{Phase: hardware.PhaseTeleop, Shift: game.Shift1, AutoWinner: hardware.AllianceBlue},
-		{Phase: hardware.PhaseFinished},
-	}
-	for _, s := range states {
-		assert.NoError(t, arena.FieldLights.SetState(s))
-	}
 }
 
 // --- field e-stop lifecycle ---

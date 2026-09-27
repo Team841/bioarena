@@ -72,40 +72,17 @@ func TestLoadConfigRetiredKeysDoNotExcuseTypos(t *testing.T) {
 	assert.Contains(t, err.Error(), "auto_duraton_seconds")
 }
 
-func TestLoadConfigFieldLightsDefaults(t *testing.T) {
-	cfg, err := loadConfig(filepath.Join(t.TempDir(), "nonexistent.yaml"))
+// The serial field lights driver is gone; hub lights live in the database now. A Pi whose
+// config.yaml still names it must start anyway.
+func TestLoadConfigRetiredFieldLightsKeysIgnored(t *testing.T) {
+	yaml := "http_port: 9090\nfield_lights_driver: serial\nfield_lights_port: /dev/ttyUSB0\n" +
+		"field_lights_baud: 9600\nfield_lights_command: \"START\\n\"\n"
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	assert.Nil(t, os.WriteFile(path, []byte(yaml), 0644))
+
+	cfg, err := loadConfig(path)
 	assert.Nil(t, err)
-	assert.Equal(t, 9600, cfg.FieldLightsBaud)
-	assert.Equal(t, "START\n", cfg.FieldLightsCommand)
-	assert.Equal(t, "", cfg.FieldLightsDriver)
-}
-
-func TestBuildFieldLightsNoneDriver(t *testing.T) {
-	// "none" is the documented value for bench testing (config.yaml comment).
-	// It must not fatal — it should return a no-op implementation.
-	cfg := defaultConfig()
-	cfg.FieldLightsDriver = "none"
-	lights := buildFieldLights(cfg)
-	assert.NotNil(t, lights)
-}
-
-func TestBuildFieldLightsEmptyDriver(t *testing.T) {
-	cfg := defaultConfig()
-	cfg.FieldLightsDriver = ""
-	lights := buildFieldLights(cfg)
-	assert.NotNil(t, lights)
-}
-
-func TestBuildFieldLightsUnknownDriverPanics(t *testing.T) {
-	// An unrecognized driver string should cause a fatal log, which os.Exit(1).
-	// We verify the known-good and known-bad paths by checking the switch
-	// handles expected values without panicking; unknown values are caught at
-	// compile time via the exhaustive switch + default fatal.
-	cfg := defaultConfig()
-	for _, driver := range []string{"", "none"} {
-		cfg.FieldLightsDriver = driver
-		assert.NotPanics(t, func() { buildFieldLights(cfg) }, "driver=%q should not panic", driver)
-	}
+	assert.Equal(t, 9090, cfg.HttpPort)
 }
 
 // Network security is on unless the file explicitly disables it. A Pi carrying an older

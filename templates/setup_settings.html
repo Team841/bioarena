@@ -223,106 +223,82 @@ UI for configuring event settings.
           </div>
           <div class="tab-pane" id="leds" role="tabpanel">
             <fieldset class="mb-4">
-              <legend>DMX Hub LEDs</legend>
+              <legend>Hub Lights</legend>
               <p class="text-body-secondary">
-                Defaults match the standard arena: upstream's full-field layout of eight fixtures per alliance
-                across four sides of each goal, running every lighting sequence unmodified. Override below for a
-                practice field with simpler fixtures.
+                Both outputs run the same lighting sequence, so they agree on which HUB is active and when.
               </p>
               <div class="row mb-3">
-                <label class="col-lg-6 control-label" for="hubLedsAddress">
-                  LED Receiver Address
-                </label>
+                <label class="col-lg-6 control-label" for="hubLightsOutput">Output</label>
+                <div class="col-lg-4">
+                  <select class="form-select" id="hubLightsOutput" name="hubLightsOutput">
+                    <option value="dmx" {{if not .HubRelays}}selected{{end}}>DMX &mdash; full-field fixtures</option>
+                    <option value="relays" {{if .HubRelays}}selected{{end}}>Relays &mdash; one lamp per HUB</option>
+                  </select>
+                </div>
+              </div>
+            </fieldset>
+            <fieldset class="mb-4">
+              <legend>DMX</legend>
+              <p class="text-body-secondary">
+                Upstream's full-field layout, eight fixtures per alliance on universe 1, running every sequence
+                unmodified.
+              </p>
+              <div class="row mb-3">
+                <label class="col-lg-6 control-label" for="hubLedsAddress">LED Receiver Address</label>
                 <div class="col-lg-4">
                   <input type="text" class="form-control" id="hubLedsAddress" name="hubLedsAddress"
                     value="{{.HubLedsAddress}}" placeholder="e.g. 10.0.100.100">
-                  <small class="text-body-secondary">Leave blank to disable LED output.</small>
+                  <small class="text-body-secondary">Leave blank to send nothing.</small>
                 </div>
               </div>
               <div class="row mb-3">
-                <label class="col-lg-6 control-label" for="hubLedsArtNet">
-                  Send Art-Net instead of sACN
-                </label>
+                <label class="col-lg-6 control-label" for="hubLedsArtNet">Send Art-Net instead of sACN</label>
                 <div class="col-lg-1 checkbox">
                   <input type="checkbox" id="hubLedsArtNet" name="hubLedsArtNet"
                     {{if .HubLedsArtNet}} checked{{end}}>
                 </div>
                 <div class="col-lg-5">
                   <small class="text-body-secondary">
-                    Same pixels and layout, a different packet: Art-Net on UDP 6454 rather than E1.31 sACN on
-                    5568. Tick it for a gateway that speaks only Art-Net. The universe number below is sent
-                    unchanged either way, so the gateway stays on universe 1 whichever protocol it is set to.
+                    Same pixels, a different packet: Art-Net on UDP 6454 rather than E1.31 sACN on 5568. Tick it
+                    for a gateway that speaks only Art-Net.
                   </small>
                 </div>
               </div>
+            </fieldset>
+            <fieldset class="mb-4">
+              <legend>Relays</legend>
+              <p class="text-body-secondary">
+                One relay per HUB on this controller's GPIO, switching a red or a blue lamp: on while that HUB is
+                active, off while it is not. Pulses and sweeps show as steady on.
+              </p>
               <div class="row mb-3">
-                <label class="col-lg-6 control-label" for="hubLedsFallback">
-                  Fixture Capability
-                </label>
-                <div class="col-lg-4">
-                  <select class="form-select" id="hubLedsFallback" name="hubLedsFallback">
-                    <option value="full" {{if eq .HubLedsFallback "full"}}selected{{end}}>
-                      Full &mdash; addressable fixtures, all sequences
-                    </option>
-                    <option value="solid" {{if eq .HubLedsFallback "solid"}}selected{{end}}>
-                      Solid &mdash; single-pixel fixtures; patterns become a solid colour
-                    </option>
-                    <option value="binary" {{if eq .HubLedsFallback "binary"}}selected{{end}}>
-                      Binary &mdash; no dimming; pulses become solid too
-                    </option>
-                  </select>
-                  <small class="text-body-secondary">
-                    Fill, sweep and rainbow sequences are meaningless on a fixture with one pixel; they would show
-                    whichever colour that pixel happened to be mid-animation. Solid replaces them with the alliance
-                    colour.
-                  </small>
+                <label class="col-lg-6 control-label" for="hubRelayRedPin">Red Relay GPIO Pin<br/>(BCM number)</label>
+                <div class="col-lg-2">
+                  <input type="number" class="form-control" id="hubRelayRedPin" name="hubRelayRedPin"
+                    value="{{.HubRelayRedPin}}" min="1" max="27">
                 </div>
               </div>
               <div class="row mb-3">
-                <label class="col-lg-6 control-label" for="hubLedsSimplified">
-                  Use Simplified Practice-Field Layout
-                </label>
+                <label class="col-lg-6 control-label" for="hubRelayBluePin">Blue Relay GPIO Pin<br/>(BCM number)</label>
+                <div class="col-lg-2">
+                  <input type="number" class="form-control" id="hubRelayBluePin" name="hubRelayBluePin"
+                    value="{{.HubRelayBluePin}}" min="1" max="27">
+                </div>
+              </div>
+              <div class="row mb-3">
+                <label class="col-lg-6 control-label" for="hubRelayActiveLow">Relays switch on when LOW</label>
                 <div class="col-lg-1 checkbox">
-                  <input type="checkbox" id="hubLedsSimplified" name="hubLedsSimplified"
-                    {{if .HubLedsSimplified}} checked{{end}}>
+                  <input type="checkbox" id="hubRelayActiveLow" name="hubRelayActiveLow"
+                    {{if .HubRelayActiveLow}} checked{{end}}>
                 </div>
                 <div class="col-lg-5">
                   <small class="text-body-secondary">
-                    One fixture per alliance Hub instead of eight. Unchecked keeps the standard arena layout.
+                    Tick it for a board whose relays click on when the input is pulled low, as most opto-isolated
+                    modules do. Lamps that are lit between matches and dark while their HUB is active mean this is
+                    set the wrong way.
                   </small>
                 </div>
               </div>
-              <div class="row mb-3">
-                <label class="col-lg-6 control-label" for="hubLedsRedUniverse">
-                  Red Hub Fixture &mdash; Universe / Start Address
-                </label>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control" id="hubLedsRedUniverse" name="hubLedsRedUniverse"
-                    value="{{.HubLedsRedUniverse}}" min="1">
-                </div>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control" id="hubLedsRedAddress" name="hubLedsRedAddress"
-                    value="{{.HubLedsRedAddress}}" min="1" max="512">
-                </div>
-              </div>
-              <div class="row mb-3">
-                <label class="col-lg-6 control-label" for="hubLedsBlueUniverse">
-                  Blue Hub Fixture &mdash; Universe / Start Address
-                </label>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control" id="hubLedsBlueUniverse" name="hubLedsBlueUniverse"
-                    value="{{.HubLedsBlueUniverse}}" min="1">
-                </div>
-                <div class="col-lg-2">
-                  <input type="number" class="form-control" id="hubLedsBlueAddress" name="hubLedsBlueAddress"
-                    value="{{.HubLedsBlueAddress}}" min="1" max="512">
-                </div>
-              </div>
-              <p class="text-body-secondary">
-                Fixtures must sit at least 24 channels apart in a universe. The renderer always writes a 24-channel
-                block per fixture; a single-pixel unit reads the first three and ignores the rest, but a second
-                fixture placed inside that block would be overwritten. Invalid spacing is rejected on save.
-              </p>
             </fieldset>
           </div>
           <div class="row justify-content-center">

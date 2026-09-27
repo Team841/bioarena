@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/team841/bioarena/field"
-	"github.com/team841/bioarena/hardware"
 	"github.com/team841/bioarena/web"
 	"gopkg.in/yaml.v3"
 )
@@ -38,10 +37,6 @@ type Config struct {
 	WarningRemainingDurationSec int              `yaml:"warning_remaining_seconds"`
 	HttpPort                    int              `yaml:"http_port"`
 	NetworkSecurityEnabled      bool             `yaml:"network_security_enabled"`
-	FieldLightsDriver           string           `yaml:"field_lights_driver"`
-	FieldLightsPort             string           `yaml:"field_lights_port"`
-	FieldLightsBaud             int              `yaml:"field_lights_baud"`
-	FieldLightsCommand          string           `yaml:"field_lights_command"`
 	RedEStopPanel               EStopPanelConfig `yaml:"red_estop_panel"`
 	BlueEStopPanel              EStopPanelConfig `yaml:"blue_estop_panel"`
 }
@@ -53,8 +48,6 @@ func defaultConfig() *Config {
 		TeleopDurationSec:           140,
 		WarningRemainingDurationSec: 30,
 		HttpPort:                    8080,
-		FieldLightsBaud:             9600,
-		FieldLightsCommand:          "START\n",
 
 		// On unless config.yaml says otherwise. A key absent from the file leaves this
 		// default in place, so a Pi carrying an older config.yaml still configures the
@@ -72,8 +65,12 @@ func defaultConfig() *Config {
 // A key that was never valid still fails. The point of the strict decode is catching
 // typos, and a typo is not the same thing as a setting that has been retired.
 var retiredConfigKeys = map[string]string{
-	"team_network_driver": "the field is always configured through the switch",
-	"local_network":       "the Pi-routed team network was removed",
+	"team_network_driver":  "the field is always configured through the switch",
+	"local_network":        "the Pi-routed team network was removed",
+	"field_lights_driver":  "hub lights are set under Arena > Settings > LEDs",
+	"field_lights_port":    "hub lights are set under Arena > Settings > LEDs",
+	"field_lights_baud":    "hub lights are set under Arena > Settings > LEDs",
+	"field_lights_command": "hub lights are set under Arena > Settings > LEDs",
 }
 
 // loadConfig reads config.yaml. If the file is absent, defaults are returned.
@@ -124,31 +121,6 @@ func stripRetiredKeys(data []byte) ([]byte, error) {
 		return data, nil
 	}
 	return yaml.Marshal(raw)
-}
-
-// buildFieldLights constructs the FieldLights driver from config.
-func buildFieldLights(cfg *Config) hardware.FieldLights {
-	switch cfg.FieldLightsDriver {
-	case "", "none":
-		return &hardware.NoopFieldLights{}
-	case "serial":
-		baud := cfg.FieldLightsBaud
-		if baud == 0 {
-			baud = 9600
-		}
-		cmd := cfg.FieldLightsCommand
-		if cmd == "" {
-			cmd = "START\n"
-		}
-		sl, err := hardware.NewSerialFieldLights(cfg.FieldLightsPort, baud, cmd)
-		if err != nil {
-			log.Fatalf("serial field lights: %v", err)
-		}
-		return sl
-	default:
-		log.Fatalf("unknown field_lights_driver: %q", cfg.FieldLightsDriver)
-		return nil
-	}
 }
 
 // isFirstRun reports whether the event database has yet to be created. Settings that the
@@ -209,16 +181,6 @@ func main() {
 
 	if err = arena.LoadSettings(); err != nil {
 		log.Fatalln("Error reloading settings:", err)
-	}
-
-	arena.FieldLights = buildFieldLights(cfg)
-
-	// Hub LED configuration lives in the database, applied by LoadSettings above, so it
-	// survives a power cycle and is editable from the Settings page without a restart.
-	if arena.EventSettings.HubLedsAddress == "" {
-		log.Println("WARNING: No Hub LED address configured — Hub LED output disabled.")
-	} else {
-		log.Printf("Hub LEDs sending sACN to %s", arena.EventSettings.HubLedsAddress)
 	}
 
 	// On SIGTERM/SIGINT: disable all robots and wait one DS packet cycle before exiting

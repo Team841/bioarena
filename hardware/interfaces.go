@@ -4,19 +4,6 @@ package hardware
 
 import (
 	"time"
-
-	"github.com/team841/bioarena/game"
-)
-
-// MatchPhase describes the current field state for hardware drivers.
-type MatchPhase int
-
-const (
-	PhaseIdle     MatchPhase = iota
-	PhaseAuto
-	PhasePause
-	PhaseTeleop
-	PhaseFinished
 )
 
 // Alliance identifies which alliance won AUTO.
@@ -27,20 +14,6 @@ const (
 	AllianceRed
 	AllianceBlue
 )
-
-// LightingState carries all context a FieldLights driver needs.
-// SetState is called at every phase transition and shift boundary.
-type LightingState struct {
-	Phase        MatchPhase
-	Shift        game.Shift // spans the whole match; game.ShiftCount when not in one
-	AutoWinner   Alliance   // which alliance's HUB goes inactive first in Shift1
-	ShiftWarning bool       // true during 3s window before next HUB deactivation
-}
-
-// FieldLights controls field indicator lighting.
-type FieldLights interface {
-	SetState(state LightingState) error
-}
 
 // StopState is the condition of one stop input.
 //

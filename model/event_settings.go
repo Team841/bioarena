@@ -8,6 +8,7 @@ package model
 
 import (
 	"github.com/team841/bioarena/game"
+	"github.com/team841/bioarena/hardware"
 )
 
 type PlayoffType int
@@ -95,45 +96,31 @@ type EventSettings struct {
 	TeleopDurationSec                int
 	WarningRemainingDurationSec      int
 
-	// Hub LED settings. Stored here rather than in config.yaml so they survive a power
-	// cycle and can be changed from the Settings page without a restart.
+	// Hub lighting. Stored here rather than in config.yaml so it survives a power cycle and
+	// can be changed from the Settings page without a restart.
 	//
-	// HubLedsSimplified selects the practice-field layout below instead of upstream's
-	// full-field one (eight fixtures per alliance across four sides of each goal).
-	// HubLedsFallback names how much the fixtures can render: "full", "solid", or
-	// "binary".
-	HubLedsAddress string
-	// HubLedsArtNet sends Art-Net instead of E1.31 sACN. Same pixels and layout; a
-	// different packet on a different port, for a node that speaks only Art-Net.
-	HubLedsArtNet       bool
-	HubLedsSimplified   bool
-	HubLedsFallback     string
-	HubLedsRedUniverse  int
-	HubLedsRedAddress   int
-	HubLedsBlueUniverse int
-	HubLedsBlueAddress  int
+	// Two outputs, one at a time. DMX is upstream's: its full-field fixture layout at
+	// HubLedsAddress, over E1.31 sACN or, with HubLedsArtNet, Art-Net; a blank address sends
+	// nothing. HubRelays replaces it with one relay per HUB on the controller's own GPIO,
+	// switching a red or a blue lamp. Relay pins are BCM numbers, and HubRelayActiveLow is
+	// for boards that switch on when their input is pulled LOW.
+	HubLedsAddress    string
+	HubLedsArtNet     bool
+	HubRelays         bool
+	HubRelayRedPin    int
+	HubRelayBluePin   int
+	HubRelayActiveLow bool
 }
 
-// applyHubLedDefaults fills in Hub LED settings that a database predating them has no
-// value for. Without this an existing install shows zeroes on the Settings page and
-// cannot enable the simplified layout without first typing valid addresses. Values are
-// only supplied where the stored one is unset, so a configured field is never
-// overwritten; they persist on the next save.
-func (settings *EventSettings) applyHubLedDefaults() {
-	if settings.HubLedsFallback == "" {
-		settings.HubLedsFallback = "full"
+// applyHubRelayDefaults fills in relay pins that a database predating them has no value
+// for, so the Settings page offers working pins rather than zeroes. Only unset pins are
+// filled, so a configured field is never overwritten; they persist on the next save.
+func (settings *EventSettings) applyHubRelayDefaults() {
+	if settings.HubRelayRedPin == 0 {
+		settings.HubRelayRedPin = hardware.DefaultHubRelayRedPin
 	}
-	if settings.HubLedsRedUniverse == 0 {
-		settings.HubLedsRedUniverse = 1
-	}
-	if settings.HubLedsRedAddress == 0 {
-		settings.HubLedsRedAddress = 1
-	}
-	if settings.HubLedsBlueUniverse == 0 {
-		settings.HubLedsBlueUniverse = 1
-	}
-	if settings.HubLedsBlueAddress == 0 {
-		settings.HubLedsBlueAddress = 25
+	if settings.HubRelayBluePin == 0 {
+		settings.HubRelayBluePin = hardware.DefaultHubRelayBluePin
 	}
 }
 
@@ -144,7 +131,7 @@ func (database *Database) GetEventSettings() (*EventSettings, error) {
 	}
 	if len(allEventSettings) == 1 {
 		settings := &allEventSettings[0]
-		settings.applyHubLedDefaults()
+		settings.applyHubRelayDefaults()
 		return settings, nil
 	}
 
@@ -165,14 +152,8 @@ func (database *Database) GetEventSettings() (*EventSettings, error) {
 		TeleopDurationSec:           game.MatchTiming.TeleopDurationSec,
 		WarningRemainingDurationSec: game.MatchTiming.WarningRemainingDurationSec,
 
-		// Default to the standard arena: upstream's full-field fixture layout, running
-		// its sequences unchanged. A practice field opts out of both.
-		HubLedsSimplified:   false,
-		HubLedsFallback:     "full",
-		HubLedsRedUniverse:  1,
-		HubLedsRedAddress:   1,
-		HubLedsBlueUniverse: 1,
-		HubLedsBlueAddress:  25,
+		HubRelayRedPin:  hardware.DefaultHubRelayRedPin,
+		HubRelayBluePin: hardware.DefaultHubRelayBluePin,
 	}
 
 	if err := database.eventSettingsTable.create(&eventSettings); err != nil {

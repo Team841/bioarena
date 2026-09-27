@@ -26,88 +26,82 @@ const (
 	hubLightScoringAssessmentSec = 3
 )
 
-// ledController is the Hub LED surface the arena uses. Two implementations: led.Controller
-// speaks E1.31 sACN, led.ArtNetController speaks Art-Net, and the checkbox under
-// Arena > Settings > LEDs picks between them. Everything above the wire is identical.
+// ledController is the Hub lighting output. Three implementations behind one sequence:
+// led.Controller speaks E1.31 sACN and led.ArtNetController Art-Net, both to upstream's
+// full-field fixtures, and hardware.GpioHubRelays switches one lamp per HUB. The mode
+// selection below is upstream's and never knows which it is driving.
 type ledController interface {
-	SetAddress(address string) error
-	SetLayout(red, blue []led.FixtureSpec) error
-	UseDefaultLayout()
 	SetMode(redMode, blueMode led.Mode)
 	GetModes() (led.Mode, led.Mode)
-	GetPixels() ([64]led.Color, [64]led.Color)
 	Update() error
 }
 
-// newLedController builds the controller for the configured protocol.
-func newLedController(artNet bool) ledController {
-	if artNet {
-		return led.NewArtNetController()
-	}
-	return led.NewController()
-}
-
-// applyHubLedSettings pushes the stored Hub LED configuration into the controller.
-// Called on every settings load, so changes take effect without restarting bioarena.
+// applyHubLedSettings rebuilds the lighting output from the stored settings. Called on
+// every settings load, so a change takes effect without restarting bioarena.
 //
-// Configuration errors are logged and leave the previous layout in place rather than
-// returning: a bad fixture address should not stop the arena from loading.
+// Rebuilt every time rather than adjusted, because every output holds something that has to
+// be let go of first: the DMX socket, or the relay GPIO lines, which the kernel will not
+// hand to the replacement while the old output still has them. Settings cannot be saved
+// mid-match, so nothing is lost by starting from Off.
 func (arena *Arena) applyHubLedSettings(settings *model.EventSettings) {
 	// A settings save is a fresh chance to report, so a failure that persists across one is
 	// said again rather than staying suppressed from before the change.
 	arena.hubLedsFailing = false
 
-	// Rebuilt when the protocol changes: the two speak different ports, so switching means
-	// a new connection rather than a new field on the old one.
-	if settings.HubLedsArtNet != arena.hubLedsArtNet {
-		// Release the outgoing controller's socket before the reference is dropped.
-		// SetAddress("") is how: it closes the connection and is already on the interface.
-		// The led package is kept byte-identical to upstream, so there is no Close to add
-		// there -- see docs/upstream-divergences.md.
-		if arena.Leds != nil {
-			_ = arena.Leds.SetAddress("")
-		}
-		arena.hubLedsArtNet = settings.HubLedsArtNet
-		arena.Leds = newLedController(settings.HubLedsArtNet)
-		if settings.HubLedsArtNet {
-			log.Println("Hub LEDs: sending Art-Net.")
-		} else {
-			log.Println("Hub LEDs: sending E1.31 sACN.")
-		}
+	if arena.Leds != nil {
+		releaseHubLeds(arena.Leds)
 	}
-
-	if err := arena.Leds.SetAddress(settings.HubLedsAddress); err != nil {
-		log.Printf("Hub LEDs: could not set address %q: %v", settings.HubLedsAddress, err)
-	}
-
-	fallback, err := led.ParseFallback(settings.HubLedsFallback)
-	if err != nil {
-		log.Printf("Hub LEDs: %v; falling back to full", err)
-	}
-	arena.hubLedFallback = fallback
-
-	if !settings.HubLedsSimplified {
-		arena.Leds.UseDefaultLayout()
-		return
-	}
-
-	err = arena.Leds.SetLayout(
-		[]led.FixtureSpec{{Universe: settings.HubLedsRedUniverse, StartAddress: settings.HubLedsRedAddress}},
-		[]led.FixtureSpec{{Universe: settings.HubLedsBlueUniverse, StartAddress: settings.HubLedsBlueAddress}},
-	)
-	if err != nil {
-		log.Printf("Hub LEDs: simplified layout rejected (%v); keeping previous layout", err)
-	}
+	arena.Leds = newHubLeds(settings)
 }
 
-// setHubLedModes applies the configured fallback and sends the modes to the controller.
-// Every mode change goes through here so a practice field's fixtures never receive a
-// sequence they cannot render.
-func (arena *Arena) setHubLedModes(redMode, blueMode led.Mode) {
-	arena.Leds.SetMode(
-		led.ApplyFallback(arena.hubLedFallback, redMode, led.RedMode),
-		led.ApplyFallback(arena.hubLedFallback, blueMode, led.BlueMode),
-	)
+// newHubLeds builds the configured output. A problem is logged rather than returned: a
+// relay pin that will not open, or an address that will not resolve, should not stop the
+// arena from loading. Either way the sequences still run, with nothing sent.
+func newHubLeds(settings *model.EventSettings) ledController {
+	if settings.HubRelays {
+		relays, err := hardware.NewGpioHubRelays(
+			"gpiochip0", settings.HubRelayRedPin, settings.HubRelayBluePin, settings.HubRelayActiveLow,
+		)
+		if err != nil {
+			log.Printf(
+				"WARNING: Could not open hub relay GPIO pins (red %d, blue %d): %v",
+				settings.HubRelayRedPin, settings.HubRelayBluePin, err,
+			)
+			return led.NewController()
+		}
+		return relays
+	}
+
+	var dmx interface {
+		ledController
+		SetAddress(address string) error
+	}
+	protocol := "sACN"
+	if settings.HubLedsArtNet {
+		dmx, protocol = led.NewArtNetController(), "Art-Net"
+	} else {
+		dmx = led.NewController()
+	}
+	if settings.HubLedsAddress == "" {
+		log.Println("WARNING: No Hub LED address configured — Hub LED output disabled.")
+	} else if err := dmx.SetAddress(settings.HubLedsAddress); err != nil {
+		log.Printf("Hub LEDs: could not set address %q: %v", settings.HubLedsAddress, err)
+	} else {
+		log.Printf("Hub LEDs: sending %s to %s.", protocol, settings.HubLedsAddress)
+	}
+	return dmx
+}
+
+// releaseHubLeds lets go of what an outgoing output holds. The relays have a Close; the DMX
+// controllers close their socket on a blank address, because the led package is kept
+// byte-identical to upstream and has no Close to add -- see docs/upstream-divergences.md.
+func releaseHubLeds(leds ledController) {
+	switch leds := leds.(type) {
+	case interface{ Close() }:
+		leds.Close()
+	case interface{ SetAddress(string) error }:
+		_ = leds.SetAddress("")
+	}
 }
 
 // redWonAuto reports whether the red alliance is the AUTO winner.
@@ -125,19 +119,19 @@ func (arena *Arena) hubs() (*game.Hub, *game.Hub) {
 func (arena *Arena) updateHubLeds(currentTime time.Time) {
 	switch arena.MatchState {
 	case AutoPeriod:
-		arena.setHubLedModes(led.RedStartupMode, led.BlueStartupMode)
+		arena.Leds.SetMode(led.RedStartupMode, led.BlueStartupMode)
 	case PausePeriod:
-		arena.setHubLedModes(led.RedMode, led.BlueMode)
+		arena.Leds.SetMode(led.RedMode, led.BlueMode)
 	case TeleopPeriod:
 		arena.updateTeleopHubLeds(currentTime)
 	case PostMatch:
 		if arena.lastMatchState != PostMatch {
 			// Set the Hub LEDs to white at the end of the match, and then turn them off when the referees are supposed
 			// to assess tower climbs.
-			arena.setHubLedModes(led.WhiteMode, led.WhiteMode)
+			arena.Leds.SetMode(led.WhiteMode, led.WhiteMode)
 			go func() {
 				time.Sleep(hubLightScoringAssessmentSec * time.Second)
-				arena.setHubLedModes(led.OffMode, led.OffMode)
+				arena.Leds.SetMode(led.OffMode, led.OffMode)
 			}()
 		}
 	}
@@ -152,7 +146,7 @@ func (arena *Arena) updateHubLeds(currentTime time.Time) {
 			log.Printf("Failed to update hub LEDs: %s", err)
 			log.Println(
 				"Hub LEDs: suppressing further failures until they recover. " +
-					"Clear the LED Receiver Address under Setup > Settings to stop trying.",
+					"Change the output under Arena > Settings > LEDs to stop trying.",
 			)
 		}
 	} else if arena.hubLedsFailing {
@@ -215,5 +209,5 @@ func (arena *Arena) updateTeleopHubLeds(currentTime time.Time) {
 			blueMode = led.BlueAdvantageMode
 		}
 	}
-	arena.setHubLedModes(redMode, blueMode)
+	arena.Leds.SetMode(redMode, blueMode)
 }

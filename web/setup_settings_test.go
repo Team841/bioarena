@@ -175,6 +175,66 @@ func TestSetupSettingsOmittedFieldBehavior(t *testing.T) {
 	assert.Equal(t, "", web.arena.EventSettings.ApPassword)
 }
 
+// The relay settings round-trip through the form and survive into the database, so they
+// hold across a power cycle. On this platform the pins cannot be opened, which must not stop
+// the save: the output is logged as unavailable and the field carries on.
+func TestSetupSettingsHubRelays(t *testing.T) {
+	web := setupTestWeb(t)
+
+	recorder := web.getHttpResponse("/setup/settings")
+	assert.Equal(t, 200, recorder.Code)
+	assert.Regexp(t, `name="hubRelayRedPin"\s+value="22"`, recorder.Body.String(), "default pin offered")
+
+	recorder = web.postHttpResponse("/setup/settings",
+		"name=Test&hubLightsOutput=relays&hubRelayRedPin=17&hubRelayBluePin=27&hubRelayActiveLow=on")
+	assert.Equal(t, 303, recorder.Code)
+
+	saved, err := web.arena.Database.GetEventSettings()
+	assert.Nil(t, err)
+	assert.True(t, saved.HubRelays)
+	assert.Equal(t, 17, saved.HubRelayRedPin)
+	assert.Equal(t, 27, saved.HubRelayBluePin)
+	assert.True(t, saved.HubRelayActiveLow)
+
+	recorder = web.getHttpResponse("/setup/settings")
+	assert.Contains(t, recorder.Body.String(), `<option value="relays" selected>`)
+
+	// Back to DMX; the relay pins are kept for next time.
+	recorder = web.postHttpResponse("/setup/settings",
+		"name=Test&hubLightsOutput=dmx&hubLedsAddress=10.0.100.100&hubRelayRedPin=17&hubRelayBluePin=27")
+	assert.Equal(t, 303, recorder.Code)
+	saved, _ = web.arena.Database.GetEventSettings()
+	assert.False(t, saved.HubRelays)
+	assert.Equal(t, "10.0.100.100", saved.HubLedsAddress)
+	assert.Equal(t, 17, saved.HubRelayRedPin)
+}
+
+// A relay pin the controller cannot open is refused on the form rather than failing at the
+// kernel, where it would leave the lamps dark with only a journal line to explain.
+func TestSetupSettingsRejectsBadRelayPins(t *testing.T) {
+	for _, c := range []struct {
+		form    string
+		message string
+	}{
+		{"hubRelayRedPin=22&hubRelayBluePin=22", "cannot share GPIO pin 22"},
+		{"hubRelayRedPin=0&hubRelayBluePin=23", "Red relay GPIO pin must be"},
+		{"hubRelayRedPin=22&hubRelayBluePin=40", "Blue relay GPIO pin must be"},
+		{"fieldEStopPin=24&hubRelayRedPin=24&hubRelayBluePin=23", "already the field e-stop"},
+	} {
+		web := setupTestWeb(t)
+		recorder := web.postHttpResponse("/setup/settings", "name=Test&hubLightsOutput=relays&"+c.form)
+		assert.Equal(t, 200, recorder.Code, c.form)
+		assert.Contains(t, recorder.Body.String(), c.message, c.form)
+		saved, _ := web.arena.Database.GetEventSettings()
+		assert.False(t, saved.HubRelays, "nothing persisted: %s", c.form)
+	}
+
+	// Only checked when the relays are the output: DMX never opens the pins.
+	web := setupTestWeb(t)
+	recorder := web.postHttpResponse("/setup/settings", "name=Test&hubLightsOutput=dmx&hubRelayRedPin=22&hubRelayBluePin=22")
+	assert.Equal(t, 303, recorder.Code)
+}
+
 func (web *Web) postFileHttpResponse(path string, paramName string, file *bytes.Buffer) *httptest.ResponseRecorder {
 	body := new(bytes.Buffer)
 	writer := multipart.NewWriter(body)

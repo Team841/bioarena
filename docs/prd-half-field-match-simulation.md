@@ -300,6 +300,10 @@ No change to existing period timing — [§4.1](#41-match-timing) and
 
 ### R6 — Practice-field fixture configuration
 
+> **Superseded.** The layout override and capability fallback below were built and later
+> removed. Hub lighting is now upstream's full-field DMX layout or one GPIO relay per HUB;
+> see `docs/upstream-divergences.md` and `docs/hardware-wiring.md` §8.
+
 Practice fields run far cheaper fixtures than the arena's. The lighting must be
 configurable to match, without diverging from the ported upstream behaviour on a field
 that does have the real hardware.

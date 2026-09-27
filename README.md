@@ -53,7 +53,7 @@ After first boot, in this order:
 4. Copy the binary, assets, and service file (below), plus `config.yaml`. Carry `event.db`
    across too if you want the previous field's settings, teams, and admin password;
    without it the first start creates a fresh database with the default password.
-5. Confirm the GPIO chip name with `gpiodetect` if you use e-stop panels or GPIO lights.
+5. Confirm the GPIO chip name with `gpiodetect` if you use e-stop panels or hub relays.
 
 Two things that will look like faults and are not:
 
@@ -807,38 +807,22 @@ Network credentials (AP address, AP password, switch address, switch password) a
 
 ## Field hardware
 
-**Hub LEDs (DMX over Ethernet)**
+**Hub lights**
 
-The 2026 Hub lighting runs E1.31 sACN, ported from upstream cheesy-arena. It is
-configured from **Arena → LEDs → DMX Hub LEDs** in the web UI and stored in the
-database, so it survives a restart. A blank address disables output.
+Set under **Arena → Settings → LEDs** and stored in the database, so they survive a power
+cycle. One output at a time, both running upstream's lighting sequence unchanged, so they
+agree on which HUB is active and when:
 
-Practice fields with cheaper fixtures can override the layout — one fixture per alliance
-Hub instead of eight — and select a fixture capability so per-pixel sequences degrade to
-a solid colour. See
-[docs/prd-half-field-match-simulation.md](docs/prd-half-field-match-simulation.md) for
-the addressing rules.
-
-**Field lights (serial)**
-
-A separate, simpler interface for an Arduino-driven light or sound cue, independent of
-the Hub LEDs:
-
-```go
-type FieldLights interface {
-    SetState(state LightingState) error
-}
-```
-
-Configured in `config.yaml`. Supported `field_lights_driver` values are `none` (the
-default) and `serial`:
-
-```yaml
-field_lights_driver: "serial"
-field_lights_port: "/dev/ttyUSB0"
-field_lights_baud: 9600
-field_lights_command: "START\n"
-```
+- **DMX** — upstream's full-field layout, eight fixtures per alliance on universe 1, over
+  E1.31 sACN or, with **Send Art-Net instead of sACN** ticked, Art-Net. Set **LED
+  Receiver Address** to the gateway; blank sends nothing.
+- **Relays** — one relay per HUB on the controller's own GPIO, switching a plain red or
+  blue lamp: on while that HUB is active, off while it is not. Pulses and sweeps show as
+  steady on, and the end-of-match white as both lamps for three seconds. The pins default
+  to BCM 22 (red) and 23 (blue) and can be changed there; tick **Relays switch on when
+  LOW** for a board that clicks on when its input is pulled low, as most opto-isolated
+  modules do. Wiring is in
+  [docs/hardware-wiring.md](docs/hardware-wiring.md#8-main-pi-hub-relays).
 
 **E-stop panel**
 
@@ -1061,7 +1045,7 @@ comes down to what else changes.
 | Static IP | `nmcli` (NetworkManager) | `/etc/dhcpcd.conf` |
 | apt | Works | End of life; repositories moved to `archive.debian.org` |
 
-**Verify the GPIO chip name** if you use e-stop panels or GPIO field lights. Both default
+**Verify the GPIO chip name** if you use e-stop panels or hub relays. Both default
 to `gpiochip0`, which is correct for a Pi 4 today, but chip numbering has moved between
 kernel versions and hardware generations. Confirm on the Pi with `gpiodetect`, and set
 `gpio_chip` in `estop-panel.yaml` if it differs.

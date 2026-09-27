@@ -121,11 +121,8 @@ func TestArtNetSequenceSkipsZero(t *testing.T) {
 
 // The pixels are the sACN controller's, unchanged: only the packet around them differs.
 func TestArtNetCarriesTheSamePixels(t *testing.T) {
+	// Upstream's default layout puts every fixture on universe 1, so this is one packet.
 	conn, controller := listen(t)
-	assert.Nil(t, controller.SetLayout(
-		[]FixtureSpec{{Universe: 1, StartAddress: 1}},
-		[]FixtureSpec{{Universe: 1, StartAddress: 25}},
-	))
 	controller.SetMode(RedMode, BlueMode)
 	assert.Nil(t, controller.Update())
 

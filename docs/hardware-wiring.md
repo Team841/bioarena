@@ -15,11 +15,12 @@ E-stop buttons are wired **dual-channel**: each button's NC and NO contacts retu
 5. [Single Button Circuit](#5-single-button-circuit)
 6. [Wiring an E-Stop Panel Pi](#6-wiring-an-e-stop-panel-pi)
 7. [Main Pi Field E-Stop](#7-main-pi-field-e-stop)
-8. [Power and Indicator Lamps](#8-power-and-indicator-lamps)
-9. [Physical Panel Layout](#9-physical-panel-layout)
-10. [Software Configuration](#10-software-configuration)
-11. [Test Procedure](#11-test-procedure)
-12. [Troubleshooting](#12-troubleshooting)
+8. [Main Pi Hub Relays](#8-main-pi-hub-relays)
+9. [Power and Indicator Lamps](#9-power-and-indicator-lamps)
+10. [Physical Panel Layout](#10-physical-panel-layout)
+11. [Software Configuration](#11-software-configuration)
+12. [Test Procedure](#12-test-procedure)
+13. [Troubleshooting](#13-troubleshooting)
 
 ---
 
@@ -84,7 +85,7 @@ Quantities marked with **×2** mean one per alliance.
 | As needed | 10 nF–100 nF ceramic capacitors | 50 V | One per GPIO line to GND at the Pi end; debounce and ESD |
 | As needed | 10 kΩ resistors (1/4 W) | ±5% or better | Optional external pull-up per line; recommended for runs over ~2 m |
 | As needed | 22 AWG 3-conductor cable | Rated ≥ 24 V | One run per button: GND, NC, NO. Shielded or twisted improves noise immunity |
-| **×2** | 12 V 1 A regulated power adapter | 2.1 mm barrel connector | **Lamps only** — see [section 8](#8-power-and-indicator-lamps). Omit if your buttons are unlit |
+| **×2** | 12 V 1 A regulated power adapter | 2.1 mm barrel connector | **Lamps only** — see [section 9](#9-power-and-indicator-lamps). Omit if your buttons are unlit |
 | **×2** | 500 mA resettable polyfuse (PTC) | Rated ≥ 15 V | Inline on the +12 V lamp feed |
 | **×2** | DIN rail section, ~20 cm | 35 mm standard | Mounts inside enclosure |
 | **×2** | Small enclosure, ~150×100×60 mm | IP54 or better | Holds Pi and terminal strips |
@@ -112,7 +113,7 @@ graph LR
     MAIN -->|"GET /poll\n200 ms timeout"| BLUE
 ```
 
-Static IPs are set by the systemd service files (see [Software Configuration](#10-software-configuration)).
+Static IPs are set by the systemd service files (see [Software Configuration](#11-software-configuration)).
 
 ---
 
@@ -180,7 +181,7 @@ The series resistor limits current if a sense line ever meets 5 V or 12 V throug
 
 For cable runs over about 2 m, add a 10 kΩ external pull-up from each sense line to 3.3 V. The internal pull-up is weak enough that long unshielded runs start picking up noise.
 
-> **Do not connect the sense circuit to 12 V.** If your buttons have illuminated lamps, the lamp circuit is a completely separate loop — see [section 8](#8-power-and-indicator-lamps).
+> **Do not connect the sense circuit to 12 V.** If your buttons have illuminated lamps, the lamp circuit is a completely separate loop — see [section 9](#9-power-and-indicator-lamps).
 
 ---
 
@@ -214,7 +215,7 @@ BCM 16 and 26 are left free. Use the BCM numbers in `estop-panel.yaml`, not phys
 5. Fit the optional capacitor from each GPIO pin to GND, as close to the Pi header as you can manage.
 6. Do **not** add pull-down resistors anywhere. The internal pull-ups are what make the active-low logic work.
 
-> **Label the channels, not just the buttons.** `R1-ESTOP-NC` and `R1-ESTOP-NO` swapped at the terminal strip produces a panel that reads OK when released and OK when pressed — inverted, and much harder to diagnose than a dead line. The test procedure in [section 11](#11-test-procedure) catches this.
+> **Label the channels, not just the buttons.** `R1-ESTOP-NC` and `R1-ESTOP-NO` swapped at the terminal strip produces a panel that reads OK when released and OK when pressed — inverted, and much harder to diagnose than a dead line. The test procedure in [section 12](#12-test-procedure) catches this.
 
 ---
 
@@ -235,7 +236,56 @@ The field e-stop **latches**: once triggered it stays triggered until an operato
 
 ---
 
-## 8. Power and Indicator Lamps
+## 8. Main Pi Hub Relays
+
+The alternative to DMX Hub lighting: one relay per HUB, each switching a plain red or blue lamp, driven from two GPIO pins on the main Pi. Select **Relays** as the output under **Setup → Settings → LEDs**; the lamp for a HUB is on while that HUB is active and off while it is not.
+
+```mermaid
+flowchart LR
+    subgraph PI["Main Pi"]
+        GR["GPIO — red relay\nBCM 22 (phys 15)"]
+        GB["GPIO — blue relay\nBCM 23 (phys 16)"]
+        PGND["GND (phys 14)"]
+    end
+    subgraph RB["2-channel relay board"]
+        IN1["IN1"]
+        IN2["IN2"]
+        RGND["GND"]
+        K1["relay 1 COM / NO"]
+        K2["relay 2 COM / NO"]
+    end
+    LPS["Lamp supply"]
+    RL["Red lamp"]
+    BL["Blue lamp"]
+    GR --> IN1
+    GB --> IN2
+    PGND --- RGND
+    LPS --> K1 --> RL
+    LPS --> K2 --> BL
+```
+
+The relays switch the lamps' own supply through their COM and NO contacts. Lamp current never goes near the Pi.
+
+**Pins.** BCM 22 and 23 by default, changeable in Settings and kept across restarts. Those two sit in BCM 9–27, which the Pi pulls *down* from power-on until bioarena claims them, so a board that switches on HIGH stays dark while the Pi boots. The settings page refuses a pin shared between the two relays or with the field e-stop.
+
+**Active-low boards.** Most opto-isolated relay modules click on when their input is pulled LOW. Tick **Relays switch on when LOW** for one of those. Two things change with it:
+
+- The default pins would light both lamps from power-on until bioarena starts, since they boot pulled down. Move to pins that boot pulled *up*: **BCM 7 (phys 26)** and **BCM 8 (phys 24)**, with GND on phys 25. They are the SPI0 chip selects, free unless SPI is enabled on this Pi.
+- Many of these modules expect 5 V logic, and on some a 3.3 V "off" still lets enough current through the opto LED to hold the relay in. If the board has a **JD-VCC** jumper, remove it, feed **JD-VCC** from 5 V for the coils and **VCC** from the Pi's 3.3 V for the inputs.
+
+To click a relay by hand, stop the service first, since the kernel gives a line to one requester:
+
+```bash
+sudo systemctl stop bioarena
+gpioset --mode=time --sec=2 gpiochip0 22=1
+sudo systemctl start bioarena
+```
+
+Use `22=0` on an active-low board.
+
+---
+
+## 9. Power and Indicator Lamps
 
 The sense circuit needs no power supply of its own — it runs on the Pi's 3.3 V pull-ups.
 
@@ -262,7 +312,7 @@ Run each Pi from its own USB-C supply (≥ 3 A for a Pi 4).
 
 ---
 
-## 9. Physical Panel Layout
+## 10. Physical Panel Layout
 
 A typical alliance button panel has three driver stations across a table edge. Suggested layout:
 
@@ -285,7 +335,7 @@ A typical alliance button panel has three driver stations across a table edge. S
 
 ---
 
-## 10. Software Configuration
+## 11. Software Configuration
 
 ### Panel Pi: `estop-panel.yaml`
 
@@ -357,7 +407,7 @@ See [README.md](../README.md) for the full deployment steps, including the servi
 
 ---
 
-## 11. Test Procedure
+## 12. Test Procedure
 
 Work through this checklist before using the system for a match. The fault-injection steps matter as much as the button steps — dual-channel wiring you have never seen fault is dual-channel wiring you have not tested.
 
@@ -414,7 +464,7 @@ For at least one e-stop per panel, and for the main Pi field e-stop:
 
 ---
 
-## 12. Troubleshooting
+## 13. Troubleshooting
 
 | Symptom | Likely cause | Fix |
 |---------|-------------|-----|

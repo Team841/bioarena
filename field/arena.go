@@ -16,7 +16,6 @@ import (
 
 	"github.com/team841/bioarena/game"
 	"github.com/team841/bioarena/hardware"
-	"github.com/team841/bioarena/led"
 	"github.com/team841/bioarena/model"
 	"github.com/team841/bioarena/network"
 	"github.com/team841/bioarena/plc"
@@ -60,11 +59,8 @@ type Arena struct {
 	accessPoint      network.AccessPoint
 	teamNetwork      teamNetwork
 	Plc              plc.Plc
-	FieldLights      hardware.FieldLights
 	Leds             ledController
-	hubLedsArtNet    bool
 	hubLedsFailing   bool // true while Update is erroring, so the failure is logged once not 100x/s
-	hubLedFallback   led.Fallback
 	EStopPanels      []hardware.EStopPanel
 	FieldEStop       hardware.FieldEStopPanel
 	AutoWinner       hardware.Alliance
@@ -74,7 +70,7 @@ type Arena struct {
 	ArenaNotifiers
 	MatchState
 	lastMatchState       MatchState
-	lastLightingState    hardware.LightingState
+	lastShift            game.Shift // for the shift_change cue; see currentShift
 	CurrentMatch         *model.Match
 	MatchStartTime       time.Time
 	postMatchStartTime   time.Time
@@ -134,9 +130,6 @@ func NewArena(dbPath string) (*Arena, error) {
 	arena := new(Arena)
 	arena.configureNotifiers()
 	arena.Plc = new(plc.FakePlc)
-	arena.FieldLights = &hardware.NoopFieldLights{}
-	// Output stays disabled until an sACN address is configured.
-	arena.Leds = newLedController(false)
 	arena.EStopPanels = []hardware.EStopPanel{}
 	arena.FieldEStop = &hardware.NoopFieldEStopPanel{}
 	// Unmuted, matching the unchecked box on Match Play. A field that is silent until
@@ -802,20 +795,16 @@ func (arena *Arena) Update() {
 		}
 	}
 
-	// Notify FieldLights driver on any state or sub-phase change.
-	if ls := arena.computeLightingState(matchTimeSec); ls != arena.lastLightingState {
-		// The shift cue is sounded from here rather than from game.MatchSounds so that it
-		// cannot drift from the lights: both come from the same computed transition, on the
-		// same tick. Upstream schedules it by timestamp instead, which works because its
-		// shift boundaries and its sound times are read from the same constants; bioarena
-		// derives the boundaries through teleopShift, so a second schedule could disagree.
-		if ls.Shift != arena.lastLightingState.Shift && shiftChangeSounds(ls.Shift) {
+	// The shift cue is sounded on the tick the shift changes, rather than scheduled by
+	// timestamp in game.MatchSounds as upstream does. Upstream's schedule is safe because its
+	// shift boundaries and its sound times read the same constants; bioarena derives the
+	// boundaries through teleopShift from a flat TeleopDurationSec, so a second schedule
+	// could disagree with it.
+	if shift := arena.currentShift(matchTimeSec); shift != arena.lastShift {
+		if shiftChangeSounds(shift) {
 			arena.PlaySound("shift_change")
 		}
-		if err := arena.FieldLights.SetState(ls); err != nil {
-			log.Printf("FieldLights.SetState: %v", err)
-		}
-		arena.lastLightingState = ls
+		arena.lastShift = shift
 	}
 
 	// Advance the Hub LED sequences. Must run before lastMatchState is updated below,
@@ -1535,44 +1524,20 @@ func (arena *Arena) assignAutoWinner() {
 	}
 }
 
-// computeLightingState derives the current LightingState from arena state and match time.
-func (arena *Arena) computeLightingState(matchTimeSec float64) hardware.LightingState {
-	var phase hardware.MatchPhase
+// currentShift is the REBUILT 2026 shift the match is in. The shift spans the whole match,
+// as upstream models it: AUTO and post-match are shifts of their own, and anything that is
+// not a shift -- idle, the pause between AUTO and teleop -- is game.ShiftCount.
+func (arena *Arena) currentShift(matchTimeSec float64) game.Shift {
 	switch arena.MatchState {
 	case AutoPeriod:
-		phase = hardware.PhaseAuto
-	case PausePeriod:
-		phase = hardware.PhasePause
-	case TeleopPeriod:
-		phase = hardware.PhaseTeleop
-	case PostMatch:
-		phase = hardware.PhaseFinished
-	default:
-		phase = hardware.PhaseIdle
-	}
-
-	// Upstream models the shift as spanning the whole match rather than teleop alone,
-	// so AUTO and post-match map onto their own shifts and anything that is not a shift
-	// (idle, the auto/teleop pause) reports ShiftCount.
-	shift := game.ShiftCount
-	var warning bool
-	switch arena.MatchState {
-	case AutoPeriod:
-		shift = game.ShiftAuto
+		return game.ShiftAuto
 	case TeleopPeriod:
 		teleopStart := game.GetDurationToTeleopStart().Seconds()
-		remaining := int(float64(game.MatchTiming.TeleopDurationSec) - (matchTimeSec - teleopStart))
-		shift = teleopShift(remaining)
-		warning = shiftWarning(remaining)
+		return teleopShift(int(float64(game.MatchTiming.TeleopDurationSec) - (matchTimeSec - teleopStart)))
 	case PostMatch:
-		shift = game.ShiftPostMatch
-	}
-
-	return hardware.LightingState{
-		Phase:        phase,
-		Shift:        shift,
-		AutoWinner:   arena.AutoWinner,
-		ShiftWarning: warning,
+		return game.ShiftPostMatch
+	default:
+		return game.ShiftCount
 	}
 }
 
@@ -1606,7 +1571,7 @@ func teleopShift(remaining int) game.Shift {
 // those again would stack two cues on one moment. ShiftAuto and ShiftPostMatch are match
 // start and end, covered by "start" and "end".
 //
-// That leaves Shift1 through Shift4 -- the same four boundaries shiftWarning anticipates.
+// That leaves Shift1 through Shift4 -- the same four boundaries the Hub lights pulse ahead of.
 func shiftChangeSounds(shift game.Shift) bool {
 	switch shift {
 	case game.Shift1, game.Shift2, game.Shift3, game.Shift4:
@@ -1614,14 +1579,6 @@ func shiftChangeSounds(shift game.Shift) bool {
 	default:
 		return false
 	}
-}
-
-// shiftWarning returns true during the 3s window before each HUB deactivation boundary.
-func shiftWarning(remaining int) bool {
-	return (remaining >= 130 && remaining < 133) || // 3s before Shift1
-		(remaining >= 105 && remaining < 108) || // 3s before Shift2
-		(remaining >= 80 && remaining < 83) || // 3s before Shift3
-		(remaining >= 55 && remaining < 58) // 3s before Shift4
 }
 
 // stationOrder is the alliance stations in a fixed order, for anything that needs to walk

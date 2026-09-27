@@ -72,8 +72,9 @@ token, so **AP Password** under Arena → Settings is blank.
 
 **Art-Net node — PKNight CR011R**, static `10.0.100.100`, on Gi0/9. The switch's
 `dhcppool` covers `10.0.100.0/24` but excludes `.1`–`.125`, so a static in that range can
-never collide with a lease. Its address goes in **sACN Receiver Address** under
-Arena → Settings → LEDs.
+never collide with a lease. Its address goes in **LED Receiver Address** under
+Arena → Settings → LEDs, with the output on DMX and **Send Art-Net instead of sACN** set to
+match the protocol the node is configured for.
 
 ## Notes
 

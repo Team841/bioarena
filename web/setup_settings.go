@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/team841/bioarena/field"
-	"github.com/team841/bioarena/led"
 	"github.com/team841/bioarena/model"
 )
 
@@ -63,36 +62,22 @@ func (web *Web) settingsPostHandler(w http.ResponseWriter, r *http.Request) {
 	eventSettings.RedEStopPanelAddress = r.PostFormValue("redEStopPanelAddress")
 	eventSettings.BlueEStopPanelAddress = r.PostFormValue("blueEStopPanelAddress")
 
-	eventSettings.HubLedsAddress = r.PostFormValue("hubLedsAddress")
+	eventSettings.HubLedsAddress = strings.TrimSpace(r.PostFormValue("hubLedsAddress"))
 	eventSettings.HubLedsArtNet = r.PostFormValue("hubLedsArtNet") == "on"
-	eventSettings.HubLedsSimplified = r.PostFormValue("hubLedsSimplified") == "on"
-	eventSettings.HubLedsFallback = r.PostFormValue("hubLedsFallback")
-	eventSettings.HubLedsRedUniverse, _ = strconv.Atoi(r.PostFormValue("hubLedsRedUniverse"))
-	eventSettings.HubLedsRedAddress, _ = strconv.Atoi(r.PostFormValue("hubLedsRedAddress"))
-	eventSettings.HubLedsBlueUniverse, _ = strconv.Atoi(r.PostFormValue("hubLedsBlueUniverse"))
-	eventSettings.HubLedsBlueAddress, _ = strconv.Atoi(r.PostFormValue("hubLedsBlueAddress"))
+	eventSettings.HubRelays = r.PostFormValue("hubLightsOutput") == "relays"
+	eventSettings.HubRelayRedPin, _ = strconv.Atoi(r.PostFormValue("hubRelayRedPin"))
+	eventSettings.HubRelayBluePin, _ = strconv.Atoi(r.PostFormValue("hubRelayBluePin"))
+	eventSettings.HubRelayActiveLow = r.PostFormValue("hubRelayActiveLow") == "on"
 
-	// Reject a layout the controller cannot render before it is saved, so a bad address
-	// surfaces as a form error rather than silently wrong colours on the field.
-	if eventSettings.HubLedsSimplified {
-		if _, err := led.ParseFallback(eventSettings.HubLedsFallback); err != nil {
-			web.renderSettings(w, r, err.Error())
-			return
-		}
-		probe := led.NewController()
-		err := probe.SetLayout(
-			[]led.FixtureSpec{{
-				Universe: eventSettings.HubLedsRedUniverse, StartAddress: eventSettings.HubLedsRedAddress,
-			}},
-			[]led.FixtureSpec{{
-				Universe: eventSettings.HubLedsBlueUniverse, StartAddress: eventSettings.HubLedsBlueAddress,
-			}},
-		)
-		if err != nil {
+	// Refused here rather than at the kernel, where a pin that cannot be opened would leave
+	// the relays silently off with only a line in the journal to say why.
+	if eventSettings.HubRelays {
+		if err := checkHubRelayPins(eventSettings); err != nil {
 			web.renderSettings(w, r, err.Error())
 			return
 		}
 	}
+
 	// Only update the admin password if a non-empty value was submitted.
 	// This prevents the settings form from inadvertently clearing the password.
 	if newPass := r.PostFormValue("adminPassword"); newPass != "" {
@@ -127,6 +112,26 @@ func (web *Web) settingsPostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, "/setup/settings", 303)
+}
+
+// checkHubRelayPins rejects relay pins the controller cannot open: outside the Pi header's
+// BCM 1-27, the same pin for both lamps, or a pin the field e-stop already holds.
+func checkHubRelayPins(settings *model.EventSettings) error {
+	for _, relay := range []struct {
+		name string
+		pin  int
+	}{{"Red", settings.HubRelayRedPin}, {"Blue", settings.HubRelayBluePin}} {
+		if relay.pin < 1 || relay.pin > 27 {
+			return fmt.Errorf("%s relay GPIO pin must be a BCM number from 1 to 27.", relay.name)
+		}
+		if relay.pin == settings.FieldEStopPin || relay.pin == settings.FieldEStopNcPin {
+			return fmt.Errorf("%s relay GPIO pin %d is already the field e-stop's.", relay.name, relay.pin)
+		}
+	}
+	if settings.HubRelayRedPin == settings.HubRelayBluePin {
+		return fmt.Errorf("Red and blue relays cannot share GPIO pin %d.", settings.HubRelayRedPin)
+	}
+	return nil
 }
 
 // Sends a copy of the event database file to the client as a download.
