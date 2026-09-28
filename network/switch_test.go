@@ -115,7 +115,7 @@ func newIncrementalTestSwitch(port int) *Switch {
 
 // Registering one team must not disturb a robot being driven from another station. The
 // full rebuild shuts every driver station port, which disconnects all six for as long as
-// the reconfiguration takes -- tolerable between matches, not during free practice.
+// the reconfiguration takes -- tolerable between matches, not while a robot is being driven.
 func TestConfigureSwitchOnlyTouchesChangedStations(t *testing.T) {
 	sw := newIncrementalTestSwitch(9100)
 

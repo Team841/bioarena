@@ -178,9 +178,10 @@ func TestForcedAutoWinnerDrivesGameData(t *testing.T) {
 	}
 }
 
-// Game data must be withheld until the teleop transition even though the AUTO winner
-// is decided at the start of AUTO, matching a real field. Robot code that reads it
-// early would otherwise behave differently here than at an event.
+// The AUTO result is decided at the teleop transition and the game data carrying it is
+// released at the same instant, matching a real field. Robot code that reads it early
+// would otherwise behave differently here than at an event, and nothing -- lighting
+// included -- may see a winner that a real field would not have settled yet.
 func TestGameDataWithheldUntilTeleop(t *testing.T) {
 	arena := setupTestArena(t)
 
@@ -192,26 +193,30 @@ func TestGameDataWithheldUntilTeleop(t *testing.T) {
 		arena.AllianceStations[station].Bypass.Store(true)
 	}
 
+	// A stale result from a previous match must not leak into this one.
+	arena.AutoWinner = hardware.AllianceRed
 	assert.Nil(t, arena.StartMatch())
 	arena.Update()
 	assert.Equal(t, "", arena.GameData)
+	assert.Equal(t, hardware.AllianceNone, arena.AutoWinner)
 
-	// Empty throughout AUTO.
+	// Undecided throughout AUTO.
 	arena.MatchStartTime = time.Now().Add(-time.Duration(game.MatchTiming.WarmupDurationSec) * time.Second)
 	arena.Update()
 	assert.Equal(t, AutoPeriod, arena.MatchState)
 	assert.Equal(t, "", arena.GameData)
+	assert.Equal(t, hardware.AllianceNone, arena.AutoWinner)
 
-	// Still empty through the pause, even though the winner is already assigned.
+	// And through the pause: a real field is still counting AUTO FUEL here.
 	arena.MatchStartTime = time.Now().Add(
 		-time.Duration(game.MatchTiming.WarmupDurationSec+game.MatchTiming.AutoDurationSec) * time.Second,
 	)
 	arena.Update()
 	assert.Equal(t, PausePeriod, arena.MatchState)
 	assert.Equal(t, "", arena.GameData)
-	assert.NotEqual(t, hardware.AllianceNone, arena.AutoWinner)
+	assert.Equal(t, hardware.AllianceNone, arena.AutoWinner)
 
-	// Released at the teleop transition, and consistent with the assigned winner.
+	// Decided and released together at the teleop transition.
 	arena.MatchStartTime = time.Now().Add(
 		-time.Duration(
 			game.MatchTiming.WarmupDurationSec+game.MatchTiming.AutoDurationSec+game.MatchTiming.PauseDurationSec,
@@ -219,6 +224,7 @@ func TestGameDataWithheldUntilTeleop(t *testing.T) {
 	)
 	arena.Update()
 	assert.Equal(t, TeleopPeriod, arena.MatchState)
+	assert.NotEqual(t, hardware.AllianceNone, arena.AutoWinner)
 	assert.Equal(t, arena.gameDataForAutoWinner(), arena.GameData)
 	assert.Contains(t, []string{"R", "B"}, arena.GameData)
 
@@ -274,6 +280,41 @@ func TestGameDataClearedOnAbort(t *testing.T) {
 	assert.Nil(t, arena.AbortMatch())
 	assert.Equal(t, PostMatch, arena.MatchState)
 	assert.Equal(t, "", arena.GameData)
+}
+
+// With no pause configured the state machine goes straight from AUTO to teleop, on a
+// separate branch from the paused path. The result must be decided there too, or a field
+// running without a pause would enter teleop with no game data and both HUBs lit.
+func TestAutoWinnerDecidedOnDirectAutoToTeleopTransition(t *testing.T) {
+	arena := setupTestArena(t)
+	arena.AutoWinnerMode = AutoWinnerForceBlue
+
+	savedPause := game.MatchTiming.PauseDurationSec
+	game.MatchTiming.PauseDurationSec = 0
+	defer func() { game.MatchTiming.PauseDurationSec = savedPause }()
+
+	assert.Nil(t, arena.Database.CreateTeam(&model.Team{Id: 254}))
+	assert.Nil(t, arena.assignTeam(254, "R1"))
+	arena.AllianceStations["R1"].DsConn = &DriverStationConnection{TeamId: 254}
+	arena.AllianceStations["R1"].DsConn.RobotLinked = true
+	for _, station := range []string{"R2", "R3", "B1", "B2", "B3"} {
+		arena.AllianceStations[station].Bypass.Store(true)
+	}
+
+	assert.Nil(t, arena.StartMatch())
+	arena.Update()
+	arena.MatchStartTime = time.Now().Add(-time.Duration(game.MatchTiming.WarmupDurationSec) * time.Second)
+	arena.Update()
+	assert.Equal(t, AutoPeriod, arena.MatchState)
+	assert.Equal(t, hardware.AllianceNone, arena.AutoWinner)
+
+	arena.MatchStartTime = time.Now().Add(
+		-time.Duration(game.MatchTiming.WarmupDurationSec+game.MatchTiming.AutoDurationSec) * time.Second,
+	)
+	arena.Update()
+	assert.Equal(t, TeleopPeriod, arena.MatchState)
+	assert.Equal(t, hardware.AllianceBlue, arena.AutoWinner)
+	assert.Equal(t, "B", arena.GameData)
 }
 
 func TestAssignTeam(t *testing.T) {
@@ -1374,23 +1415,4 @@ func TestConcurrentOperatorsDoNotDeadlockOrPanic(t *testing.T) {
 		[]MatchState{PreMatch, StartMatch, WarmupPeriod, AutoPeriod, PausePeriod, TeleopPeriod, PostMatch},
 		arena.MatchState,
 	)
-}
-
-// Match Play is the only operating page, so the view is only ever that. Kept because the
-// mechanism still refuses anything else, which is what stops a kiosk being stranded.
-func TestCurrentView(t *testing.T) {
-	arena := setupTestArena(t)
-
-	// Match play until told otherwise, so a field that has never navigated still agrees.
-	assert.Equal(t, ViewMatchPlay, arena.CurrentView())
-
-	arena.SetCurrentView(ViewMatchPlay)
-	assert.Equal(t, ViewMatchPlay, arena.CurrentView())
-
-	// Anything unrecognised is ignored rather than stranding every kiosk on a page that
-	// does not exist.
-	arena.SetCurrentView("setup/settings")
-	assert.Equal(t, ViewMatchPlay, arena.CurrentView())
-	arena.SetCurrentView("")
-	assert.Equal(t, ViewMatchPlay, arena.CurrentView())
 }

@@ -89,8 +89,8 @@ func TestPollStationPortLinks(t *testing.T) {
 }
 
 // Not during a match: this reads the switch every thirty seconds and can cycle a port,
-// neither of which belongs anywhere near a running match. Free practice does poll, because
-// that is where a driver station most often needs rescuing.
+// neither of which belongs anywhere near a running match. Setup does poll, because that
+// is where a driver station most often needs rescuing.
 func TestPollStationPortLinksSkippedDuringMatch(t *testing.T) {
 	arena := setupTestArena(t)
 	arena.teamNetwork = &fakeTeamNetwork{links: [6]bool{true, true, true, true, true, true}}

@@ -47,7 +47,7 @@ func (web *Web) teamGetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Creates a new team with just an ID; used by the free practice UI when an anonymous team is encountered.
+// Creates a new team with just an ID; used by Match Play's team-not-in-database offer.
 // Returns 201 on success, 409 if the team already exists.
 func (web *Web) teamQuickAddHandler(w http.ResponseWriter, r *http.Request) {
 	if !web.userIsAdmin(w, r) {

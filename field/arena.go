@@ -79,7 +79,6 @@ type Arena struct {
 	lastPeriodicTaskTime time.Time
 	EventStatus          EventStatus
 	MuteMatchSounds      bool
-	currentView          string // operating page the kiosks mirror; see SetCurrentView
 	matchAborted         bool
 	soundsPlayed         map[*game.MatchSound]struct{}
 
@@ -302,6 +301,7 @@ func (arena *Arena) LoadMatch(match *model.Match) error {
 	// Reset the arena state.
 	arena.soundsPlayed = make(map[*game.MatchSound]struct{})
 	arena.Plc.ResetMatch()
+	arena.AutoWinner = hardware.AllianceNone
 
 	// Notify any listeners about the new match.
 	arena.MatchLoadNotifier.Notify()
@@ -659,7 +659,9 @@ func (arena *Arena) Update() {
 	case StartMatch:
 		arena.MatchStartTime = time.Now()
 		arena.LastMatchTimeSec = -1
-		// Game data is withheld until the teleop transition, matching a real field.
+		// The AUTO result and the game data carrying it are both withheld until the
+		// teleop transition, matching a real field; see handleAutoWinner.
+		arena.AutoWinner = hardware.AllianceNone
 		arena.GameData = ""
 		auto = true
 		if game.MatchTiming.WarmupDurationSec > 0 {
@@ -668,7 +670,6 @@ func (arena *Arena) Update() {
 			sendDsPacket = false
 		} else {
 			arena.MatchState = AutoPeriod
-			arena.assignAutoWinner()
 			enabled = true
 			sendDsPacket = true
 		}
@@ -678,7 +679,6 @@ func (arena *Arena) Update() {
 		enabled = false
 		if matchTimeSec >= float64(game.MatchTiming.WarmupDurationSec) {
 			arena.MatchState = AutoPeriod
-			arena.assignAutoWinner()
 			auto = true
 			enabled = true
 			sendDsPacket = true
@@ -693,8 +693,8 @@ func (arena *Arena) Update() {
 				arena.MatchState = PausePeriod
 				enabled = false
 			} else {
+				arena.handleAutoWinner()
 				arena.MatchState = TeleopPeriod
-				arena.GameData = arena.gameDataForAutoWinner()
 				enabled = true
 			}
 		}
@@ -702,8 +702,8 @@ func (arena *Arena) Update() {
 		auto = false
 		enabled = false
 		if matchTimeSec >= game.GetDurationToTeleopStart().Seconds() {
+			arena.handleAutoWinner()
 			arena.MatchState = TeleopPeriod
-			arena.GameData = arena.gameDataForAutoWinner()
 			auto = false
 			enabled = true
 			sendDsPacket = true
@@ -1346,9 +1346,8 @@ func (arena *Arena) runPeriodicTasks() {
 // pollStationPortLinks asks the switch which driver station ports have link, so the UI can
 // point out a laptop in the wrong station.
 //
-// Setup only. During a match or a free practice run this would put a Telnet session on the
-// switch every thirty seconds for information nobody is looking at, and the wiring is
-// settled by then anyway.
+// Setup only. During a match this would put a Telnet session on the switch every thirty
+// seconds for information nobody is looking at, and the wiring is settled by then anyway.
 func (arena *Arena) pollStationPortLinks() {
 	// Never during a match: this reads the switch, and the recovery below cycles ports.
 	// Snapshot the state rather than holding the lock across the switch read, which is a
@@ -1421,51 +1420,6 @@ func ParseAutoWinnerMode(name string) (AutoWinnerMode, error) {
 	}
 }
 
-// SetAutoWinnerMode selects how the AUTO result will be decided for the next match.
-// It cannot be changed once a match is underway: the winner is assigned at the start
-// Field views that every kiosk mirrors. Only the two operating pages take part: the
-// settings and team pages are administrative, and dragging every display to them because
-// one operator opened one would be worse than the drift it fixed.
-const ViewMatchPlay = "match_play"
-
-// SetCurrentView records which operating page the operators are on, so that kiosks
-// opened on the other one follow. Whichever page was opened most recently wins.
-//
-// This is display state, not field state: it does not gate anything, and a kiosk that
-// ignores it still works. It exists because a field can have several displays and they
-// are useless if they disagree about what is being run.
-func (arena *Arena) SetCurrentView(view string) {
-	if view != ViewMatchPlay {
-		return
-	}
-
-	arena.mu.Lock()
-	changed := arena.currentView != view
-	arena.currentView = view
-	arena.mu.Unlock()
-
-	if changed {
-		arena.ArenaStatusNotifier.Notify()
-	}
-}
-
-// CurrentView is the operating page kiosks should be showing.
-func (arena *Arena) CurrentView() string {
-	arena.mu.Lock()
-	defer arena.mu.Unlock()
-	return arena.currentViewLocked()
-}
-
-// currentViewLocked assumes the arena lock is held.
-func (arena *Arena) currentViewLocked() string {
-	if arena.currentView == "" {
-		return ViewMatchPlay
-	}
-	return arena.currentView
-}
-
-// of AUTO and drives both the HUB lighting and the game data sent to driver stations,
-// so a mid-match change would desynchronise them.
 // SetMuteMatchSounds records whether match cues should play.
 //
 // Under the lock like every other mutator: the web handlers set this while Update is
@@ -1478,6 +1432,11 @@ func (arena *Arena) SetMuteMatchSounds(mute bool) {
 	arena.MuteMatchSounds = mute
 }
 
+// SetAutoWinnerMode selects how the AUTO result will be decided for the next match.
+// It cannot be changed once a match is underway. The result is not settled until the
+// teleop transition, so a change during AUTO would technically be honoured -- but the
+// outcome would then depend on when the operator clicked rather than on what the match
+// was set up with, and the driver has no way to see the difference.
 func (arena *Arena) SetAutoWinnerMode(mode AutoWinnerMode) error {
 	arena.mu.Lock()
 	defer arena.mu.Unlock()
@@ -1504,6 +1463,20 @@ func (arena *Arena) gameDataForAutoWinner() string {
 	default:
 		return ""
 	}
+}
+
+// handleAutoWinner settles the AUTO result and releases the game data carrying it. It
+// runs at the transition into teleop, where upstream's handleAutoWinner runs, and
+// nowhere earlier: on a real field the result is decided from what was scored by the
+// end of the pause, so nothing may observe a winner before then. Both HUBs are active
+// throughout AUTO and the pause, so nothing needs to.
+//
+// Deciding here rather than at the start of AUTO is what lets a scored result -- one
+// counted from FUEL actually in the HUB -- share this code path with the forced and
+// random modes; see docs/spec-hub-fuel-counter-feed.md.
+func (arena *Arena) handleAutoWinner() {
+	arena.assignAutoWinner()
+	arena.GameData = arena.gameDataForAutoWinner()
 }
 
 // assignAutoWinner picks which alliance's HUB goes inactive first in Shift1, honouring

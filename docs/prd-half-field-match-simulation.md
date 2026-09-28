@@ -86,7 +86,10 @@ foundation rather than replacing it.
 
 ## 3. Non-Goals
 
-- Match scoring, FUEL counting, fouls, ranking points, or match results.
+- Match scoring, fouls, ranking points, or match results. FUEL counting was originally
+  listed here too; it is now specified separately in
+  [spec-hub-fuel-counter-feed.md](spec-hub-fuel-counter-feed.md), which is the only
+  scoring bioarena takes on.
 - Merging upstream's `game/` package (`score.go`, `hub.go`, `foul.go`,
   `ranking_fields.go`, `score_summary.go`).
 - Full 3v3 event operation — bioarena remains a practice-field controller.
@@ -240,14 +243,17 @@ Operator chooses, before the match, one of:
 |---|---|
 | **Win** | Practice alliance is the AUTO winner → their HUB dark in Shifts 1 and 3 |
 | **Lose** | Opposing alliance is the AUTO winner → practice HUB dark in Shifts 2 and 4 |
-| **Random** | Resolved to a concrete alliance at match start |
+| **Random** | Resolved to a concrete alliance at the teleop transition |
 
 - `assignAutoWinner()` (`field/arena.go:1112`) currently randomises unconditionally.
   It must respect the selected mode.
 - Random **must** resolve to `AllianceRed` or `AllianceBlue`, never `AllianceNone`
   (see [§4.4](#44-ties)).
-- The decision may be made at AUTO start, but must not be *transmitted* before
-  teleop (see R3).
+- The decision is made at the transition into teleop, where upstream makes it, and
+  transmitted at the same instant (see R3). `AutoWinner` is `AllianceNone` before
+  then. Originally this PRD allowed the decision at AUTO start; it was moved so that a
+  result counted from real FUEL
+  ([spec-hub-fuel-counter-feed.md](spec-hub-fuel-counter-feed.md)) shares the path.
 
 ### R3 — FMS Game Data to driver stations
 

@@ -10,7 +10,7 @@ import (
 )
 
 // Match Play registers the WPA key alongside the team number, so a match can be set up
-// without going to the Free Practice page for the key. The key is what the radio is
+// without leaving for Setup > Teams to enter the key. The key is what the radio is
 // configured with, so a station registered without one has no working WiFi.
 func TestMatchPlayRegisterTeamsAppliesWpaKeys(t *testing.T) {
 	web := setupTestWeb(t)

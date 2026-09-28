@@ -8,7 +8,7 @@ Simplified match play UI for 10th Street practice field controller.
 {{define "body"}}
 <!-- Offered when a team number is entered that the database has never seen. Registering
      rejects an unknown team outright, so without this the operator is told no and left to
-     go to Setup > Teams and come back. Same modal and same endpoints as Free Practice. -->
+     go to Setup > Teams and come back. -->
 <div class="modal fade" id="teamNotInDbModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
@@ -136,7 +136,7 @@ Simplified match play UI for 10th Street practice field controller.
     <span class="mp-card-label">{{.}}</span>
     {{/* Team number and WPA key share the space the number used to have on its own. Both
          are needed at registration: the key is what the radio is configured with, and
-         without it here a match had to be set up from the Free Practice page instead. */}}
+         without it here the operator had to leave for Setup > Teams to set it. */}}
     <span class="mp-team-fields">
       <input type="number" class="mp-team-input" id="team-{{.}}" placeholder="Team #"
         onchange="markRegistration()" onblur="lookUpTeam('{{.}}')">

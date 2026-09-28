@@ -118,7 +118,7 @@ const setTestMatchName = function () {
 //
 // Registering rejects a team the database has never seen -- validateTeams returns "Team N
 // is not present at the event" -- so without the offer the operator is told no and has to
-// leave for Setup > Teams and come back. Same endpoints Free Practice uses.
+// leave for Setup > Teams and come back.
 const lookUpTeam = function (station) {
   const teamId = getTeamNumber(station);
   const wpa = document.getElementById("wpaKey-" + station);
@@ -207,20 +207,7 @@ const getTeamNumber = function (station) {
 
 // --- WebSocket message handlers ---
 
-// Set once a navigation is under way, so the broadcasts that arrive before the page
-// unloads do not each trigger another one.
-let leavingForOtherView = false;
-
 const handleArenaStatus = function (data) {
-  // Every kiosk shows the same operating page. The server records whichever of them was
-  // opened most recently, and displays sitting on the other one follow, so a field with
-  // several screens does not have them disagreeing about what is being run.
-  if (data.CurrentView && data.CurrentView !== "match_play" && !leavingForOtherView) {
-    leavingForOtherView = true;
-    window.location.href = "/" + data.CurrentView;
-    return;
-  }
-
   for (const station of stations) {
     const st = data.AllianceStations[station];
     if (!st) continue;
