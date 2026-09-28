@@ -382,9 +382,9 @@ Counted mode ([§6.4](#64-auto-winner-mode-counted)) and never aborts one.
 `hardware/hub_counter.go` — a `HubCounterReceiver` listening on the configured UDP port
 in its own goroutine, following `listenForDsUdpPackets` in
 `field/driver_station_connection.go`. For each datagram it applies the acceptance rules
-of [§4.5](#45-sessions-and-restarts), updates one record held behind an
-`atomic.Pointer`, and sends the status reply. It never takes the arena lock; the reply's
-match context comes from a snapshot the arena loop publishes each tick.
+of [§4.5](#45-sessions-and-restarts), records it, and sends the status reply. It never
+takes the arena lock; the reply's match context comes from a snapshot the arena loop
+publishes each tick through `SetMatchContext`, behind an `atomic.Pointer`.
 
 The record is the last accepted datagram plus receipt time:
 
@@ -394,10 +394,22 @@ type hubCounterRecord struct {
     Seq        uint64
     Red, Blue  int       // cumulative within Session
     ReceivedAt time.Time
-    AgeMs      int       // from the last on-change datagram
+    AgeMs      int       // from the last datagram on which a count rose
     Info       string
 }
 ```
+
+The record and the match baseline are guarded by one small mutex of the receiver's own,
+not an atomic each. They move together: the listener carries the baseline forward when
+it sees a counter restart, the arena re-baselines at `ResetMatch`, and a restart
+observed halfway through a re-baseline would lose or double a session's contribution.
+It is never held across a socket write, and never interacts with the arena lock.
+
+The receiver also answers `Status()` — `ONLINE` or `OFFLINE` per
+[§5.3](#53-liveness) — and `Telemetry()`, which is the `age_ms`, `info` and session for
+the match panel. `Status` is what notices the counter going quiet, because going quiet
+is the absence of an event and is only observable when something asks; the arena asks
+every tick.
 
 Datagrams from any source other than the configured address are dropped before
 parsing. In practice this excludes every team VLAN, so a robot cannot post scores; the
@@ -623,8 +635,8 @@ Each phase is independently mergeable and leaves the field working.
 - `plc/plc.go`: `GetHubCounts` and the Hub registers restored from upstream verbatim;
   `plc/fake_plc.go` (fork-local) answers `0, 0`.
 - `plc/override.go`, `plc/override_test.go`: `HubCountSource`, `WithHubCounts`.
-- `hardware/hub_counter.go`, `hardware/hub_counter_test.go`: receiver, acceptance
-  rules, session accounting behind `ResetMatch`, status reply.
+- ~~`hardware/hub_counter.go`, `hardware/hub_counter_test.go`: receiver, acceptance
+  rules, session accounting behind `ResetMatch`, status reply.~~ **Done.**
 - `game/hub.go` restored byte-identical; `game/hub_bioarena.go`; `ScoringGracePeriodSec`.
   Take upstream's `game/hub_test.go` too.
 - `field/arena.go`: persistent hubs, `updateHubCounts` in `Update`, `HubScoreNotifier`,
