@@ -57,6 +57,11 @@ const (
 	HubCounterOffline = "OFFLINE"
 )
 
+// DefaultHubCounterPort is the UDP port the counter sends to unless the field says
+// otherwise. Clear of everything the driver stations use (1750, 1120, 1121, 1160), of
+// the e-stop panels' HTTP port (8765), and of the web UI (8080).
+const DefaultHubCounterPort = 8411
+
 // Drop reasons, which double as the keys rate-limiting their own log lines. A closed
 // set, so the rate-limit map cannot grow without bound however much junk arrives.
 const (

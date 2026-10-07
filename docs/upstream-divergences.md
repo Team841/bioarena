@@ -80,8 +80,11 @@ Deliberate, specific to a practice field, and not appropriate to send upstream.
 
 | Area | Divergence | Why it stays local |
 |---|---|---|
-| `game/hub.go` | Ported from upstream with the scoring half omitted — `ShiftCounts`, `UpdateState`, `GetShiftCount`, `GetTeleopActiveFuelCount`, `getCurrentShift`, `getScoringGracePeriod`. `IsShiftActive` exported. | bioarena does not score. The export is needed because the lighting drivers live outside `game/`. |
-| `game/match_timing.go` | Adds `WarmupDurationSec` and keeps a flat `TeleopDurationSec` alongside upstream's shift constants. | Warmup is a practice-field feature with no upstream counterpart, threaded through the match state machine. |
+| `game/hub_bioarena.go` | New file: `IsShiftActive`, a one-line wrapper exporting upstream's unexported `isShiftActive`. | bioarena's lighting drivers live outside `game/`, where upstream's callers are all inside it. A separate file so `hub.go` stays byte-identical; it was previously a fork-local edit with the scoring half omitted, until the FUEL counter gave bioarena a reason to score and the whole file could be taken back. |
+| `plc/override.go` | New file: `HubCountSource` and `WithHubCounts`, which return a `Plc` whose `GetHubCounts` is answered by a webcam FUEL counter instead of Modbus registers, and whose `ResetMatch` reaches both. Wired in `field/arena_hub_counter.go` from the counter address under Arena → Settings → LEDs. | Upstream fields have a PLC counting FUEL at the HUB chutes. A practice field has a webcam. Additive, on the `led/override.go` pattern, so `plc.go` keeps upstream's shape and the arena's scoring lines stay upstream's own — see [docs/spec-hub-fuel-counter-feed.md](spec-hub-fuel-counter-feed.md). |
+| `hardware/hub_counter.go` | New file: `HubCounterReceiver`, the UDP listener for the counter feed — acceptance rules, per-match baseline, liveness, and the status reply. | Practice-field hardware with no upstream counterpart. It implements `plc.HubCountSource` structurally, so `hardware/` need not know about Modbus nor `plc/` about cameras. |
+| `field/arena_hub_counter.go`, `field/arena.go` | `updateHubCounts` runs upstream's two scoring lines — `Plc.GetHubCounts` into each `game.Hub.UpdateState` — from `Update` rather than from `handlePlcInputOutput`, and the Hubs are zeroed at `StartMatch` as well as at `LoadMatch`. | `handlePlcInputOutput` returns early when the PLC is not enabled, and on a practice field it never is. The extra zeroing is because a driver shoots in PreMatch for ten minutes before a practice round, where upstream loads a match and immediately runs it. `field/arena.go` is forked throughout. |
+| `game/match_timing.go` | Adds `WarmupDurationSec` and keeps a flat `TeleopDurationSec` alongside upstream's shift constants. `ScoringGracePeriodSec` is upstream's own; `MotorsOnExtraPeriodSec` is omitted. | Warmup is a practice-field feature with no upstream counterpart, threaded through the match state machine. The omitted constant times upstream's HUB exhaust motors, which no practice field has. |
 | `led/override.go`, `hardware/gpio_hub_relays.go`, `field/arena_leds.go` | Hub lights have two outputs, picked under Arena → Settings → LEDs: DMX to upstream's full-field layout (sACN, or Art-Net via `led/artnet.go`), or one GPIO relay per HUB switching a red or blue lamp. The relays take the same `led.Mode` sequence as the DMX controller and turn each into on, off or a blink with `led.Lit`, the only thing left in `override.go`: the warning pulse and the transition-shift advantage sweep blink, at periods read from upstream's `pulseHalfPeriod` and `advantageStepCycle`, since both carry game information a steady lamp would lose. Relay pins and polarity are stored in the database, defaulting to BCM 22 and 23. The output is rebuilt on every settings save, releasing the previous one first. | Upstream fields have the full 16-fixture hardware; a practice field may have two lamps. Driving the relays from the mode sequence rather than a parallel computation means they cannot disagree with DMX about which HUB is active. The practice-field layout override and capability fallback that used to live in `override.go` were removed, leaving these two outputs as the only choice. |
 | `led/artnet.go` | New file: `ArtNetController`, an Art-Net alternative to the E1.31 sACN in `controller.go`, chosen by a checkbox under Arena → Settings → LEDs. Embeds `Controller` and replaces only `SetAddress` and `Update`, reusing the zone rendering and fixture layout. | Upstream fields have sACN nodes. A practice field buys whatever DMX gateway is cheap, and plenty of them speak only Art-Net. Additive for the same reason as `override.go`: a protocol switch inside `controller.go` would end the byte-identical property. |
 | `web/match_play.go`, `templates/match_play.html`, `static/js/match_play.js`, `field/arena.go` | Match sounds play on the Match Play page. The websocket subscribes to `PlaySoundNotifier`, the template carries the `<audio>` elements, and `MuteMatchSounds` defaults to true. | Upstream plays cues on the audience display. This fork has no `audience_display` template — only `static/js/audience_display.js` survives, orphaned — so the notifier fired into nothing and the field was silent regardless of settings. The operator's page is the only one there is. Muted by default because a practice field is usually a room with people in it. |
@@ -100,15 +103,34 @@ Deliberate, specific to a practice field, and not appropriate to send upstream.
 
 ## Kept byte-identical
 
-`led/` — all seven ported files (`color.go`, `controller.go`, `controller_test.go`,
-`fixture.go`, `mode.go`, `mode_test.go`, `zone.go`). Local behaviour goes in
-`led/override.go` and `led/artnet.go` instead.
+Files taken from upstream unchanged, so an upstream change to them can be taken with a
+checkout rather than a merge. Fork-local behaviour goes in a neighbouring file instead —
+`led/override.go`, `led/artnet.go`, `plc/override.go`, `game/hub_bioarena.go`.
+
+| Files | Local behaviour lives in |
+|---|---|
+| `led/color.go`, `led/controller.go`, `led/controller_test.go`, `led/fixture.go`, `led/mode.go`, `led/mode_test.go`, `led/zone.go` | `led/override.go`, `led/artnet.go` |
+| `game/hub.go`, `game/hub_test.go` | `game/hub_bioarena.go`, `game/hub_bioarena_test.go` |
+| `plc/register_string.go` | generated from the register enum in `plc/plc.go`, which is upstream's |
 
 ```bash
-git diff upstream/main -- led/color.go led/controller.go led/controller_test.go \
-  led/fixture.go led/mode.go led/mode_test.go led/zone.go
+git fetch upstream main
+git diff upstream/main -- \
+  led/color.go led/controller.go led/controller_test.go led/fixture.go \
+  led/mode.go led/mode_test.go led/zone.go \
+  game/hub.go game/hub_test.go plc/register_string.go
 ```
 
-Empty output means the property still holds. If it ever stops being empty, either revert
-the edit into `override.go` or update this document to say the property was given up and
-why.
+Empty output means the property still holds. **Fetch first** — a stale `upstream/main`
+reports differences that are only the fork being behind, which reads exactly like the
+property having been broken.
+
+If the output is ever genuinely non-empty, either move the edit into the neighbouring
+file or update this document to say the property was given up and why.
+
+`game/hub.go` is the worked example of taking one back. It was fork-local for a while,
+with the scoring half deleted on the grounds that a practice field does not score; when
+the FUEL counter gave it a reason to, the whole file came back from upstream unchanged and
+upstream's `hub_test.go` passed against bioarena's timings without an edit. The one thing
+bioarena needs that upstream does not — an exported `IsShiftActive` — is three lines in
+`game/hub_bioarena.go`.

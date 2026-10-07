@@ -68,6 +68,12 @@ func (plc *FakePlc) GetEthernetConnected() ([3]bool, [3]bool) {
 	return [3]bool{}, [3]bool{}
 }
 
+// GetHubCounts reports no FUEL, since there is no PLC counting any. A practice field
+// that has a counter gets its counts through WithHubCounts instead.
+func (plc *FakePlc) GetHubCounts() (int, int) {
+	return 0, 0
+}
+
 func (plc *FakePlc) ResetMatch() {}
 
 func (plc *FakePlc) SetStackLights(red, blue, orange, green bool) {}

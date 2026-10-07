@@ -1,0 +1,321 @@
+package field
+
+import (
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/team841/bioarena/game"
+	"github.com/team841/bioarena/hardware"
+	"github.com/team841/bioarena/model"
+	"github.com/team841/bioarena/plc"
+)
+
+// startedArena is an arena in AUTO with one robot on the field, which is what the scoring
+// path needs before it will attribute anything.
+func startedArena(t *testing.T) (*Arena, *FakePlc) {
+	t.Helper()
+	arena := setupTestArena(t)
+
+	fakePlc := new(FakePlc)
+	arena.Plc = fakePlc
+
+	assert.Nil(t, arena.Database.CreateTeam(&model.Team{Id: 254}))
+	assert.Nil(t, arena.assignTeam(254, "R1"))
+	arena.AllianceStations["R1"].DsConn = &DriverStationConnection{TeamId: 254}
+	arena.AllianceStations["R1"].DsConn.RobotLinked = true
+	for _, station := range []string{"R2", "R3", "B1", "B2", "B3"} {
+		arena.AllianceStations[station].Bypass.Store(true)
+	}
+
+	assert.Nil(t, arena.StartMatch())
+	arena.Update() // consumes StartMatch, which is also what sets MatchStartTime
+	arena.MatchStartTime = time.Now().Add(-time.Duration(game.MatchTiming.WarmupDurationSec) * time.Second)
+	arena.Update()
+	assert.Equal(t, AutoPeriod, arena.MatchState)
+
+	return arena, fakePlc
+}
+
+// The two scoring lines are upstream's, so the shift they credit has to be upstream's too.
+func TestUpdateHubCountsCreditsTheCurrentShift(t *testing.T) {
+	arena, fakePlc := startedArena(t)
+
+	fakePlc.redHubCount = 3
+	fakePlc.blueHubCount = 1
+	arena.Update()
+
+	assert.Equal(t, 3, arena.RedHub.GetShiftCount(game.ShiftAuto, true))
+	assert.Equal(t, 1, arena.BlueHub.GetShiftCount(game.ShiftAuto, true))
+
+	// Counts are cumulative, so only the increment is new FUEL.
+	fakePlc.redHubCount = 5
+	arena.Update()
+	assert.Equal(t, 5, arena.RedHub.GetShiftCount(game.ShiftAuto, true))
+	assert.Equal(t, 1, arena.BlueHub.GetShiftCount(game.ShiftAuto, true))
+}
+
+// The whole point of the override: FUEL reported by the counter has to reach the Hubs
+// through arena.Plc.GetHubCounts, the call upstream reads its PLC with.
+func TestUpdateHubCountsReadsThroughTheOverride(t *testing.T) {
+	arena, _ := startedArena(t)
+
+	source := &fakeHubCountSource{red: 4, blue: 2}
+	arena.Plc = plc.WithHubCounts(arena.Plc, source)
+
+	arena.Update()
+
+	assert.Equal(t, 4, arena.RedHub.GetShiftCount(game.ShiftAuto, true))
+	assert.Equal(t, 2, arena.BlueHub.GetShiftCount(game.ShiftAuto, true))
+}
+
+// One round's FUEL must not be in the next one's tally. Clearing a match loads a fresh
+// one, which is where the tallies go -- and the counter is reset with them, since its
+// baseline rides the same Plc.ResetMatch call.
+func TestClearingAMatchZeroesTheHubsAndTheCounter(t *testing.T) {
+	arena, _ := startedArena(t)
+	source := &fakeHubCountSource{red: 6, blue: 2}
+	arena.Plc = plc.WithHubCounts(arena.Plc, source)
+
+	arena.Update()
+	assert.Equal(t, 6, arena.RedHub.GetShiftCount(game.ShiftAuto, true))
+	assert.Equal(t, 2, arena.BlueHub.GetShiftCount(game.ShiftAuto, true))
+
+	assert.Nil(t, arena.AbortMatch())
+	assert.Equal(t, PostMatch, arena.MatchState)
+	assert.Nil(t, arena.ClearMatch())
+	assert.Equal(t, PreMatch, arena.MatchState)
+
+	assert.Equal(t, 0, hubTotalCount(&arena.RedHub))
+	assert.Equal(t, 0, hubTotalCount(&arena.BlueHub))
+	assert.Greater(t, source.resets, 0, "the counter's baseline rides Plc.ResetMatch")
+}
+
+// And starting a match takes a fresh baseline of its own, so anything the counter reported
+// between loading the match and running it is not part of it.
+func TestStartingAMatchTakesAFreshCounterBaseline(t *testing.T) {
+	arena, _ := startedArena(t)
+	source := &fakeHubCountSource{}
+	arena.Plc = plc.WithHubCounts(arena.Plc, source)
+
+	assert.Nil(t, arena.AbortMatch())
+	assert.Nil(t, arena.ClearMatch())
+	assert.Equal(t, PreMatch, arena.MatchState)
+
+	// Bypassed rather than re-linked: the fake driver station connection goes stale once
+	// Update has recalculated it, and readiness is not what this test is about.
+	for _, station := range allStationNames {
+		arena.AllianceStations[station].Bypass.Store(true)
+	}
+
+	resetsBefore := source.resets
+	assert.Nil(t, arena.StartMatch())
+	arena.Update()
+
+	assert.Greater(t, source.resets, resetsBefore)
+	assert.Equal(t, 0, hubTotalCount(&arena.RedHub))
+	assert.Equal(t, 0, hubTotalCount(&arena.BlueHub))
+}
+
+// FUEL into a dark HUB is counted but not credited, and the difference is the number a
+// practice field exists to show a driver.
+func TestHubCountsSeparateCountedFromCredited(t *testing.T) {
+	arena, fakePlc := startedArena(t)
+
+	// Red won AUTO, so red's HUB is dark for shifts 1 and 3.
+	arena.AutoWinner = hardware.AllianceRed
+	arena.MatchState = TeleopPeriod
+	arena.MatchStartTime = time.Now().Add(-midShiftOffset(game.Shift1))
+
+	fakePlc.redHubCount = 7
+	arena.Update()
+
+	redHub, _ := arena.hubs()
+	assert.Equal(t, 7, redHub.GetShiftCount(game.Shift1, false), "the camera saw seven")
+	assert.Equal(t, 0, redHub.GetShiftCount(game.Shift1, true), "none of them scored")
+	assert.Equal(t, 7, hubTotalCount(redHub))
+	assert.Equal(t, 0, hubCreditedCount(redHub))
+}
+
+// hubs must read WonAuto from arena.AutoWinner every time, or the lighting and the scoring
+// end up disagreeing about which HUB is dark.
+func TestHubsFollowTheAutoWinner(t *testing.T) {
+	arena := setupTestArena(t)
+
+	// Undecided: neither HUB has won, which is symmetric rather than arbitrary.
+	arena.AutoWinner = hardware.AllianceNone
+	redHub, blueHub := arena.hubs()
+	assert.False(t, redHub.WonAuto)
+	assert.False(t, blueHub.WonAuto)
+
+	arena.AutoWinner = hardware.AllianceRed
+	redHub, blueHub = arena.hubs()
+	assert.True(t, redHub.WonAuto)
+	assert.False(t, blueHub.WonAuto)
+
+	arena.AutoWinner = hardware.AllianceBlue
+	redHub, blueHub = arena.hubs()
+	assert.False(t, redHub.WonAuto)
+	assert.True(t, blueHub.WonAuto)
+}
+
+// --- The match context published to the counter ---
+
+func TestHubMatchContextDescribesTheMatch(t *testing.T) {
+	arena, fakePlc := startedArena(t)
+	arena.AutoWinner = hardware.AllianceRed
+	fakePlc.redHubCount = 2
+	arena.Update()
+
+	context := arena.hubMatchContext(time.Now())
+	assert.Equal(t, "AUTO_PERIOD", context.MatchState)
+	assert.Equal(t, "AUTO", context.Shift)
+	assert.True(t, context.RedActive, "both HUBs are active during AUTO")
+	assert.True(t, context.BlueActive)
+	assert.Equal(t, 2, context.RedCount)
+	assert.Equal(t, 2, context.RedCredited)
+	assert.Equal(t, 2, context.RedAuto)
+	assert.Equal(t, 0, context.BlueCount)
+}
+
+// Outside a shift the counter is told so, rather than being given a stale one.
+func TestHubMatchContextReportsNoShiftWhenThereIsNone(t *testing.T) {
+	arena := setupTestArena(t)
+	arena.MatchState = PreMatch
+
+	context := arena.hubMatchContext(time.Now())
+	assert.Equal(t, "PRE_MATCH", context.MatchState)
+	assert.Equal(t, "NONE", context.Shift)
+	assert.False(t, context.RedActive)
+	assert.False(t, context.BlueActive)
+}
+
+// The names are wire values in the counter protocol, so every state and shift has to have
+// one -- a missing case would reach the counter as "UNKNOWN" or "NONE" and look like a
+// fault in its own code.
+func TestHubProtocolNamesCoverEveryStateAndShift(t *testing.T) {
+	for state, expected := range map[MatchState]string{
+		PreMatch:     "PRE_MATCH",
+		StartMatch:   "START_MATCH",
+		WarmupPeriod: "WARMUP_PERIOD",
+		AutoPeriod:   "AUTO_PERIOD",
+		PausePeriod:  "PAUSE_PERIOD",
+		TeleopPeriod: "TELEOP_PERIOD",
+		PostMatch:    "POST_MATCH",
+	} {
+		assert.Equal(t, expected, hubMatchStateName(state))
+	}
+	assert.Equal(t, "UNKNOWN", hubMatchStateName(MatchState(99)))
+
+	for shift, expected := range map[game.Shift]string{
+		game.ShiftAuto:       "AUTO",
+		game.ShiftTransition: "TRANSITION",
+		game.Shift1:          "SHIFT1",
+		game.Shift2:          "SHIFT2",
+		game.Shift3:          "SHIFT3",
+		game.Shift4:          "SHIFT4",
+		game.ShiftEndgame:    "ENDGAME",
+		game.ShiftPostMatch:  "POST_MATCH",
+	} {
+		assert.Equal(t, expected, hubShiftName(shift))
+	}
+	assert.Equal(t, "NONE", hubShiftName(game.ShiftCount))
+}
+
+// --- Settings ---
+
+func TestApplyHubCounterSettingsStartsAndStopsTheReceiver(t *testing.T) {
+	arena := setupTestArena(t)
+	arena.Plc = new(FakePlc)
+
+	assert.Nil(t, arena.hubCounter)
+	assert.Equal(t, HubCounterNotConfigured, arena.HubCounterStatus())
+
+	settings := &model.EventSettings{HubCounterAddress: "127.0.0.1", HubCounterPort: 0}
+	arena.applyHubCounterSettings(settings)
+	assert.NotNil(t, arena.hubCounter)
+	// Port 0 falls back to the default rather than being taken as "no counter", which is
+	// the address's job to say.
+	assert.Equal(t, hardware.DefaultHubCounterPort, arena.hubCounter.Port())
+	assert.Equal(t, hardware.HubCounterOffline, arena.HubCounterStatus())
+
+	// The receiver has to reach arena.Plc, or the scoring path never sees it.
+	red, blue := arena.Plc.GetHubCounts()
+	assert.Equal(t, 0, red)
+	assert.Equal(t, 0, blue)
+
+	// Clearing the address closes the receiver and unwraps the PLC, so a field that
+	// removes its counter is left with the PLC it started with.
+	arena.applyHubCounterSettings(&model.EventSettings{})
+	assert.Nil(t, arena.hubCounter)
+	assert.Equal(t, HubCounterNotConfigured, arena.HubCounterStatus())
+}
+
+// A counter that will not start must not stop the arena from loading: scoring is not a
+// safety function, and the operator sees NOT CONFIGURED either way.
+func TestApplyHubCounterSettingsSurvivesABadAddress(t *testing.T) {
+	arena := setupTestArena(t)
+	arena.Plc = new(FakePlc)
+
+	arena.applyHubCounterSettings(&model.EventSettings{
+		HubCounterAddress: "not-an-address",
+		HubCounterPort:    hardware.DefaultHubCounterPort,
+	})
+
+	assert.Nil(t, arena.hubCounter)
+	assert.Equal(t, HubCounterNotConfigured, arena.HubCounterStatus())
+	red, blue := arena.Plc.GetHubCounts()
+	assert.Equal(t, 0, red)
+	assert.Equal(t, 0, blue)
+}
+
+// Reconfiguring must not leave the old receiver holding the UDP port, or the second save
+// silently keeps the first save's address.
+func TestApplyHubCounterSettingsRebindsThePort(t *testing.T) {
+	arena := setupTestArena(t)
+	arena.Plc = new(FakePlc)
+
+	settings := &model.EventSettings{HubCounterAddress: "127.0.0.1", HubCounterPort: 8412}
+	arena.applyHubCounterSettings(settings)
+	assert.NotNil(t, arena.hubCounter)
+	assert.Equal(t, 8412, arena.hubCounter.Port())
+
+	arena.applyHubCounterSettings(settings)
+	assert.NotNil(t, arena.hubCounter, "the same port has to be bindable again")
+	assert.Equal(t, 8412, arena.hubCounter.Port())
+
+	arena.applyHubCounterSettings(&model.EventSettings{})
+}
+
+// fakeHubCountSource stands in for the receiver where a test only needs numbers.
+type fakeHubCountSource struct {
+	red, blue int
+	resets    int
+}
+
+func (source *fakeHubCountSource) GetHubCounts() (int, int) {
+	return source.red, source.blue
+}
+
+func (source *fakeHubCountSource) ResetMatch() {
+	source.resets++
+	source.red, source.blue = 0, 0
+}
+
+// midShiftOffset is how far into the match the middle of the given teleop shift is, so a
+// test can put the clock somewhere unambiguous inside it.
+//
+// The middle rather than the start, because the previous shift's scoring grace period
+// reaches into the first three seconds of this one: FUEL arriving there still belongs to
+// the shift it was shot in, which is the whole point of the grace, but it makes the start
+// of a shift the wrong place to ask which shift it is.
+func midShiftOffset(shift game.Shift) time.Duration {
+	offset := time.Duration(
+		game.MatchTiming.WarmupDurationSec+game.MatchTiming.AutoDurationSec+
+			game.MatchTiming.PauseDurationSec+game.MatchTiming.TransitionShiftDurationSec,
+	) * time.Second
+	for s := game.Shift1; s < shift; s++ {
+		offset += time.Duration(game.MatchTiming.ShiftDurationSec) * time.Second
+	}
+	return offset + time.Duration(game.MatchTiming.ShiftDurationSec/2)*time.Second
+}

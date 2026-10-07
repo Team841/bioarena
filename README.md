@@ -1057,6 +1057,7 @@ kernel versions and hardware generations. Confirm on the Pi with `gpiodetect`, a
 
 - [docs/hardware-wiring.md](docs/hardware-wiring.md) — field hardware wiring, opto-isolation, e-stop panel assembly.
 - [docs/prd-half-field-match-simulation.md](docs/prd-half-field-match-simulation.md) — requirements for 1v0 half-field REBUILT 2026 simulation: AUTO outcome selection, FMS Game Data, DMX HUB light.
+- [docs/spec-hub-fuel-counter-feed.md](docs/spec-hub-fuel-counter-feed.md) — the contract for the webcam FUEL counter: the UDP feed it sends, the timing it has to meet, and what the arena does with the counts. Written for the counter's author as much as for this repo.
 - [docs/upstream-divergences.md](docs/upstream-divergences.md) — where this fork differs from cheesy-arena, which differences are candidates to send upstream, and which files are kept byte-identical.
 - [docs/console.py](docs/console.py) — serial console for the field switch, standard library only; Linux and macOS.
 - [docs/chrony-bioarena.conf](docs/chrony-bioarena.conf) — chrony drop-in making the Pi the field's time source, so switch and controller logs can be correlated.

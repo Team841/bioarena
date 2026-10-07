@@ -9,7 +9,14 @@ package game
 import "time"
 
 const (
-	TeleopGracePeriodSec = 3
+	// How long after a shift ends that FUEL still counts for it, so a ball already in
+	// flight when the buzzer goes is not lost. Upstream's constant and upstream's value;
+	// it is what makes the AUTO count still settling during the pause.
+	//
+	// Replaced a dead TeleopGracePeriodSec of the same value, whose last caller went with
+	// the hub relay work. Two identically-valued grace periods next to each other, one of
+	// them unused, is a trap rather than a spare.
+	ScoringGracePeriodSec = 3
 )
 
 // MatchTiming diverges from upstream in two ways. WarmupDurationSec is a bioarena

@@ -1,21 +1,17 @@
 // Copyright 2026 Team 254. All Rights Reserved.
-// Portions Copyright Team 841. All Rights Reserved.
 // Author: pat@patfairbank.com (Patrick Fairbank)
 //
-// Shift structure for the 2026 Hub element.
-//
-// Mirrors upstream cheesy-arena's game/hub.go. The scoring half of that file -- Fuel
-// counting, per-shift tallies, and the scoring grace periods serving them -- is
-// deliberately omitted: bioarena is a practice field controller and does not score.
-// What remains is the rule deciding when a Hub is active and the shift timing the
-// lighting needs, kept structurally identical to upstream so the files can be diffed.
+// Scoring logic for the 2026 Hub element.
 
 package game
 
-import "time"
+import (
+	"time"
+)
 
 type Hub struct {
-	WonAuto bool
+	WonAuto     bool
+	ShiftCounts [ShiftCount]int
 }
 
 // Shift represents a distinct period during the match when Fuel is scored (and tracked separately).
@@ -32,6 +28,48 @@ const (
 	ShiftPostMatch
 	ShiftCount
 )
+
+// UpdateState updates the internal counting state of the Hub given the current state of the hardware count and the
+// match time.
+func (hub *Hub) UpdateState(count int, matchStartTime, currentTime time.Time) {
+	if currentTime.Before(matchStartTime) {
+		return
+	}
+
+	shift, ok := hub.getCurrentShift(matchStartTime, currentTime)
+	if !ok {
+		return
+	}
+
+	var existingCount int
+	for _, shiftCount := range hub.ShiftCounts {
+		existingCount += shiftCount
+	}
+	newFuel := count - existingCount
+	if newFuel <= 0 {
+		return
+	}
+
+	hub.ShiftCounts[shift] += newFuel
+}
+
+// GetTeleopActiveFuelCount returns the number of Fuel scored during the teleop period when the Hub was active.
+func (hub *Hub) GetTeleopActiveFuelCount() int {
+	var count int
+	for shift := ShiftTransition; shift < ShiftCount; shift++ {
+		count += hub.GetShiftCount(shift, true)
+	}
+	return count
+}
+
+// GetShiftActiveCount returns the number of Fuel scored during the given shift if the Hub was active, or zero if the
+// Hub was not active.
+func (hub *Hub) GetShiftCount(shift Shift, activeOnly bool) int {
+	if hub.isShiftActive(shift) || !activeOnly {
+		return hub.ShiftCounts[shift]
+	}
+	return 0
+}
 
 // GetCurrentShiftTiming returns the current Hub shift, the amount of time remaining in it, and its duration. If the
 // match is not in a valid shift, both durations are zero and the ok return value is false.
@@ -67,17 +105,14 @@ func (hub *Hub) GetActiveShiftTiming(matchStartTime, currentTime time.Time) (tim
 	if !ok {
 		return 0, 0
 	}
-	if hub.IsShiftActive(shift) {
+	if hub.isShiftActive(shift) {
 		return remaining, shiftDuration
 	}
 	return 0, shiftDuration
 }
 
-// IsShiftActive returns true if the Hub is active during the given shift.
-//
-// Exported, unlike upstream's unexported isShiftActive, because bioarena's lighting
-// drivers live outside this package. The body is otherwise unchanged.
-func (hub *Hub) IsShiftActive(shift Shift) bool {
+// isShiftActive returns true if the Hub is active during the given shift.
+func (hub *Hub) isShiftActive(shift Shift) bool {
 	switch shift {
 	case ShiftAuto, ShiftTransition, ShiftEndgame, ShiftPostMatch:
 		return true
@@ -88,4 +123,42 @@ func (hub *Hub) IsShiftActive(shift Shift) bool {
 	default:
 		return false
 	}
+}
+
+// getCurrentShift returns the current shift based on the match time, and a boolean indicating whether the time
+// corresponds to a valid shift.
+func (hub *Hub) getCurrentShift(matchStartTime, currentTime time.Time) (Shift, bool) {
+	if currentTime.Before(matchStartTime.Add(GetDurationToAutoEnd() + hub.getScoringGracePeriod(ShiftAuto))) {
+		return ShiftAuto, true
+	}
+
+	teleopStartTime := matchStartTime.Add(GetDurationToTeleopStart())
+	shiftEndTime := teleopStartTime.Add(time.Duration(MatchTiming.TransitionShiftDurationSec) * time.Second)
+	if currentTime.Before(shiftEndTime.Add(hub.getScoringGracePeriod(ShiftTransition))) {
+		return ShiftTransition, true
+	}
+
+	for shift := Shift1; shift <= Shift4; shift++ {
+		shiftEndTime = shiftEndTime.Add(time.Duration(MatchTiming.ShiftDurationSec) * time.Second)
+		if currentTime.Before(shiftEndTime.Add(hub.getScoringGracePeriod(shift))) {
+			return shift, true
+		}
+	}
+
+	teleopEndTime := matchStartTime.Add(GetDurationToTeleopEnd())
+	if currentTime.Before(teleopEndTime) {
+		return ShiftEndgame, true
+	}
+	if currentTime.Before(teleopEndTime.Add(hub.getScoringGracePeriod(ShiftPostMatch))) {
+		return ShiftPostMatch, true
+	}
+
+	return ShiftCount, false
+}
+
+func (hub *Hub) getScoringGracePeriod(shift Shift) time.Duration {
+	if hub.isShiftActive(shift) {
+		return time.Duration(ScoringGracePeriodSec) * time.Second
+	}
+	return 0
 }

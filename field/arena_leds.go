@@ -104,15 +104,11 @@ func releaseHubLeds(leds ledController) {
 	}
 }
 
+// hubs lives in arena_hub_counter.go, alongside the FUEL counting that also needs them.
+
 // redWonAuto reports whether the red alliance is the AUTO winner.
 func (arena *Arena) redWonAuto() bool {
 	return arena.AutoWinner == hardware.AllianceRed
-}
-
-// hubs returns the red and blue Hubs for the current AUTO result.
-func (arena *Arena) hubs() (*game.Hub, *game.Hub) {
-	redWon := arena.redWonAuto()
-	return &game.Hub{WonAuto: redWon}, &game.Hub{WonAuto: !redWon}
 }
 
 // updateHubLeds updates Hub LEDs based on the current match state and active scoring shift.

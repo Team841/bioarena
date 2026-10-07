@@ -67,6 +67,17 @@ type Arena struct {
 	AutoWinnerMode   AutoWinnerMode
 	GameData         string
 	AllianceStations map[string]*AllianceStation
+
+	// The Hubs, holding the FUEL counted into each this match, per shift. Upstream keeps
+	// these on its realtime scores, which bioarena has no equivalent of. They are fed by
+	// updateHubCounts and zeroed when a match is loaded or started.
+	RedHub  game.Hub
+	BlueHub game.Hub
+
+	// hubCounter is the webcam FUEL counter's receiver, or nil when no counter address is
+	// configured. It is also wrapped into arena.Plc, which is how the scoring reads it;
+	// this field is what the match panel and the match-context publisher use.
+	hubCounter *hardware.HubCounterReceiver
 	ArenaNotifiers
 	MatchState
 	lastMatchState       MatchState
@@ -251,6 +262,7 @@ func (arena *Arena) LoadSettings() error {
 	}
 
 	arena.applyHubLedSettings(settings)
+	arena.applyHubCounterSettings(settings)
 
 	game.MatchTiming.WarmupDurationSec = settings.WarmupDurationSec
 	game.MatchTiming.AutoDurationSec = settings.AutoDurationSec
@@ -301,6 +313,7 @@ func (arena *Arena) LoadMatch(match *model.Match) error {
 	// Reset the arena state.
 	arena.soundsPlayed = make(map[*game.MatchSound]struct{})
 	arena.Plc.ResetMatch()
+	arena.resetHubs()
 	arena.AutoWinner = hardware.AllianceNone
 
 	// Notify any listeners about the new match.
@@ -648,6 +661,12 @@ func (arena *Arena) Update() {
 	defer arena.mu.Unlock()
 
 	// Decide what state the robots need to be in, depending on where we are in the match.
+	// Fold in the FUEL counted since the last tick before the state machine runs, not
+	// after: the AUTO result is decided inside it, at the teleop transition, from the
+	// count in hand at that instant. Reading the counter afterwards would hand the
+	// decision a tick-old figure for no reason.
+	arena.updateHubCounts()
+
 	auto := false
 	enabled := false
 	sendDsPacket := false
@@ -673,7 +692,11 @@ func (arena *Arena) Update() {
 			enabled = true
 			sendDsPacket = true
 		}
+		// Also takes the FUEL counter's baseline, since the counter stands in behind
+		// GetHubCounts and ResetMatch reaches it; see plc/override.go. Zeroing the Hubs
+		// alongside it drops anything counted while the driver was shooting in PreMatch.
 		arena.Plc.ResetMatch()
+		arena.resetHubs()
 	case WarmupPeriod:
 		auto = true
 		enabled = false

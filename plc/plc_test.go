@@ -91,6 +91,16 @@ func TestPlcGetNames(t *testing.T) {
 		t,
 		[]string{
 			"fieldIoConnection",
+			"redHubTotal",
+			"blueHubTotal",
+			"redHubCount1",
+			"redHubCount2",
+			"redHubCount3",
+			"redHubCount4",
+			"blueHubCount1",
+			"blueHubCount2",
+			"blueHubCount3",
+			"blueHubCount4",
 		},
 		plc.GetRegisterNames(),
 	)

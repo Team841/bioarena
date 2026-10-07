@@ -26,6 +26,7 @@ type Plc interface {
 	GetTeamEStops() ([3]bool, [3]bool)
 	GetTeamAStops() ([3]bool, [3]bool)
 	GetEthernetConnected() ([3]bool, [3]bool)
+	GetHubCounts() (int, int)
 	ResetMatch()
 	SetStackLights(red, blue, orange, green bool)
 	SetStackBuzzer(state bool)
@@ -94,6 +95,16 @@ type register int
 
 const (
 	fieldIoConnection register = iota
+	redHubTotal
+	blueHubTotal
+	redHubCount1
+	redHubCount2
+	redHubCount3
+	redHubCount4
+	blueHubCount1
+	blueHubCount2
+	blueHubCount3
+	blueHubCount4
 	registerCount
 )
 
@@ -226,6 +237,11 @@ func (plc *ModbusPlc) GetEthernetConnected() ([3]bool, [3]bool) {
 			plc.inputs[blueConnected2],
 			plc.inputs[blueConnected3],
 		}
+}
+
+// Returns the red and blue Hub counts, respectively.
+func (plc *ModbusPlc) GetHubCounts() (int, int) {
+	return int(plc.registers[redHubTotal]), int(plc.registers[blueHubTotal])
 }
 
 // Resets the internal state of the PLC to start a new match.

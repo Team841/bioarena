@@ -23,6 +23,12 @@ type FakePlc struct {
 	stackLightBuzzer      bool
 	fieldResetLight       bool
 	cycleState            bool
+	// Hub FUEL counts, as a real PLC's registers would hold them: settable so a test can
+	// drive the scoring path without standing up a counter receiver, and zeroed by
+	// ResetMatch the way the register mirror is.
+	redHubCount  int
+	blueHubCount int
+	matchResets  int
 }
 
 func (plc *FakePlc) SetAddress(address string) {
@@ -63,7 +69,13 @@ func (plc *FakePlc) GetEthernetConnected() ([3]bool, [3]bool) {
 	return plc.redEthernetConnected, plc.blueEthernetConnected
 }
 
+func (plc *FakePlc) GetHubCounts() (int, int) {
+	return plc.redHubCount, plc.blueHubCount
+}
+
 func (plc *FakePlc) ResetMatch() {
+	plc.matchResets++
+	plc.redHubCount, plc.blueHubCount = 0, 0
 }
 
 func (plc *FakePlc) SetStackLights(red, blue, orange, green bool) {

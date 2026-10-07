@@ -110,6 +110,12 @@ type EventSettings struct {
 	HubRelayRedPin    int
 	HubRelayBluePin   int
 	HubRelayActiveLow bool
+
+	// Hub FUEL counter. A webcam watching the field reports the FUEL scored into both
+	// HUBs; see docs/spec-hub-fuel-counter-feed.md. A blank address means no counter, and
+	// both HUBs then score nothing. Datagrams are accepted from that address only.
+	HubCounterAddress string
+	HubCounterPort    int
 }
 
 // applyHubRelayDefaults fills in relay pins that a database predating them has no value
@@ -121,6 +127,12 @@ func (settings *EventSettings) applyHubRelayDefaults() {
 	}
 	if settings.HubRelayBluePin == 0 {
 		settings.HubRelayBluePin = hardware.DefaultHubRelayBluePin
+	}
+	// Same reasoning for the counter port: a database predating the counter has no value
+	// for it, and a zero would read as "no counter" rather than as "not configured yet".
+	// The address is left blank, which is what actually turns the counter off.
+	if settings.HubCounterPort == 0 {
+		settings.HubCounterPort = hardware.DefaultHubCounterPort
 	}
 }
 
@@ -154,6 +166,7 @@ func (database *Database) GetEventSettings() (*EventSettings, error) {
 
 		HubRelayRedPin:  hardware.DefaultHubRelayRedPin,
 		HubRelayBluePin: hardware.DefaultHubRelayBluePin,
+		HubCounterPort:  hardware.DefaultHubCounterPort,
 	}
 
 	if err := database.eventSettingsTable.create(&eventSettings); err != nil {

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -78,6 +79,15 @@ func (web *Web) settingsPostHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	eventSettings.HubCounterAddress = strings.TrimSpace(r.PostFormValue("hubCounterAddress"))
+	eventSettings.HubCounterPort, _ = strconv.Atoi(r.PostFormValue("hubCounterPort"))
+	// Refused here for the same reason: the receiver drops every datagram whose source does
+	// not match, so an address with a typo in it is a counter that appears to be dead.
+	if err := checkHubCounter(eventSettings); err != nil {
+		web.renderSettings(w, r, err.Error())
+		return
+	}
+
 	// Only update the admin password if a non-empty value was submitted.
 	// This prevents the settings form from inadvertently clearing the password.
 	if newPass := r.PostFormValue("adminPassword"); newPass != "" {
@@ -130,6 +140,28 @@ func checkHubRelayPins(settings *model.EventSettings) error {
 	}
 	if settings.HubRelayRedPin == settings.HubRelayBluePin {
 		return fmt.Errorf("Red and blue relays cannot share GPIO pin %d.", settings.HubRelayRedPin)
+	}
+	return nil
+}
+
+// checkHubCounter rejects a FUEL counter that could not be reached or listened for.
+//
+// A blank address is how the counter is turned off, so it is the one thing always
+// allowed. Anything else has to be an address rather than a hostname: datagrams are
+// accepted by comparing the source against this value, and a name that resolves somewhere
+// else later would silently stop matching.
+func checkHubCounter(settings *model.EventSettings) error {
+	if settings.HubCounterAddress == "" {
+		return nil
+	}
+	if net.ParseIP(settings.HubCounterAddress) == nil {
+		return fmt.Errorf(
+			"Hub FUEL counter address must be an IP address, not a hostname: %q.",
+			settings.HubCounterAddress,
+		)
+	}
+	if settings.HubCounterPort < 1 || settings.HubCounterPort > 65535 {
+		return fmt.Errorf("Hub FUEL counter port must be from 1 to 65535.")
 	}
 	return nil
 }

@@ -40,6 +40,10 @@ func TestEventSettingsReadWrite(t *testing.T) {
 			// from working pins rather than zeroes.
 			HubRelayRedPin:  22,
 			HubRelayBluePin: 23,
+
+			// The FUEL counter's port is filled in for the same reason, and its address is
+			// blank, which is what actually leaves the counter off.
+			HubCounterPort: 8411,
 		},
 		*eventSettings,
 	)
