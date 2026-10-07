@@ -1,6 +1,7 @@
 package field
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/team841/bioarena/hardware"
 	"github.com/team841/bioarena/model"
 	"github.com/team841/bioarena/plc"
+	"github.com/team841/bioarena/websocket"
 )
 
 // startedArena is an arena in AUTO with one robot on the field, which is what the scoring
@@ -220,6 +222,128 @@ func TestHubProtocolNamesCoverEveryStateAndShift(t *testing.T) {
 		assert.Equal(t, expected, hubShiftName(shift))
 	}
 	assert.Equal(t, "NONE", hubShiftName(game.ShiftCount))
+}
+
+// --- The score notifier ---
+
+// Scores do not ride arenaStatus, which goes out every 500ms. Firing on change is what
+// keeps the tally inside the display budget, so it has to actually fire on one.
+func TestHubScoreNotifierFiresOnAChangeOnly(t *testing.T) {
+	arena, fakePlc := startedArena(t)
+
+	// Notify always calls the message producer, with or without listeners, so counting
+	// producer calls counts fires -- and does it through the exported API rather than by
+	// reaching into the notifier.
+	fires := 0
+	arena.HubScoreNotifier = websocket.NewNotifier("hubScore", func() any {
+		fires++
+		return nil
+	})
+
+	fires = 0
+	fakePlc.redHubCount = 1
+	arena.Update()
+	assert.Equal(t, 1, fires, "a ball scored is a change")
+
+	fires = 0
+	arena.Update()
+	arena.Update()
+	assert.Equal(t, 0, fires, "an unchanged tally must not wake every kiosk 100x/s")
+
+	fires = 0
+	fakePlc.redHubCount = 2
+	arena.Update()
+	assert.Equal(t, 1, fires)
+}
+
+// Going offline is a change the panel shows, so it has to fire too -- otherwise a dead
+// camera leaves a green badge until the next ball, which is the one thing that will not
+// arrive.
+func TestHubScoreNotifierFiresWhenTheFeedChangesState(t *testing.T) {
+	arena, _ := startedArena(t)
+	arena.applyHubCounterSettings(&model.EventSettings{
+		HubCounterAddress: "127.0.0.1",
+		HubCounterPort:    0,
+	})
+	defer arena.applyHubCounterSettings(&model.EventSettings{})
+
+	fires := 0
+	arena.HubScoreNotifier = websocket.NewNotifier("hubScore", func() any {
+		fires++
+		return nil
+	})
+
+	// First tick records OFFLINE, since nothing has been heard from the counter.
+	arena.Update()
+	fires = 0
+	arena.Update()
+	assert.Equal(t, 0, fires, "still offline is not a change")
+}
+
+func TestHubScoreMessageCarriesBothHubs(t *testing.T) {
+	arena, fakePlc := startedArena(t)
+	fakePlc.redHubCount = 4
+	fakePlc.blueHubCount = 1
+	arena.Update()
+
+	message := arena.generateHubScoreMessage()
+	encoded, err := json.Marshal(message)
+	assert.Nil(t, err)
+
+	var decoded struct {
+		Counter struct {
+			Status    string
+			LatencyMs int
+		}
+		Red  hubScoreView
+		Blue hubScoreView
+	}
+	assert.Nil(t, json.Unmarshal(encoded, &decoded))
+
+	assert.Equal(t, HubCounterNotConfigured, decoded.Counter.Status)
+	assert.Equal(t, 4, decoded.Red.Counted)
+	assert.Equal(t, 4, decoded.Red.Credited)
+	assert.Equal(t, 4, decoded.Red.Auto)
+	assert.Equal(t, 1, decoded.Blue.Counted)
+	assert.Len(t, decoded.Red.ByShift, int(game.ShiftCount))
+	assert.Equal(t, 4, decoded.Red.ByShift[game.ShiftAuto])
+}
+
+// FUEL credited to an alliance with nobody on it is the wrong-side mistake: a driver
+// station plugged into the other alliance, or a camera with the hubs swapped.
+func TestHubScoreWarnsWhenAnAllianceHasNoTeam(t *testing.T) {
+	arena, fakePlc := startedArena(t)
+
+	// startedArena registers 254 on R1 and bypasses the rest, so blue has no team.
+	fakePlc.redHubCount = 2
+	fakePlc.blueHubCount = 3
+	arena.Update()
+
+	message := arena.generateHubScoreMessage()
+	encoded, _ := json.Marshal(message)
+	var decoded struct {
+		Red  hubScoreView
+		Blue hubScoreView
+	}
+	assert.Nil(t, json.Unmarshal(encoded, &decoded))
+
+	assert.False(t, decoded.Red.NoTeam, "red has team 254 registered")
+	assert.True(t, decoded.Blue.NoTeam, "blue scored with nobody on it")
+}
+
+// An alliance that has not scored is not a wrong-side mistake, just an alliance that has
+// not scored. Warning there would fire on every 1v0 match from the first tick.
+func TestHubScoreDoesNotWarnWithoutAScore(t *testing.T) {
+	arena, _ := startedArena(t)
+	arena.Update()
+
+	message := arena.generateHubScoreMessage()
+	encoded, _ := json.Marshal(message)
+	var decoded struct {
+		Blue hubScoreView
+	}
+	assert.Nil(t, json.Unmarshal(encoded, &decoded))
+	assert.False(t, decoded.Blue.NoTeam)
 }
 
 // --- Settings ---

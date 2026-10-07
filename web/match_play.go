@@ -70,6 +70,7 @@ func (web *Web) matchPlayWebsocketHandler(w http.ResponseWriter, r *http.Request
 		// have. Without this subscription the notifier fires into nothing and the field is
 		// silent, however the sounds themselves are configured.
 		web.arena.PlaySoundNotifier,
+		web.arena.HubScoreNotifier,
 	)
 
 	// Loop, waiting for commands and responding to them, until the client closes the connection.

@@ -23,7 +23,7 @@ func TestMatchPlayRegisterTeamsAppliesWpaKeys(t *testing.T) {
 	assert.Nil(t, err)
 	defer conn.Close()
 	ws := websocket.NewTestWebsocket(conn)
-	readWebsocketMultiple(t, ws, 4)
+	readWebsocketMultiple(t, ws, 5)
 
 	ws.Write("registerTeams", map[string]any{
 		"Red1": 254, "Red2": 0, "Red3": 0, "Blue1": 1114, "Blue2": 0, "Blue3": 0,
@@ -54,7 +54,7 @@ func TestMatchPlayRegisterTeamsWithoutWpaKeys(t *testing.T) {
 	assert.Nil(t, err)
 	defer conn.Close()
 	ws := websocket.NewTestWebsocket(conn)
-	readWebsocketMultiple(t, ws, 4)
+	readWebsocketMultiple(t, ws, 5)
 
 	ws.Write("registerTeams", map[string]int{
 		"Red1": 254, "Red2": 0, "Red3": 0, "Blue1": 0, "Blue2": 0, "Blue3": 0,

@@ -56,6 +56,31 @@ Simplified match play UI for 10th Street practice field controller.
       {{template "mpCard" "B3"}}
     </div>
 
+    {{/* FUEL tallies, one strip per alliance, hidden entirely until a counter is configured
+         so a field without one is not told about a feature it does not have.
+
+         Credited is the score. Counted beside it is every ball the camera saw, so the gap
+         between them is the FUEL shot into a dark HUB -- the number a driver practising the
+         shift cycle actually wants. */}}
+    <div class="mp-fuel mb-2" id="fuelStrip" hidden>
+      <div class="mp-fuel-alliance" data-alliance="red">
+        <span class="mp-fuel-label">RED FUEL</span>
+        <span class="mp-fuel-credited" id="fuelCredited-red">0</span>
+        <span class="mp-fuel-detail" id="fuelDetail-red"></span>
+        <span class="mp-fuel-warning" id="fuelWarning-red" hidden></span>
+      </div>
+      <div class="mp-fuel-counter">
+        <span class="badge badge-status" id="hubCounterStatus" data-status="" title="">COUNTER</span>
+        <span class="mp-fuel-latency" id="fuelLatency"></span>
+      </div>
+      <div class="mp-fuel-alliance" data-alliance="blue">
+        <span class="mp-fuel-label">BLUE FUEL</span>
+        <span class="mp-fuel-credited" id="fuelCredited-blue">0</span>
+        <span class="mp-fuel-detail" id="fuelDetail-blue"></span>
+        <span class="mp-fuel-warning" id="fuelWarning-blue" hidden></span>
+      </div>
+    </div>
+
     <!-- Match controls -->
     <div class="mp-controls mb-2">
       <button id="btnRegister" class="btn btn-secondary btn-mp" onclick="registerTeams()" disabled>

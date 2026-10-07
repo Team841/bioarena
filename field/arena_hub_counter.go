@@ -11,6 +11,7 @@ package field
 
 import (
 	"log"
+	"strings"
 	"time"
 
 	"github.com/team841/bioarena/game"
@@ -110,6 +111,8 @@ func (arena *Arena) updateHubCounts() {
 	if arena.hubCounter != nil {
 		arena.hubCounter.SetMatchContext(arena.hubMatchContext(currentTime))
 	}
+
+	arena.notifyHubScoreIfChanged()
 }
 
 // hubMatchContext describes the match in the counter protocol's terms, so the receiver
@@ -136,6 +139,111 @@ func (arena *Arena) hubMatchContext(currentTime time.Time) hardware.HubMatchCont
 		RedAuto:      redHub.GetShiftCount(game.ShiftAuto, true),
 		BlueAuto:     blueHub.GetShiftCount(game.ShiftAuto, true),
 	}
+}
+
+// hubScoreView is one alliance's tallies, as the match panel reads them.
+type hubScoreView struct {
+	// Counted is every FUEL the camera saw enter this HUB; Credited is the subset that
+	// entered while it was active, which is the score. The difference is what was shot
+	// into a dark HUB.
+	Counted  int
+	Credited int
+	Auto     int
+	// ByShift is the per-shift breakdown, counted rather than credited, indexed by
+	// game.Shift. The whole match's shape in one array, for a panel that wants it.
+	ByShift []int
+	// NoTeam is set when this HUB has been credited FUEL but no team is registered on its
+	// alliance -- a driver station plugged into the wrong side, or a camera with the hubs
+	// swapped. Worth saying out loud, because the scoring looks fine until someone checks
+	// which alliance got it.
+	NoTeam bool
+}
+
+// generateHubScoreMessage is the hubScore notifier's payload.
+func (arena *Arena) generateHubScoreMessage() any {
+	redHub, blueHub := arena.hubs()
+	ageMs, info, session := 0, "", ""
+	if arena.hubCounter != nil {
+		ageMs, info, session = arena.hubCounter.Telemetry()
+	}
+
+	return &struct {
+		Counter struct {
+			Status    string
+			LatencyMs int
+			Info      string
+			Session   string
+		}
+		Red  hubScoreView
+		Blue hubScoreView
+	}{
+		Counter: struct {
+			Status    string
+			LatencyMs int
+			Info      string
+			Session   string
+		}{arena.HubCounterStatus(), ageMs, info, session},
+		Red:  arena.hubScoreView(redHub, "R"),
+		Blue: arena.hubScoreView(blueHub, "B"),
+	}
+}
+
+// hubScoreView projects one Hub, with the wrong-side warning for its alliance.
+func (arena *Arena) hubScoreView(hub *game.Hub, stationPrefix string) hubScoreView {
+	byShift := make([]int, game.ShiftCount)
+	for shift := game.ShiftAuto; shift < game.ShiftCount; shift++ {
+		byShift[shift] = hub.GetShiftCount(shift, false)
+	}
+	credited := hubCreditedCount(hub)
+	return hubScoreView{
+		Counted:  hubTotalCount(hub),
+		Credited: credited,
+		Auto:     hub.GetShiftCount(game.ShiftAuto, true),
+		ByShift:  byShift,
+		NoTeam:   credited > 0 && !arena.allianceHasTeam(stationPrefix),
+	}
+}
+
+// allianceHasTeam reports whether any station on the alliance has a team registered.
+func (arena *Arena) allianceHasTeam(stationPrefix string) bool {
+	for station, allianceStation := range arena.AllianceStations {
+		if strings.HasPrefix(station, stationPrefix) && allianceStation.Team != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// hubScoreSnapshot is what a change is detected against. Only the values the panel shows:
+// a tally that has not moved and a feed that has not changed state should not wake every
+// kiosk up.
+type hubScoreSnapshot struct {
+	redCounted, redCredited   int
+	blueCounted, blueCredited int
+	counterStatus             string
+	latencyMs                 int
+}
+
+// notifyHubScoreIfChanged fires the hubScore notifier when anything on the panel moved.
+func (arena *Arena) notifyHubScoreIfChanged() {
+	redHub, blueHub := arena.hubs()
+	latencyMs := 0
+	if arena.hubCounter != nil {
+		latencyMs, _, _ = arena.hubCounter.Telemetry()
+	}
+	snapshot := hubScoreSnapshot{
+		redCounted:    hubTotalCount(redHub),
+		redCredited:   hubCreditedCount(redHub),
+		blueCounted:   hubTotalCount(blueHub),
+		blueCredited:  hubCreditedCount(blueHub),
+		counterStatus: arena.HubCounterStatus(),
+		latencyMs:     latencyMs,
+	}
+	if snapshot == arena.lastHubScore {
+		return
+	}
+	arena.lastHubScore = snapshot
+	arena.HubScoreNotifier.Notify()
 }
 
 // hubTotalCount is every FUEL the camera saw enter this HUB this match, active or not.

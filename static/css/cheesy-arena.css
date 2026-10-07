@@ -109,8 +109,14 @@
 .badge-status[data-status=CONFIGURING], .badge-status[data-status=DISABLED] {
   background-color: #08f;
 }
-.badge-status[data-status=ACTIVE] {
+.badge-status[data-status=ACTIVE], .badge-status[data-status=ONLINE] {
   background-color: #0c6;
+}
+/* "NOT CONFIGURED" has a space in it, so it needs quoting where the bare values above do
+   not. Blue rather than red for the same reason DISABLED is: no counter is a field that
+   does not have one, not a field whose counter is broken. */
+.badge-status[data-status="NOT CONFIGURED"] {
+  background-color: #08f;
 }
 /* The bare [data-status-ok] rules above tie with .badge-status on specificity, and
    .badge-status comes later, so it wins and pins these badges red whatever the value is.
@@ -424,6 +430,78 @@ input[data-changed="true"], select[data-changed="true"] {
 }
 
 /* Control buttons row */
+/* ── FUEL tallies ──────────────────────────────────────────────────────── */
+/* Three columns so the two alliances sit at the outer edges, matching the station cards
+   above them, with the feed's own health between. Collapses to one column on a phone. */
+.mp-fuel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  background: #1a1a1a;
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+.mp-fuel-alliance {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.mp-fuel-alliance[data-alliance=blue] {
+  justify-self: end;
+}
+.mp-fuel-label {
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 1px;
+}
+.mp-fuel-alliance[data-alliance=red] .mp-fuel-label {
+  color: #e66;
+}
+.mp-fuel-alliance[data-alliance=blue] .mp-fuel-label {
+  color: #6ae;
+}
+/* The score, and the only thing on this strip meant to be readable across a field. */
+.mp-fuel-credited {
+  font-size: 26px;
+  font-weight: bold;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.mp-fuel-detail {
+  font-size: 11px;
+  color: #888;
+}
+.mp-fuel-warning {
+  font-size: 11px;
+  font-weight: bold;
+  color: #f92;
+}
+.mp-fuel-counter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.mp-fuel-latency {
+  font-size: 11px;
+  color: #888;
+  font-variant-numeric: tabular-nums;
+}
+/* Amber past the budget in docs/spec-hub-fuel-counter-feed.md: the feed still works, but
+   the tally is lagging the shot by more than a driver should have to allow for. */
+.mp-fuel-latency[data-slow=true] {
+  color: #f92;
+}
+@media (max-width: 600px) {
+  .mp-fuel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mp-fuel-alliance[data-alliance=blue] {
+    justify-self: start;
+  }
+}
+
 .mp-controls {
   display: flex;
   flex-wrap: wrap;

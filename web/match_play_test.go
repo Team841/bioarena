@@ -71,6 +71,9 @@ func TestMatchPlayWebsocketCommands(t *testing.T) {
 	readWebsocketType(t, ws, "arenaStatus")
 	readWebsocketType(t, ws, "matchLoad")
 	readWebsocketType(t, ws, "matchTime")
+	// A kiosk that has just connected needs the current FUEL tally, rather than waiting
+	// for the next ball to learn what the score is.
+	readWebsocketType(t, ws, "hubScore")
 
 	// Test that a server-side error is communicated to the client.
 	ws.Write("nonexistenttype", nil)
@@ -135,7 +138,7 @@ func TestMatchPlayWebsocketBypassEmptyStations(t *testing.T) {
 	assert.Nil(t, err)
 	defer conn.Close()
 	ws := websocket.NewTestWebsocket(conn)
-	readWebsocketMultiple(t, ws, 4)
+	readWebsocketMultiple(t, ws, 5)
 
 	ws.Write("registerTeams", map[string]int{
 		"Red1": 254, "Red2": 0, "Red3": 0, "Blue1": 0, "Blue2": 0, "Blue3": 0,
@@ -160,7 +163,7 @@ func TestMatchPlayWebsocketSetAutoWinnerMode(t *testing.T) {
 	assert.Nil(t, err)
 	defer conn.Close()
 	ws := websocket.NewTestWebsocket(conn)
-	readWebsocketMultiple(t, ws, 4)
+	readWebsocketMultiple(t, ws, 5)
 
 	// Default is random.
 	assert.Equal(t, field.AutoWinnerRandom, web.arena.AutoWinnerMode)
@@ -200,7 +203,7 @@ func TestMatchPlayWebsocketClearMatchPreservesTeams(t *testing.T) {
 	assert.Nil(t, err)
 	defer conn.Close()
 	ws := websocket.NewTestWebsocket(conn)
-	readWebsocketMultiple(t, ws, 4)
+	readWebsocketMultiple(t, ws, 5)
 
 	// Register two teams.
 	ws.Write("registerTeams", map[string]int{
@@ -251,6 +254,7 @@ func TestMatchPlayClearFieldEStop(t *testing.T) {
 	readWebsocketType(t, ws, "arenaStatus")
 	readWebsocketType(t, ws, "matchLoad")
 	readWebsocketType(t, ws, "matchTime")
+	readWebsocketType(t, ws, "hubScore")
 
 	// Simulate a field e-stop: latch all stations.
 	mock.pinHeld = true
@@ -284,8 +288,8 @@ func TestMatchPlayArenaStatusIncludesGpioFieldEStop(t *testing.T) {
 	defer conn.Close()
 	ws := websocket.NewTestWebsocket(conn)
 
-	// Read all four initial messages and extract arenaStatus.
-	messages := readWebsocketMultiple(t, ws, 4)
+	// Read all five initial messages and extract arenaStatus.
+	messages := readWebsocketMultiple(t, ws, 5)
 	arenaStatus, ok := messages["arenaStatus"]
 	if !assert.True(t, ok, "arenaStatus not found in initial messages") {
 		return
@@ -315,7 +319,7 @@ func TestMatchPlayWebsocketToggleBypassThenStartMatch(t *testing.T) {
 	ws := websocket.NewTestWebsocket(conn)
 
 	// Drain the four initial notifications.
-	readWebsocketMultiple(t, ws, 4)
+	readWebsocketMultiple(t, ws, 5)
 
 	// Toggle bypass for each station via WebSocket — same path the browser uses.
 	stations := []string{"R1", "R2", "R3", "B1", "B2", "B3"}
@@ -356,7 +360,7 @@ func TestMatchPlayWebsocketCanStartMatchProgression(t *testing.T) {
 	defer conn.Close()
 	ws := websocket.NewTestWebsocket(conn)
 
-	readWebsocketMultiple(t, ws, 4)
+	readWebsocketMultiple(t, ws, 5)
 
 	stations := []string{"R1", "R2", "R3", "B1", "B2", "B3"}
 	for i, station := range stations {
@@ -390,7 +394,7 @@ func TestMatchPlayWebsocketStartMatchWithRegisteredTeamAndBypass(t *testing.T) {
 	defer conn.Close()
 	ws := websocket.NewTestWebsocket(conn)
 
-	readWebsocketMultiple(t, ws, 4)
+	readWebsocketMultiple(t, ws, 5)
 
 	// Place the registered team in R1.
 	ws.Write("registerTeams", map[string]int{
@@ -441,7 +445,7 @@ func TestMatchPlayWebsocketRejectsDuplicateTeams(t *testing.T) {
 	assert.Nil(t, err)
 	defer conn.Close()
 	ws := websocket.NewTestWebsocket(conn)
-	readWebsocketMultiple(t, ws, 4)
+	readWebsocketMultiple(t, ws, 5)
 
 	ws.Write("registerTeams", map[string]int{
 		"Red1": 841, "Red2": 841, "Red3": 0, "Blue1": 0, "Blue2": 0, "Blue3": 0,

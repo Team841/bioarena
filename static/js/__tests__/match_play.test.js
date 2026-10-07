@@ -36,7 +36,7 @@ global.CheesyWebsocket = class {
 };
 global.websocket = new global.CheesyWebsocket();
 
-const { handleArenaStatus, handleMatchLoad } = require("../match_play.js");
+const { handleArenaStatus, handleMatchLoad, handleHubScore } = require("../match_play.js");
 
 // ---- helpers ----------------------------------------------------------------
 
@@ -81,6 +81,16 @@ function buildDom() {
     <button id="btnResetField"></button>
     <span id="redPanelStatus"></span>
     <span id="bluePanelStatus"></span>
+    <div id="fuelStrip" hidden>
+      <span id="fuelCredited-red">0</span>
+      <span id="fuelDetail-red"></span>
+      <span id="fuelWarning-red" hidden></span>
+      <span id="fuelCredited-blue">0</span>
+      <span id="fuelDetail-blue"></span>
+      <span id="fuelWarning-blue" hidden></span>
+      <span id="hubCounterStatus" data-status=""></span>
+      <span id="fuelLatency"></span>
+    </div>
   `;
 }
 
@@ -483,5 +493,94 @@ describe("handleMatchLoad", () => {
       Teams: { R1: null, R2: null, R3: null, B1: null, B2: null, B3: null },
     });
     expect(document.getElementById("testMatchNameWrap").style.display).toBe("none");
+  });
+});
+
+// ---- FUEL tallies -----------------------------------------------------------
+
+// The strip carries two numbers per alliance: the score, and how many balls the camera saw
+// that did not score because the HUB was dark.
+describe("handleHubScore", () => {
+  const score = (overrides = {}) => ({
+    Counted: 0, Credited: 0, Auto: 0, ByShift: [], NoTeam: false, ...overrides,
+  });
+
+  test("shows the credited count as the score", () => {
+    handleHubScore({ Counter: { Status: "ONLINE" }, Red: score({ Counted: 7, Credited: 7 }), Blue: score() });
+    expect(document.getElementById("fuelCredited-red").textContent).toBe("7");
+    expect(document.getElementById("fuelCredited-blue").textContent).toBe("0");
+  });
+
+  // The gap between counted and credited is the number a driver practising the shift cycle
+  // is actually after.
+  test("calls out FUEL shot into a dark hub", () => {
+    handleHubScore({ Counter: {}, Red: score({ Counted: 10, Credited: 6 }), Blue: score() });
+    expect(document.getElementById("fuelDetail-red").textContent).toBe("counted 10 · 4 into dark hub");
+  });
+
+  // On an active HUB every ball counts, and saying "0 into dark hub" is noise.
+  test("says nothing about a dark hub when every ball scored", () => {
+    handleHubScore({ Counter: {}, Red: score({ Counted: 5, Credited: 5 }), Blue: score() });
+    expect(document.getElementById("fuelDetail-red").textContent).toBe("");
+  });
+
+  // Scoring for an alliance with nobody on it means the driver station is on the wrong
+  // side, or the camera has the hubs swapped. The tally looks fine either way.
+  test("warns when FUEL is credited to an alliance with no team", () => {
+    handleHubScore({ Counter: {}, Red: score({ Counted: 3, Credited: 3, NoTeam: true }), Blue: score() });
+    const warning = document.getElementById("fuelWarning-red");
+    expect(warning.hidden).toBe(false);
+    expect(warning.textContent).toContain("no red team registered");
+    expect(document.getElementById("fuelWarning-blue").hidden).toBe(true);
+  });
+
+  test("reports feed latency and flags it past the budget", () => {
+    handleHubScore({ Counter: { LatencyMs: 38 }, Red: score(), Blue: score() });
+    expect(document.getElementById("fuelLatency").textContent).toBe("38 ms");
+    expect(document.getElementById("fuelLatency").dataset.slow).toBe("false");
+
+    handleHubScore({ Counter: { LatencyMs: 400 }, Red: score(), Blue: score() });
+    expect(document.getElementById("fuelLatency").dataset.slow).toBe("true");
+  });
+
+  // A message that arrives before the arena has published a hub is not a reason to throw
+  // and lose the rest of the handler.
+  test("survives a message missing an alliance", () => {
+    expect(() => handleHubScore({ Counter: {} })).not.toThrow();
+  });
+});
+
+// The strip's visibility and the feed's badge ride arena status, not hubScore.
+describe("handleArenaStatus — FUEL counter badge", () => {
+  test("hides the strip on a field with no counter", () => {
+    const status = makeStatus(0, false);
+    status.HubCounterStatus = "NOT CONFIGURED";
+    handleArenaStatus(status);
+    expect(document.getElementById("fuelStrip").hidden).toBe(true);
+  });
+
+  // An older server reports no status at all, which is not a counter either.
+  test("hides the strip when no status is reported", () => {
+    handleArenaStatus(makeStatus(0, false));
+    expect(document.getElementById("fuelStrip").hidden).toBe(true);
+  });
+
+  test("shows the strip once a counter is configured", () => {
+    const status = makeStatus(0, false);
+    status.HubCounterStatus = "ONLINE";
+    handleArenaStatus(status);
+    expect(document.getElementById("fuelStrip").hidden).toBe(false);
+    expect(document.getElementById("hubCounterStatus").dataset.status).toBe("ONLINE");
+    expect(document.getElementById("hubCounterStatus").textContent).toBe("COUNTER");
+  });
+
+  // A configured counter that has gone quiet stays visible -- its counts are frozen, not
+  // gone, and the operator needs to know which.
+  test("names the offline state on the badge itself", () => {
+    const status = makeStatus(0, false);
+    status.HubCounterStatus = "OFFLINE";
+    handleArenaStatus(status);
+    expect(document.getElementById("fuelStrip").hidden).toBe(false);
+    expect(document.getElementById("hubCounterStatus").textContent).toBe("COUNTER OFFLINE");
   });
 });

@@ -77,7 +77,8 @@ type Arena struct {
 	// hubCounter is the webcam FUEL counter's receiver, or nil when no counter address is
 	// configured. It is also wrapped into arena.Plc, which is how the scoring reads it;
 	// this field is what the match panel and the match-context publisher use.
-	hubCounter *hardware.HubCounterReceiver
+	hubCounter   *hardware.HubCounterReceiver
+	lastHubScore hubScoreSnapshot // what the panel last saw; see notifyHubScoreIfChanged
 	ArenaNotifiers
 	MatchState
 	lastMatchState       MatchState

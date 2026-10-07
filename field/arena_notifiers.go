@@ -29,6 +29,11 @@ type ArenaNotifiers struct {
 	MatchTimeNotifier   *websocket.Notifier
 	MatchTimingNotifier *websocket.Notifier
 	PlaySoundNotifier   *websocket.Notifier
+	// HubScoreNotifier carries the FUEL tallies. Separate from arenaStatus, which goes out
+	// every 500ms: half a second between a shot and the tally moving is visible, and the
+	// counter feed is specified to put it on screen inside 350ms. Fired on change instead,
+	// which costs nothing between shots.
+	HubScoreNotifier *websocket.Notifier
 }
 
 type MatchTimeMessage struct {
@@ -63,6 +68,7 @@ func (arena *Arena) configureNotifiers() {
 	arena.MatchTimeNotifier = websocket.NewNotifier("matchTime", arena.generateMatchTimeMessage)
 	arena.MatchTimingNotifier = websocket.NewNotifier("matchTiming", arena.generateMatchTimingMessage)
 	arena.PlaySoundNotifier = websocket.NewNotifier("playSound", nil)
+	arena.HubScoreNotifier = websocket.NewNotifier("hubScore", arena.generateHubScoreMessage)
 }
 
 func (arena *Arena) generateArenaStatusMessage() any {
@@ -102,6 +108,10 @@ func (arena *Arena) generateArenaStatusMessage() any {
 		RedPanelStatus    string
 		BluePanelStatus   string
 		StationLinksKnown bool
+		// HubCounterStatus is ONLINE, OFFLINE, or NOT CONFIGURED. Only the reachability
+		// rides arenaStatus; the tallies themselves go out on hubScore, which fires on
+		// change rather than every 500ms.
+		HubCounterStatus string
 	}{
 		arena.CurrentMatch.Id,
 		stationViews,
@@ -118,6 +128,7 @@ func (arena *Arena) generateArenaStatusMessage() any {
 		arena.panelStatus("red"),
 		arena.panelStatus("blue"),
 		arena.stationLinksKnown.Load(),
+		arena.HubCounterStatus(),
 	}
 }
 

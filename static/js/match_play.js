@@ -334,6 +334,12 @@ const handleArenaStatus = function (data) {
     estopBadge.title = estopStopped ? "Field e-stop active" : "Field e-stop healthy";
   }
 
+  // The FUEL strip appears only on a field that has a counter. Its reachability rides
+  // arenaStatus; the tallies come separately on hubScore, which fires on change -- see
+  // handleHubScore.
+  const counterStatus = data.HubCounterStatus || "";
+  setFuelCounterStatus(counterStatus);
+
   // Update control button states.
   const btnStart = document.getElementById("btnStart");
   const btnAbort = document.getElementById("btnAbort");
@@ -373,6 +379,63 @@ const handleArenaStatus = function (data) {
       btnClear.disabled = true;
       btnResetField.disabled = true;
   }
+};
+
+// --- FUEL tallies ---
+
+// The latency past which the figure is called out. The feed is specified to get a ball on
+// screen inside 350ms end to end, of which the sensing is the counter's 250ms; past that
+// the tally is lagging the shot by more than a driver should have to allow for.
+const fuelLatencyWarningMs = 250;
+
+// setFuelCounterStatus shows or hides the whole strip and colours the feed's badge.
+// Called from arena status, which is where reachability arrives.
+const setFuelCounterStatus = function (status) {
+  const strip = document.getElementById("fuelStrip");
+  if (!strip) return;
+
+  // Hidden entirely with no counter: a field without one should not be told about a
+  // feature it does not have, and an empty strip reads as a broken one.
+  strip.hidden = status === "" || status === "NOT CONFIGURED";
+
+  const badge = document.getElementById("hubCounterStatus");
+  badge.dataset.status = status;
+  badge.textContent = status === "OFFLINE" ? "COUNTER OFFLINE" : "COUNTER";
+  badge.title = {
+    ONLINE: "Counter is reporting",
+    OFFLINE: "Nothing heard from the counter for over a second — counts are frozen",
+    "NOT CONFIGURED": "No FUEL counter configured (Setup > Settings)",
+  }[status] || "";
+};
+
+const handleHubScore = function (data) {
+  for (const alliance of ["red", "blue"]) {
+    // The server capitalises them; the DOM ids do not.
+    const score = data[alliance === "red" ? "Red" : "Blue"];
+    if (!score) continue;
+
+    document.getElementById("fuelCredited-" + alliance).textContent = score.Credited;
+
+    // Only worth saying when they differ: on an active HUB every ball counts, and
+    // "counted 7 · 0 into dark hub" is noise. The gap is the interesting number.
+    const intoDark = score.Counted - score.Credited;
+    document.getElementById("fuelDetail-" + alliance).textContent =
+      intoDark > 0 ? "counted " + score.Counted + " · " + intoDark + " into dark hub" : "";
+
+    // Scoring for an alliance with nobody on it: the driver station is plugged into the
+    // wrong side, or the camera has the hubs swapped. The tally looks fine either way,
+    // which is why it has to be said out loud.
+    const warning = document.getElementById("fuelWarning-" + alliance);
+    warning.textContent = score.NoTeam ? "⚠ no " + alliance + " team registered" : "";
+    warning.hidden = !score.NoTeam;
+  }
+
+  const counter = data.Counter || {};
+  const latency = document.getElementById("fuelLatency");
+  const ms = counter.LatencyMs || 0;
+  latency.textContent = ms > 0 ? ms + " ms" : "";
+  latency.dataset.slow = String(ms > fuelLatencyWarningMs);
+  latency.title = counter.Info || "";
 };
 
 const handleMatchLoad = function (data) {
@@ -501,6 +564,7 @@ $(function () {
     matchTime:   function (event) { handleMatchTime(event.data); },
     matchTiming: function (event) { handleMatchTiming(event.data); },
     playSound:   function (event) { handlePlaySound(event.data); },
+    hubScore:    function (event) { handleHubScore(event.data); },
   });
 
   // Any interaction will do. Registered on the capture phase so a click on a control primes
@@ -517,5 +581,8 @@ $(function () {
 });
 
 if (typeof module !== "undefined") {
-  module.exports = { handleArenaStatus, handleMatchLoad, handleMatchTime, registerTeams, clearMatch };
+  module.exports = {
+    handleArenaStatus, handleMatchLoad, handleMatchTime, handleHubScore,
+    registerTeams, clearMatch,
+  };
 }
