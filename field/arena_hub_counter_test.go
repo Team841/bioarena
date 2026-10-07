@@ -331,9 +331,35 @@ func TestHubScoreWarnsWhenAnAllianceHasNoTeam(t *testing.T) {
 	assert.True(t, decoded.Blue.NoTeam, "blue scored with nobody on it")
 }
 
-// An alliance that has not scored is not a wrong-side mistake, just an alliance that has
-// not scored. Warning there would fire on every 1v0 match from the first tick.
-func TestHubScoreDoesNotWarnWithoutAScore(t *testing.T) {
+// The warning has to survive the HUB being dark. A driver on the wrong side shooting
+// during a shift their HUB is inactive for scores nothing, so a warning keyed on the score
+// would go quiet for half of teleop -- exactly while the operator is staring at a tally
+// that is not moving and has no idea why.
+func TestHubScoreWarnsEvenWhenTheWrongSideScoresNothing(t *testing.T) {
+	arena, fakePlc := startedArena(t)
+
+	// Blue won AUTO, so blue's HUB is dark for shifts 1 and 3, and blue has no team.
+	arena.AutoWinner = hardware.AllianceBlue
+	arena.MatchState = TeleopPeriod
+	arena.MatchStartTime = time.Now().Add(-midShiftOffset(game.Shift1))
+
+	fakePlc.blueHubCount = 5
+	arena.Update()
+
+	_, blueHub := arena.hubs()
+	assert.Equal(t, 5, hubTotalCount(blueHub))
+	assert.Equal(t, 0, hubCreditedCount(blueHub), "a dark HUB credits nothing")
+
+	message := arena.generateHubScoreMessage()
+	encoded, _ := json.Marshal(message)
+	var decoded struct{ Blue hubScoreView }
+	assert.Nil(t, json.Unmarshal(encoded, &decoded))
+	assert.True(t, decoded.Blue.NoTeam, "five balls went somewhere nobody is registered")
+}
+
+// An alliance that has seen no FUEL at all is not a wrong-side mistake, just the empty
+// half of a 1v0. Warning there would fire on every practice match from the first tick.
+func TestHubScoreDoesNotWarnWithoutAnyFuel(t *testing.T) {
 	arena, _ := startedArena(t)
 	arena.Update()
 

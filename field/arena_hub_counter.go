@@ -194,13 +194,18 @@ func (arena *Arena) hubScoreView(hub *game.Hub, stationPrefix string) hubScoreVi
 	for shift := game.ShiftAuto; shift < game.ShiftCount; shift++ {
 		byShift[shift] = hub.GetShiftCount(shift, false)
 	}
-	credited := hubCreditedCount(hub)
+	counted := hubTotalCount(hub)
 	return hubScoreView{
-		Counted:  hubTotalCount(hub),
-		Credited: credited,
+		Counted:  counted,
+		Credited: hubCreditedCount(hub),
 		Auto:     hub.GetShiftCount(game.ShiftAuto, true),
 		ByShift:  byShift,
-		NoTeam:   credited > 0 && !arena.allianceHasTeam(stationPrefix),
+		// Counted, not credited. The mistake being reported is that the camera saw FUEL
+		// enter this HUB while nobody is registered on its alliance -- a driver station on
+		// the wrong side, or a camera with the hubs swapped. Whether those balls scored is
+		// beside the point, and keying on credited would hide the warning for the whole of
+		// whichever shifts this HUB is dark, which is half of teleop.
+		NoTeam: counted > 0 && !arena.allianceHasTeam(stationPrefix),
 	}
 }
 
