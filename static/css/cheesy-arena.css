@@ -493,7 +493,10 @@ input[data-changed="true"], select[data-changed="true"] {
 .mp-fuel-latency[data-slow=true] {
   color: #f92;
 }
-@media (max-width: 600px) {
+/* Stacked on the 720px Pi screen, matching the breakpoint the rest of match play
+   reflows at. Three columns fit there arithmetically and are still useless: the labels
+   break onto two lines and the detail text wraps into a sliver. */
+@media (max-width: 767px) {
   .mp-fuel {
     grid-template-columns: minmax(0, 1fr);
   }
