@@ -164,11 +164,28 @@ func (arena *Arena) updateHubCounts() {
 func (arena *Arena) activeHubs(currentTime time.Time) (shiftName string, red, blue, inShift bool) {
 	redHub, blueHub := arena.hubs()
 
-	shift, ok := redHub.ScoringShift(arena.MatchStartTime, currentTime)
-	if !ok {
-		return "NONE", false, false, false
+	// Each HUB keeps its own scoring clock. The grace period after a shift ends applies
+	// only to a HUB that was active for that shift, and the two alliances are active in
+	// opposite shifts -- so for up to three seconds after every boundary they are
+	// genuinely crediting FUEL to different shifts. Asking one HUB's shift whether the
+	// other is active gets the wrong answer for exactly that window.
+	redShift, redOk := redHub.ScoringShift(arena.MatchStartTime, currentTime)
+	blueShift, blueOk := blueHub.ScoringShift(arena.MatchStartTime, currentTime)
+	red = redOk && redHub.IsShiftActive(redShift)
+	blue = blueOk && blueHub.IsShiftActive(blueShift)
+
+	// The name, though, is the field's own shift, which both alliances share and which a
+	// person reading the banner is standing in.
+	if shift, _, _, ok := redHub.GetCurrentShiftTiming(arena.MatchStartTime, currentTime); ok {
+		return hubShiftName(shift), red, blue, true
 	}
-	return hubShiftName(shift), redHub.IsShiftActive(shift), blueHub.IsShiftActive(shift), true
+	// Between shifts on that clock -- the auto/teleop pause, and the grace after teleop
+	// ends -- there is no physical shift, but FUEL is still crediting to the one just
+	// finished. Name that, rather than claiming nothing is happening.
+	if redOk {
+		return hubShiftName(redShift), red, blue, true
+	}
+	return "NONE", false, false, false
 }
 
 // hubMatchContext describes the match in the counter protocol's terms, so the receiver

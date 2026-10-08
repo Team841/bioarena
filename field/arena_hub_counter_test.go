@@ -285,6 +285,38 @@ func TestActiveHubsAlternateWithTheAutoWinner(t *testing.T) {
 	}
 }
 
+// The two HUBs keep separate scoring clocks. Upstream's grace period after a shift ends
+// applies only to a HUB that was active for that shift, and the alliances are active in
+// opposite shifts -- so for three seconds after every boundary they credit FUEL to
+// different shifts, and each one's activity has to be asked of its own clock.
+//
+// Just inside Shift 2: red (the AUTO winner) is active for it, while blue is still inside
+// its grace from Shift 1, which blue was active for. Both are taking FUEL, and asking
+// blue's activity against red's shift would say otherwise.
+func TestActiveHubsAskEachHubItsOwnShift(t *testing.T) {
+	arena, _ := startedArena(t)
+	arena.AutoWinner = hardware.AllianceRed
+	arena.syncHubWonAuto()
+	arena.MatchState = TeleopPeriod
+
+	// One second past the Shift 1 -> Shift 2 boundary, inside blue's three-second grace.
+	intoShift2 := midShiftOffset(game.Shift2) -
+		time.Duration(game.MatchTiming.ShiftDurationSec/2-1)*time.Second
+	arena.MatchStartTime = time.Now().Add(-intoShift2)
+
+	shiftName, red, blue, inShift := arena.activeHubs(time.Now())
+	assert.True(t, inShift)
+	assert.Equal(t, "SHIFT2", shiftName, "the name is the field's shift, not one alliance's")
+	assert.True(t, red, "red is active for shift 2")
+	assert.True(t, blue, "blue is still crediting to shift 1, which it was active for")
+
+	// And well clear of the grace, blue has gone dark as shift 2 says it should.
+	arena.MatchStartTime = time.Now().Add(-midShiftOffset(game.Shift2))
+	_, red, blue, _ = arena.activeHubs(time.Now())
+	assert.True(t, red)
+	assert.False(t, blue)
+}
+
 // Between matches neither HUB is taking anything, and the banner hides rather than showing
 // two dark pills that read as a fault.
 func TestActiveHubsReportsNoShiftBetweenMatches(t *testing.T) {

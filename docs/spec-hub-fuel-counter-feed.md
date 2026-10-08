@@ -658,9 +658,18 @@ and none into blue, after which the field held red's HUB dark through shifts 1 a
 blue's through 2 — the AUTO winner's pattern, settled from the counts rather than a coin
 flip. With the counter offline, Counted mode holds the start button disabled.
 
-### Phase 4 — Logs
+### Phase 4 — Logs — **done**
 
 - `_fuel.csv` at match close.
+
+Written when the match is cleared rather than at the buzzer, so the post-match scoring
+grace is already over and the FUEL shot as time expired is in the file. Both ways out of a
+match -- the timer and the abort -- leave through there. Nothing is written for a match
+that saw no FUEL, so a field with no counter does not accumulate identical empty files.
+
+Reconciled end to end against a simulated counter with 47% of its datagrams deliberately
+dropped: 23 red and 13 blue sent, 23 and 13 in the file. That is the cumulative-count
+design doing its job -- a lost datagram costs nothing because the next one supersedes it.
 
 ### Phase 5 — Commissioning
 

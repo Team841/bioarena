@@ -598,6 +598,13 @@ func (arena *Arena) clearMatchLocked() error {
 		bypassed[station] = allianceStation.Bypass.Load()
 	}
 
+	// Before the reset below, which zeroes the tallies this records. Here rather than at
+	// the transition into PostMatch so the post-match scoring grace is already over: FUEL
+	// shot as the buzzer went is credited for three seconds afterwards, and a log written
+	// at the buzzer would be missing it. Both ways out of a match -- the timer and the
+	// abort -- dwell in PostMatch and leave through here.
+	arena.writeHubFuelLog()
+
 	if err := arena.ResetMatch(); err != nil {
 		return err
 	}
