@@ -630,13 +630,13 @@ Each phase is independently mergeable and leaves the field working.
 - Hand this document and the simulator to the collaborator. They can build against the
   simulator's behaviour while Phase 2 lands.
 
-### Phase 2 — Receiver, override and display
+### Phase 2 — Receiver, override and display — **done**
 
 - `plc/plc.go`: `GetHubCounts` and the Hub registers restored from upstream verbatim;
   `plc/fake_plc.go` (fork-local) answers `0, 0`.
 - `plc/override.go`, `plc/override_test.go`: `HubCountSource`, `WithHubCounts`.
-- ~~`hardware/hub_counter.go`, `hardware/hub_counter_test.go`: receiver, acceptance
-  rules, session accounting behind `ResetMatch`, status reply.~~ **Done.**
+- `hardware/hub_counter.go`, `hardware/hub_counter_test.go`: receiver, acceptance
+  rules, session accounting behind `ResetMatch`, status reply.
 - `game/hub.go` restored byte-identical; `game/hub_bioarena.go`; `ScoringGracePeriodSec`.
   Take upstream's `game/hub_test.go` too.
 - `field/arena.go`: persistent hubs, `updateHubCounts` in `Update`, `HubScoreNotifier`,
@@ -648,10 +648,15 @@ Each phase is independently mergeable and leaves the field working.
 
 At the end of Phase 2 the tally is live and the AUTO winner is still operator-chosen.
 
-### Phase 3 — Counted mode
+### Phase 3 — Counted mode — **done**
 
 - `AutoWinnerMode` moved into `EventSettings`, the match panel select writing through.
 - `AutoWinnerCounted` as a case in `assignAutoWinner`; readiness checks; UI.
+
+Verified on a running field against a simulated counter: five FUEL into red during AUTO
+and none into blue, after which the field held red's HUB dark through shifts 1 and 3 and
+blue's through 2 — the AUTO winner's pattern, settled from the counts rather than a coin
+flip. With the counter offline, Counted mode holds the start button disabled.
 
 ### Phase 4 — Logs
 

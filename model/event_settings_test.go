@@ -44,6 +44,10 @@ func TestEventSettingsReadWrite(t *testing.T) {
 			// The FUEL counter's port is filled in for the same reason, and its address is
 			// blank, which is what actually leaves the counter off.
 			HubCounterPort: 8411,
+
+			// Random until a field says otherwise: most practice fields have no camera,
+			// and a default of Counted would block match start on hardware nobody has.
+			AutoWinnerMode: "random",
 		},
 		*eventSettings,
 	)

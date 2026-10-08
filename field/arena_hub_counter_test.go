@@ -372,6 +372,187 @@ func TestHubScoreDoesNotWarnWithoutAnyFuel(t *testing.T) {
 	assert.False(t, decoded.Blue.NoTeam)
 }
 
+// --- Counted mode ---
+
+// scoreInAuto puts FUEL into each HUB's AUTO shift, which is what the Counted decision
+// reads.
+func scoreInAuto(t *testing.T, arena *Arena, fakePlc *FakePlc, red, blue int) {
+	t.Helper()
+	fakePlc.redHubCount, fakePlc.blueHubCount = red, blue
+	arena.Update()
+	redHub, blueHub := arena.hubs()
+	assert.Equal(t, red, redHub.GetShiftCount(game.ShiftAuto, true))
+	assert.Equal(t, blue, blueHub.GetShiftCount(game.ShiftAuto, true))
+}
+
+func TestCountedAutoWinnerFollowsTheFuel(t *testing.T) {
+	for _, c := range []struct {
+		name      string
+		red, blue int
+		expected  hardware.Alliance
+	}{
+		{"red scored more", 7, 2, hardware.AllianceRed},
+		{"blue scored more", 1, 9, hardware.AllianceBlue},
+		// A half field: one HUB counting, the other reporting nothing all match. Any FUEL
+		// in AUTO takes the advantage.
+		{"only red has a hub", 1, 0, hardware.AllianceRed},
+		{"only blue has a hub", 0, 1, hardware.AllianceBlue},
+	} {
+		arena, fakePlc := startedArena(t)
+		arena.AutoWinnerMode = AutoWinnerCounted
+		scoreInAuto(t, arena, fakePlc, c.red, c.blue)
+
+		arena.assignAutoWinner()
+
+		assert.Equal(t, c.expected, arena.AutoWinner, c.name)
+	}
+}
+
+// A tie is broken by selecting an alliance, as a real field does -- including the tie at
+// zero, which is every match where nobody scores in AUTO. Never AllianceNone.
+func TestCountedAutoWinnerBreaksATieBySelecting(t *testing.T) {
+	// One arena, decided repeatedly. SetupTestArena seeds math/rand to a fixed value for
+	// reproducibility, so building a fresh arena per iteration would reseed it and make
+	// every "coin flip" land the same way.
+	arena, fakePlc := startedArena(t)
+	arena.AutoWinnerMode = AutoWinnerCounted
+	scoreInAuto(t, arena, fakePlc, 3, 3)
+
+	seen := map[hardware.Alliance]bool{}
+	for i := 0; i < 60; i++ {
+		arena.assignAutoWinner()
+		assert.NotEqual(t, hardware.AllianceNone, arena.AutoWinner)
+		seen[arena.AutoWinner] = true
+	}
+	assert.True(t, seen[hardware.AllianceRed] && seen[hardware.AllianceBlue],
+		"a tie must be able to go either way")
+}
+
+// The whole point of Counted mode: the game data the driver station receives has to agree
+// with what was actually scored.
+func TestCountedAutoWinnerDrivesGameData(t *testing.T) {
+	arena, fakePlc := startedArena(t)
+	arena.AutoWinnerMode = AutoWinnerCounted
+	scoreInAuto(t, arena, fakePlc, 6, 1)
+
+	// Run the clock to the teleop transition, where the result is settled and released.
+	arena.MatchStartTime = time.Now().Add(
+		-time.Duration(
+			game.MatchTiming.WarmupDurationSec+game.MatchTiming.AutoDurationSec,
+		) * time.Second,
+	)
+	arena.Update()
+	assert.Equal(t, PausePeriod, arena.MatchState)
+	assert.Equal(t, "", arena.GameData, "nothing is released before the transition")
+
+	arena.MatchStartTime = time.Now().Add(
+		-time.Duration(
+			game.MatchTiming.WarmupDurationSec+game.MatchTiming.AutoDurationSec+
+				game.MatchTiming.PauseDurationSec,
+		) * time.Second,
+	)
+	arena.Update()
+
+	assert.Equal(t, TeleopPeriod, arena.MatchState)
+	assert.Equal(t, hardware.AllianceRed, arena.AutoWinner)
+	assert.Equal(t, "R", arena.GameData)
+}
+
+// FUEL that arrives during the pause still counts for AUTO -- upstream's grace period is
+// the whole pause, and it is what makes a ball shot at the buzzer count.
+func TestCountedAutoWinnerIncludesFuelFromTheGracePeriod(t *testing.T) {
+	arena, fakePlc := startedArena(t)
+	arena.AutoWinnerMode = AutoWinnerCounted
+	scoreInAuto(t, arena, fakePlc, 1, 2) // blue ahead at the buzzer
+
+	// Into the pause, inside the scoring grace.
+	arena.MatchStartTime = time.Now().Add(
+		-time.Duration(game.MatchTiming.WarmupDurationSec+game.MatchTiming.AutoDurationSec)*time.Second -
+			500*time.Millisecond,
+	)
+	fakePlc.redHubCount = 4 // three more red, still credited to AUTO
+	arena.Update()
+
+	redHub, _ := arena.hubs()
+	assert.Equal(t, 4, redHub.GetShiftCount(game.ShiftAuto, true))
+
+	arena.assignAutoWinner()
+	assert.Equal(t, hardware.AllianceRed, arena.AutoWinner)
+}
+
+// --- Counted-mode readiness ---
+
+func TestCountedModeBlocksStartWithoutACounter(t *testing.T) {
+	arena := setupTestArena(t)
+	arena.Plc = new(FakePlc)
+	for _, station := range allStationNames {
+		arena.AllianceStations[station].Bypass.Store(true)
+	}
+
+	arena.AutoWinnerMode = AutoWinnerRandom
+	assert.Nil(t, arena.checkCanStartMatch(), "the other modes do not need a counter")
+
+	arena.AutoWinnerMode = AutoWinnerCounted
+	err := arena.checkCanStartMatch()
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "no Hub FUEL counter is configured")
+}
+
+// A counter that is configured but not talking is worse than none: the match would run to
+// completion looking correct while the AUTO advantage was decided by a coin flip.
+func TestCountedModeBlocksStartWhileTheCounterIsOffline(t *testing.T) {
+	arena := setupTestArena(t)
+	arena.Plc = new(FakePlc)
+	for _, station := range allStationNames {
+		arena.AllianceStations[station].Bypass.Store(true)
+	}
+	arena.applyHubCounterSettings(&model.EventSettings{
+		HubCounterAddress: "127.0.0.1",
+		HubCounterPort:    0,
+	})
+	defer arena.applyHubCounterSettings(&model.EventSettings{})
+
+	arena.AutoWinnerMode = AutoWinnerCounted
+	err := arena.checkCanStartMatch()
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "OFFLINE")
+
+	// Display-only in the other modes, so a dead camera must not stop practice.
+	arena.AutoWinnerMode = AutoWinnerRandom
+	assert.Nil(t, arena.checkCanStartMatch())
+}
+
+// --- Persistence ---
+
+func TestAutoWinnerModePersists(t *testing.T) {
+	arena := setupTestArena(t)
+
+	assert.Equal(t, AutoWinnerRandom, arena.AutoWinnerMode, "random until told otherwise")
+
+	assert.Nil(t, arena.SetAutoWinnerMode(AutoWinnerCounted))
+	assert.Equal(t, "counted", arena.EventSettings.AutoWinnerMode)
+
+	// Reloading is what a restart does.
+	assert.Nil(t, arena.LoadSettings())
+	assert.Equal(t, AutoWinnerCounted, arena.AutoWinnerMode)
+
+	assert.Nil(t, arena.SetAutoWinnerMode(AutoWinnerForceBlue))
+	assert.Nil(t, arena.LoadSettings())
+	assert.Equal(t, AutoWinnerForceBlue, arena.AutoWinnerMode)
+}
+
+// A settings record with a value nothing can parse must not leave the field unable to
+// start a match.
+func TestAutoWinnerModeFallsBackWhenUnparseable(t *testing.T) {
+	arena := setupTestArena(t)
+
+	arena.EventSettings.AutoWinnerMode = "purple"
+	assert.Nil(t, arena.Database.UpdateEventSettings(arena.EventSettings))
+	assert.Nil(t, arena.LoadSettings())
+
+	assert.Equal(t, AutoWinnerRandom, arena.AutoWinnerMode)
+}
+
 // --- Settings ---
 
 func TestApplyHubCounterSettingsStartsAndStopsTheReceiver(t *testing.T) {

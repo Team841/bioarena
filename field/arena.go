@@ -265,6 +265,15 @@ func (arena *Arena) LoadSettings() error {
 	arena.applyHubLedSettings(settings)
 	arena.applyHubCounterSettings(settings)
 
+	// A stored mode that cannot be parsed falls back to Random rather than refusing to
+	// load: a settings record with a bad value should not leave the field unable to start.
+	if mode, err := ParseAutoWinnerMode(settings.AutoWinnerMode); err != nil {
+		log.Printf("WARNING: %v; using Random", err)
+		arena.AutoWinnerMode = AutoWinnerRandom
+	} else {
+		arena.AutoWinnerMode = mode
+	}
+
 	game.MatchTiming.WarmupDurationSec = settings.WarmupDurationSec
 	game.MatchTiming.AutoDurationSec = settings.AutoDurationSec
 	game.MatchTiming.PauseDurationSec = settings.PauseDurationSec
@@ -1145,6 +1154,10 @@ func (arena *Arena) checkCanStartMatch() error {
 		return err
 	}
 
+	if err := arena.checkHubCounterReady(); err != nil {
+		return err
+	}
+
 	if arena.Plc.IsEnabled() {
 		if !arena.Plc.IsHealthy() {
 			return fmt.Errorf("cannot start match while PLC is not healthy")
@@ -1404,19 +1417,22 @@ func (arena *Arena) pollStationPortLinks() {
 	arena.ArenaStatusNotifier.Notify()
 }
 
-// AutoWinnerMode selects how the AUTO result is decided for a practice match. On a
-// real field the winner is whichever alliance scored more FUEL during AUTO; bioarena
-// does not score, so the operator chooses the outcome to practice against.
+// AutoWinnerMode selects how the AUTO result is decided for a practice match. On a real
+// field the winner is whichever alliance scored more FUEL during AUTO, which Counted
+// reproduces from a webcam counter. The other three exist because a practice field often
+// has no counter, or because a coach wants to drill a particular outcome.
 //
-// The mode names an alliance rather than "win" or "lose" because arena state has no
-// concept of which alliance is practising. The half-field mode can present it in
-// win/lose terms once a live alliance is known.
+// The forced modes name an alliance rather than "win" or "lose" because arena state has
+// no concept of which alliance is practising.
 type AutoWinnerMode int
 
 const (
 	AutoWinnerRandom AutoWinnerMode = iota
 	AutoWinnerForceRed
 	AutoWinnerForceBlue
+	// AutoWinnerCounted decides it the way a real field does: from the FUEL each HUB
+	// counted during AUTO. Requires a counter; see docs/spec-hub-fuel-counter-feed.md.
+	AutoWinnerCounted
 )
 
 func (mode AutoWinnerMode) String() string {
@@ -1425,6 +1441,8 @@ func (mode AutoWinnerMode) String() string {
 		return "red"
 	case AutoWinnerForceBlue:
 		return "blue"
+	case AutoWinnerCounted:
+		return "counted"
 	default:
 		return "random"
 	}
@@ -1439,6 +1457,8 @@ func ParseAutoWinnerMode(name string) (AutoWinnerMode, error) {
 		return AutoWinnerForceRed, nil
 	case "blue":
 		return AutoWinnerForceBlue, nil
+	case "counted":
+		return AutoWinnerCounted, nil
 	default:
 		return AutoWinnerRandom, fmt.Errorf("invalid AUTO winner mode %q", name)
 	}
@@ -1468,10 +1488,22 @@ func (arena *Arena) SetAutoWinnerMode(mode AutoWinnerMode) error {
 	switch arena.MatchState {
 	case PreMatch, PostMatch:
 		arena.AutoWinnerMode = mode
-		return nil
 	default:
 		return fmt.Errorf("cannot change AUTO winner mode while a match is in progress")
 	}
+
+	// Written through so the choice survives a restart. The select on the match panel is
+	// the control an operator actually reaches for, so it has to be the one that persists;
+	// the settings record is where it lives rather than a second place to set it.
+	//
+	// A failed write is logged, not returned: the mode is already in effect for this
+	// session, and refusing the operator's change because the database would not take it
+	// would be worse than losing it at the next restart.
+	arena.EventSettings.AutoWinnerMode = mode.String()
+	if err := arena.Database.UpdateEventSettings(arena.EventSettings); err != nil {
+		log.Printf("WARNING: Could not persist the AUTO winner mode: %v", err)
+	}
+	return nil
 }
 
 // gameDataForAutoWinner returns the FMS Game Data string for the current AUTO result:
@@ -1512,13 +1544,41 @@ func (arena *Arena) assignAutoWinner() {
 		arena.AutoWinner = hardware.AllianceRed
 	case AutoWinnerForceBlue:
 		arena.AutoWinner = hardware.AllianceBlue
+	case AutoWinnerCounted:
+		arena.AutoWinner = arena.countedAutoWinner()
 	default:
-		if rand.Intn(2) == 0 {
-			arena.AutoWinner = hardware.AllianceRed
-		} else {
-			arena.AutoWinner = hardware.AllianceBlue
-		}
+		arena.AutoWinner = coinFlipAlliance()
 	}
+}
+
+// countedAutoWinner decides the AUTO result from the FUEL each HUB counted, which is
+// upstream's handleAutoWinner rule.
+//
+// A HUB with no counter on it counts nothing, so on a half field any FUEL in AUTO takes
+// the advantage and none at all is a coin flip -- the real tie-break applied to an
+// opponent who scored nothing. There is deliberately no invented opponent score to beat;
+// a coach who wants the driver to lose AUTO has the forced modes for that.
+func (arena *Arena) countedAutoWinner() hardware.Alliance {
+	redHub, blueHub := arena.hubs()
+	redAutoFuel := redHub.GetShiftCount(game.ShiftAuto, true)
+	blueAutoFuel := blueHub.GetShiftCount(game.ShiftAuto, true)
+
+	if redAutoFuel == blueAutoFuel {
+		return coinFlipAlliance()
+	}
+	if redAutoFuel > blueAutoFuel {
+		return hardware.AllianceRed
+	}
+	return hardware.AllianceBlue
+}
+
+// coinFlipAlliance resolves to a concrete alliance. A real field breaks an AUTO tie by
+// selecting one, so AllianceNone is never a valid result.
+func coinFlipAlliance() hardware.Alliance {
+	if rand.Intn(2) == 0 {
+		return hardware.AllianceRed
+	}
+	return hardware.AllianceBlue
 }
 
 // currentShift is the REBUILT 2026 shift the match is in. The shift spans the whole match,

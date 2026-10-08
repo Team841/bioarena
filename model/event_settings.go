@@ -116,6 +116,12 @@ type EventSettings struct {
 	// both HUBs then score nothing. Datagrams are accepted from that address only.
 	HubCounterAddress string
 	HubCounterPort    int
+
+	// AutoWinnerMode is how the AUTO result is decided: "random", "red", "blue", or
+	// "counted". Stored rather than held only in arena state because a field that runs
+	// Counted runs it every day, and falling back to Random on a power cycle is the kind
+	// of error nobody notices until the wrong HUB goes dark mid-match.
+	AutoWinnerMode string
 }
 
 // applyHubRelayDefaults fills in relay pins that a database predating them has no value
@@ -134,7 +140,16 @@ func (settings *EventSettings) applyHubRelayDefaults() {
 	if settings.HubCounterPort == 0 {
 		settings.HubCounterPort = hardware.DefaultHubCounterPort
 	}
+	// A database predating the setting has no mode stored, and an empty string is not one.
+	if settings.AutoWinnerMode == "" {
+		settings.AutoWinnerMode = DefaultAutoWinnerMode
+	}
 }
+
+// DefaultAutoWinnerMode is what a field decides the AUTO result by until it says
+// otherwise. Random rather than Counted: most practice fields have no camera, and a
+// default that blocks match start on hardware nobody has would be a poor one.
+const DefaultAutoWinnerMode = "random"
 
 func (database *Database) GetEventSettings() (*EventSettings, error) {
 	allEventSettings, err := database.eventSettingsTable.getAll()
@@ -167,6 +182,7 @@ func (database *Database) GetEventSettings() (*EventSettings, error) {
 		HubRelayRedPin:  hardware.DefaultHubRelayRedPin,
 		HubRelayBluePin: hardware.DefaultHubRelayBluePin,
 		HubCounterPort:  hardware.DefaultHubCounterPort,
+		AutoWinnerMode:  DefaultAutoWinnerMode,
 	}
 
 	if err := database.eventSettingsTable.create(&eventSettings); err != nil {

@@ -10,6 +10,7 @@
 package field
 
 import (
+	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -70,6 +71,32 @@ func (arena *Arena) HubCounterStatus() string {
 // HubCounterNotConfigured is the arena's own status: the absence of a receiver rather
 // than a state one can be in, which is why it is not in hardware/ with the other two.
 const HubCounterNotConfigured = "NOT CONFIGURED"
+
+// checkHubCounterReady blocks a match start that the AUTO result would be decided wrongly
+// by. Only in Counted mode: in the other three the counter is display-only, and a field
+// whose camera is down should still be able to run practice matches.
+//
+// Starting anyway would not fail loudly. Both HUBs would count nothing, the tie-break
+// would flip a coin, and the match would run to completion looking exactly like a correct
+// one -- with the driver's AUTO having had no bearing on the advantage they got.
+func (arena *Arena) checkHubCounterReady() error {
+	if arena.AutoWinnerMode != AutoWinnerCounted {
+		return nil
+	}
+	if arena.hubCounter == nil {
+		return fmt.Errorf(
+			"cannot start match: AUTO winner is set to Counted but no Hub FUEL counter is " +
+				"configured (Setup > Settings)",
+		)
+	}
+	if status := arena.hubCounter.Status(); status != hardware.HubCounterOnline {
+		return fmt.Errorf(
+			"cannot start match: AUTO winner is set to Counted but the Hub FUEL counter is %s",
+			status,
+		)
+	}
+	return nil
+}
 
 // resetHubs zeroes the per-shift FUEL tallies.
 //

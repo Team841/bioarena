@@ -122,6 +122,10 @@ Simplified match play UI for 10th Street practice field controller.
           <option value="random">Random</option>
           <option value="red">Red</option>
           <option value="blue">Blue</option>
+          {{/* Decides it the way a real field does, from the FUEL counted in AUTO. Blocks
+               match start without a counter online, since the alternative is a match that
+               looks correct while the driver's AUTO had no bearing on the advantage. */}}
+          <option value="counted">Counted</option>
         </select>
       </span>
       <span class="ms-auto d-flex align-items-center gap-2">
