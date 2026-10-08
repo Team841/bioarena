@@ -126,6 +126,7 @@ func TestHubCountsSeparateCountedFromCredited(t *testing.T) {
 
 	// Red won AUTO, so red's HUB is dark for shifts 1 and 3.
 	arena.AutoWinner = hardware.AllianceRed
+	arena.syncHubWonAuto()
 	arena.MatchState = TeleopPeriod
 	arena.MatchStartTime = time.Now().Add(-midShiftOffset(game.Shift1))
 
@@ -146,16 +147,19 @@ func TestHubsFollowTheAutoWinner(t *testing.T) {
 
 	// Undecided: neither HUB has won, which is symmetric rather than arbitrary.
 	arena.AutoWinner = hardware.AllianceNone
+	arena.syncHubWonAuto()
 	redHub, blueHub := arena.hubs()
 	assert.False(t, redHub.WonAuto)
 	assert.False(t, blueHub.WonAuto)
 
 	arena.AutoWinner = hardware.AllianceRed
+	arena.syncHubWonAuto()
 	redHub, blueHub = arena.hubs()
 	assert.True(t, redHub.WonAuto)
 	assert.False(t, blueHub.WonAuto)
 
 	arena.AutoWinner = hardware.AllianceBlue
+	arena.syncHubWonAuto()
 	redHub, blueHub = arena.hubs()
 	assert.False(t, redHub.WonAuto)
 	assert.True(t, blueHub.WonAuto)
@@ -222,6 +226,121 @@ func TestHubProtocolNamesCoverEveryStateAndShift(t *testing.T) {
 		assert.Equal(t, expected, hubShiftName(shift))
 	}
 	assert.Equal(t, "NONE", hubShiftName(game.ShiftCount))
+}
+
+// --- Which HUBs are taking FUEL ---
+
+// The pause is the window the AUTO result is still being settled in, and FUEL arriving in
+// it is credited to AUTO. Reporting no shift and dark HUBs there told the counter -- and
+// would have told the banner -- that nothing scores during the one stretch that decides
+// the match's advantage.
+//
+// The lighting clock does report no shift through the pause, which is correct for it: see
+// game.Hub.ScoringShift for why the two differ.
+func TestActiveHubsDuringThePauseStillCreditAuto(t *testing.T) {
+	arena, fakePlc := startedArena(t)
+
+	autoEnd := game.GetDurationToAutoEnd()
+	teleopStart := game.GetDurationToTeleopStart()
+	arena.MatchStartTime = time.Now().Add(-(autoEnd + (teleopStart-autoEnd)/2))
+	fakePlc.redHubCount = 3
+	arena.Update()
+	assert.Equal(t, PausePeriod, arena.MatchState)
+
+	shiftName, red, blue, inShift := arena.activeHubs(time.Now())
+	assert.True(t, inShift)
+	assert.Equal(t, "AUTO", shiftName)
+	assert.True(t, red)
+	assert.True(t, blue)
+
+	// And that is not a claim about nothing: FUEL arriving now really is credited.
+	redHub, _ := arena.hubs()
+	assert.Equal(t, 3, redHub.GetShiftCount(game.ShiftAuto, true))
+}
+
+// During the alliance shifts exactly one HUB takes FUEL, and it is the loser's first.
+func TestActiveHubsAlternateWithTheAutoWinner(t *testing.T) {
+	arena, _ := startedArena(t)
+	arena.AutoWinner = hardware.AllianceRed
+	arena.syncHubWonAuto()
+	arena.MatchState = TeleopPeriod
+
+	for _, c := range []struct {
+		shift             game.Shift
+		expectedName      string
+		wantRed, wantBlue bool
+	}{
+		// Red won AUTO, so red's HUB is dark for shifts 1 and 3.
+		{game.Shift1, "SHIFT1", false, true},
+		{game.Shift2, "SHIFT2", true, false},
+		{game.Shift3, "SHIFT3", false, true},
+		{game.Shift4, "SHIFT4", true, false},
+	} {
+		arena.MatchStartTime = time.Now().Add(-midShiftOffset(c.shift))
+		shiftName, red, blue, inShift := arena.activeHubs(time.Now())
+		assert.True(t, inShift, "shift %v", c.shift)
+		assert.Equal(t, c.expectedName, shiftName)
+		assert.Equal(t, c.wantRed, red, "red during shift %v", c.shift)
+		assert.Equal(t, c.wantBlue, blue, "blue during shift %v", c.shift)
+	}
+}
+
+// Between matches neither HUB is taking anything, and the banner hides rather than showing
+// two dark pills that read as a fault.
+func TestActiveHubsReportsNoShiftBetweenMatches(t *testing.T) {
+	arena := setupTestArena(t)
+	arena.MatchState = PreMatch
+
+	shiftName, red, blue, inShift := arena.activeHubs(time.Now())
+	assert.False(t, inShift)
+	assert.Equal(t, "NONE", shiftName)
+	assert.False(t, red)
+	assert.False(t, blue)
+}
+
+// The banner rides the match clock, which fires every whole second and on every state
+// change -- the same instants the shift boundaries fall on.
+func TestMatchTimeMessageCarriesTheActiveHubs(t *testing.T) {
+	arena, _ := startedArena(t)
+	arena.AutoWinner = hardware.AllianceBlue
+	arena.syncHubWonAuto()
+	arena.MatchState = TeleopPeriod
+	arena.MatchStartTime = time.Now().Add(-midShiftOffset(game.Shift1))
+
+	message, ok := arena.generateMatchTimeMessage().(MatchTimeMessage)
+	assert.True(t, ok)
+	assert.True(t, message.InShift)
+	assert.Equal(t, "SHIFT1", message.HubShift)
+	// Blue won AUTO, so blue's HUB is the one that goes dark first.
+	assert.True(t, message.RedHubActive)
+	assert.False(t, message.BlueHubActive)
+}
+
+// The notifier message generators run on a web goroutine with no arena lock -- see
+// websocket.go, which calls them whenever a client subscribes. A generator that writes
+// arena state therefore races the match loop on every page load, so hubs() has to stay a
+// pure read and the WonAuto sync has to stay on the arena goroutine.
+//
+// Pinned by writing the Hubs' WonAuto to the opposite of the AUTO result and checking the
+// generators leave it alone. A hubs() that assigns would quietly repair it, which is
+// exactly the write that must not happen here.
+func TestMessageGeneratorsDoNotWriteArenaState(t *testing.T) {
+	arena, _ := startedArena(t)
+	arena.AutoWinner = hardware.AllianceRed
+	arena.RedHub.WonAuto = false
+	arena.BlueHub.WonAuto = true
+
+	arena.generateHubScoreMessage()
+	arena.generateMatchTimeMessage()
+	arena.generateArenaStatusMessage()
+
+	assert.False(t, arena.RedHub.WonAuto, "a message generator must not write arena state")
+	assert.True(t, arena.BlueHub.WonAuto, "a message generator must not write arena state")
+
+	// The arena goroutine is what puts it right, once per tick.
+	arena.syncHubWonAuto()
+	assert.True(t, arena.RedHub.WonAuto)
+	assert.False(t, arena.BlueHub.WonAuto)
 }
 
 // --- The score notifier ---
@@ -340,6 +459,7 @@ func TestHubScoreWarnsEvenWhenTheWrongSideScoresNothing(t *testing.T) {
 
 	// Blue won AUTO, so blue's HUB is dark for shifts 1 and 3, and blue has no team.
 	arena.AutoWinner = hardware.AllianceBlue
+	arena.syncHubWonAuto()
 	arena.MatchState = TeleopPeriod
 	arena.MatchStartTime = time.Now().Add(-midShiftOffset(game.Shift1))
 

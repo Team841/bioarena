@@ -226,6 +226,45 @@ input[data-changed="true"], select[data-changed="true"] {
   text-align: right;
   line-height: 1;
 }
+/* ── Active HUBs in the field banner ───────────────────────────────────── */
+.mp-hubs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* Lit and dark rather than two colours: the question is which HUB is taking FUEL, and a
+   dark pill should read as off at a glance from across a field. The alliance colour only
+   appears on the lit one, so a pill that is merely dim is never mistaken for an active
+   one in poor light. */
+.mp-hub {
+  font-size: clamp(10px, 1.6vw, 13px);
+  font-weight: bold;
+  letter-spacing: 1px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid #444;
+  color: #555;
+  background: #141414;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.mp-hub[data-active=true][data-alliance=red] {
+  color: #fff;
+  background: #c33;
+  border-color: #e66;
+}
+.mp-hub[data-active=true][data-alliance=blue] {
+  color: #fff;
+  background: #36c;
+  border-color: #6ae;
+}
+.mp-hub-shift {
+  font-size: clamp(9px, 1.4vw, 12px);
+  letter-spacing: 1px;
+  color: #888;
+  min-width: 6ch;
+  text-align: center;
+}
+
 .mp-timer-band[data-period="auto"]   { background: #1a3a1a; }
 .mp-timer-band[data-period="auto"] #periodText,
 .mp-timer-band[data-period="auto"] #timerText { color: #4f4; }

@@ -36,7 +36,7 @@ global.CheesyWebsocket = class {
 };
 global.websocket = new global.CheesyWebsocket();
 
-const { handleArenaStatus, handleMatchLoad, handleHubScore } = require("../match_play.js");
+const { handleArenaStatus, handleMatchLoad, handleHubScore, updateHubBanner } = require("../match_play.js");
 
 // ---- helpers ----------------------------------------------------------------
 
@@ -81,6 +81,11 @@ function buildDom() {
     <button id="btnResetField"></button>
     <span id="redPanelStatus"></span>
     <span id="bluePanelStatus"></span>
+    <div id="hubBanner" hidden>
+      <span id="hubBanner-red" data-alliance="red" data-active="false">RED</span>
+      <span id="hubBannerShift"></span>
+      <span id="hubBanner-blue" data-alliance="blue" data-active="false">BLUE</span>
+    </div>
     <div id="fuelStrip" hidden>
       <span id="fuelCredited-red">0</span>
       <span id="fuelDetail-red"></span>
@@ -582,5 +587,48 @@ describe("handleArenaStatus — FUEL counter badge", () => {
     handleArenaStatus(status);
     expect(document.getElementById("fuelStrip").hidden).toBe(false);
     expect(document.getElementById("hubCounterStatus").textContent).toBe("COUNTER OFFLINE");
+  });
+});
+
+// ---- Active HUBs in the field banner ----------------------------------------
+
+// Which HUBs are taking FUEL, beside the phase and the clock. The HUB light on the field
+// is the driver's only in-match cue for this, so the banner is where an operator confirms
+// what the drivers are seeing.
+describe("updateHubBanner", () => {
+  const banner = () => document.getElementById("hubBanner");
+  const pill = (alliance) => document.getElementById("hubBanner-" + alliance);
+
+  test("hides between matches rather than showing two dark pills", () => {
+    updateHubBanner({ InShift: false, HubShift: "NONE" });
+    expect(banner().hidden).toBe(true);
+  });
+
+  test("lights both HUBs during AUTO", () => {
+    updateHubBanner({ InShift: true, HubShift: "AUTO", RedHubActive: true, BlueHubActive: true });
+    expect(banner().hidden).toBe(false);
+    expect(pill("red").dataset.active).toBe("true");
+    expect(pill("blue").dataset.active).toBe("true");
+    expect(document.getElementById("hubBannerShift").textContent).toBe("AUTO");
+  });
+
+  // During the alliance shifts exactly one HUB is taking FUEL.
+  test("lights one HUB during an alliance shift", () => {
+    updateHubBanner({ InShift: true, HubShift: "SHIFT1", RedHubActive: false, BlueHubActive: true });
+    expect(pill("red").dataset.active).toBe("false");
+    expect(pill("blue").dataset.active).toBe("true");
+  });
+
+  // The wire vocabulary is for the counter; the banner is for a person at the field.
+  test("reads the shift name out for a human", () => {
+    updateHubBanner({ InShift: true, HubShift: "SHIFT2", RedHubActive: true, BlueHubActive: false });
+    expect(document.getElementById("hubBannerShift").textContent).toBe("SHIFT 2");
+  });
+
+  // An unrecognised shift name is shown rather than blanked: a server that learns a new
+  // one should not leave the banner silently empty.
+  test("passes through a shift name it does not know", () => {
+    updateHubBanner({ InShift: true, HubShift: "OVERTIME", RedHubActive: true, BlueHubActive: true });
+    expect(document.getElementById("hubBannerShift").textContent).toBe("OVERTIME");
   });
 });

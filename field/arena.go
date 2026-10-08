@@ -1532,6 +1532,9 @@ func (arena *Arena) gameDataForAutoWinner() string {
 // random modes; see docs/spec-hub-fuel-counter-feed.md.
 func (arena *Arena) handleAutoWinner() {
 	arena.assignAutoWinner()
+	// Immediately, rather than waiting for the next tick: the lighting and the shift
+	// alternation read it, and this is the instant teleop begins.
+	arena.syncHubWonAuto()
 	arena.GameData = arena.gameDataForAutoWinner()
 }
 

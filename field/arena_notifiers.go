@@ -7,6 +7,8 @@
 package field
 
 import (
+	"time"
+
 	"github.com/team841/bioarena/game"
 	"github.com/team841/bioarena/hardware"
 	"github.com/team841/bioarena/model"
@@ -39,6 +41,14 @@ type ArenaNotifiers struct {
 type MatchTimeMessage struct {
 	MatchState
 	MatchTimeSec int
+	// Which HUBs would credit a FUEL arriving now, for the field banner. Carried on the
+	// clock rather than on arenaStatus because every shift boundary falls on a whole
+	// second, which is exactly when this notifier fires -- so the banner changes with the
+	// field instead of up to half a second after it.
+	HubShift      string
+	RedHubActive  bool
+	BlueHubActive bool
+	InShift       bool
 }
 
 // allianceStationView is a JSON-safe projection of AllianceStation.
@@ -157,7 +167,15 @@ func (arena *Arena) GenerateMatchLoadMessage() any {
 }
 
 func (arena *Arena) generateMatchTimeMessage() any {
-	return MatchTimeMessage{arena.MatchState, int(arena.MatchTimeSec())}
+	shiftName, redActive, blueActive, inShift := arena.activeHubs(time.Now())
+	return MatchTimeMessage{
+		MatchState:    arena.MatchState,
+		MatchTimeSec:  int(arena.MatchTimeSec()),
+		HubShift:      shiftName,
+		RedHubActive:  redActive,
+		BlueHubActive: blueActive,
+		InShift:       inShift,
+	}
 }
 
 func (arena *Arena) generateMatchTimingMessage() any {

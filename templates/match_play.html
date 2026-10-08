@@ -43,6 +43,15 @@ Simplified match play UI for 10th Street practice field controller.
     <!-- Timer band -->
     <div class="mp-timer-band mb-2" id="timerBand">
       <span id="periodText">PRE-MATCH</span>
+      {{/* Which HUBs are taking FUEL right now, and the shift they are in. The HUB light
+           on the field is the driver's only in-match cue for this, so the banner is where
+           an operator confirms what the drivers are seeing -- and the one place to look
+           when someone asks why their shots stopped counting. Hidden outside a shift. */}}
+      <span class="mp-hubs" id="hubBanner" hidden>
+        <span class="mp-hub" id="hubBanner-red" data-alliance="red" data-active="false">RED</span>
+        <span class="mp-hub-shift" id="hubBannerShift"></span>
+        <span class="mp-hub" id="hubBanner-blue" data-alliance="blue" data-active="false">BLUE</span>
+      </span>
       <span id="timerText">—</span>
     </div>
 

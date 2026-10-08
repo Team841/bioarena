@@ -153,7 +153,13 @@ func (arena *Arena) updateHubLeds(currentTime time.Time) {
 
 // updateTeleopHubLeds updates teleop LED modes using the active Hub shift, auto winner, and warning window.
 func (arena *Arena) updateTeleopHubLeds(currentTime time.Time) {
-	redHub, blueHub := arena.hubs()
+	// Hubs of its own rather than the arena's. The lighting needs only the shift timing
+	// and the alternation, both pure functions of the AUTO result -- none of the FUEL the
+	// arena's Hubs are carrying. Borrowing those would couple the lighting to the scoring
+	// for nothing, and leave it reading WonAuto that something else is responsible for
+	// keeping current.
+	redHub := &game.Hub{WonAuto: arena.redWonAuto()}
+	blueHub := &game.Hub{WonAuto: arena.AutoWinner == hardware.AllianceBlue}
 
 	shift, remaining, _, ok := redHub.GetCurrentShiftTiming(arena.MatchStartTime, currentTime)
 	if !ok {

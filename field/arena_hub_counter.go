@@ -116,9 +116,19 @@ func (arena *Arena) resetHubs() {
 // Before the decision both read false, which is symmetric and harmless: the shifts whose
 // activity depends on WonAuto are all in teleop, after it.
 func (arena *Arena) hubs() (*game.Hub, *game.Hub) {
+	return &arena.RedHub, &arena.BlueHub
+}
+
+// syncHubWonAuto copies the AUTO result onto the Hubs, which is what their shift
+// alternation keys on.
+//
+// Kept separate from hubs() and called only from the arena goroutine. hubs() has to stay
+// a pure read because the notifier message generators call it, and websocket.go runs those
+// on a web goroutine with no arena lock whenever a client subscribes -- a writer there
+// races the match loop on every page load.
+func (arena *Arena) syncHubWonAuto() {
 	arena.RedHub.WonAuto = arena.AutoWinner == hardware.AllianceRed
 	arena.BlueHub.WonAuto = arena.AutoWinner == hardware.AllianceBlue
-	return &arena.RedHub, &arena.BlueHub
 }
 
 // updateHubCounts folds the counter's totals into the Hubs, and publishes the match
@@ -128,6 +138,8 @@ func (arena *Arena) hubs() (*game.Hub, *game.Hub) {
 // instead because that returns early when the PLC is not enabled, and on a practice field
 // it never is.
 func (arena *Arena) updateHubCounts() {
+	// The one place the Hubs' WonAuto is written, on the arena goroutine under the lock.
+	arena.syncHubWonAuto()
 	redHub, blueHub := arena.hubs()
 
 	currentTime := time.Now()
@@ -142,23 +154,35 @@ func (arena *Arena) updateHubCounts() {
 	arena.notifyHubScoreIfChanged()
 }
 
+// activeHubs reports the shift a FUEL arriving now would be credited to, and which HUBs
+// would credit it.
+//
+// The scoring clock, not the lighting one: through the auto/teleop pause this still says
+// AUTO with both HUBs active, which is the truth a counter and an operator both need --
+// it is the window the AUTO result is still being settled in. Shared by the counter's
+// status reply and the match panel's banner so the two cannot disagree.
+func (arena *Arena) activeHubs(currentTime time.Time) (shiftName string, red, blue, inShift bool) {
+	redHub, blueHub := arena.hubs()
+
+	shift, ok := redHub.ScoringShift(arena.MatchStartTime, currentTime)
+	if !ok {
+		return "NONE", false, false, false
+	}
+	return hubShiftName(shift), redHub.IsShiftActive(shift), blueHub.IsShiftActive(shift), true
+}
+
 // hubMatchContext describes the match in the counter protocol's terms, so the receiver
 // can answer a status datagram without reading arena state from its own goroutine.
 func (arena *Arena) hubMatchContext(currentTime time.Time) hardware.HubMatchContext {
 	redHub, blueHub := arena.hubs()
-
-	shift, _, _, inShift := redHub.GetCurrentShiftTiming(arena.MatchStartTime, currentTime)
-	shiftName := "NONE"
-	if inShift {
-		shiftName = hubShiftName(shift)
-	}
+	shiftName, redActive, blueActive, _ := arena.activeHubs(currentTime)
 
 	return hardware.HubMatchContext{
 		MatchState:   hubMatchStateName(arena.MatchState),
 		MatchTimeSec: arena.MatchTimeSec(),
 		Shift:        shiftName,
-		RedActive:    inShift && redHub.IsShiftActive(shift),
-		BlueActive:   inShift && blueHub.IsShiftActive(shift),
+		RedActive:    redActive,
+		BlueActive:   blueActive,
 		RedCount:     hubTotalCount(redHub),
 		BlueCount:    hubTotalCount(blueHub),
 		RedCredited:  hubCreditedCount(redHub),

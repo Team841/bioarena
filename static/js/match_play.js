@@ -491,6 +491,38 @@ const handleMatchTime = function (data) {
         band.dataset.period = "";
     }
   });
+
+  updateHubBanner(data);
+};
+
+// Shift names arrive in the counter protocol's vocabulary, which is a wire format. The
+// banner is for a person standing at the field, so SHIFT2 reads as "SHIFT 2".
+const hubShiftLabels = {
+  AUTO: "AUTO",
+  TRANSITION: "TRANSITION",
+  SHIFT1: "SHIFT 1",
+  SHIFT2: "SHIFT 2",
+  SHIFT3: "SHIFT 3",
+  SHIFT4: "SHIFT 4",
+  ENDGAME: "ENDGAME",
+  POST_MATCH: "POST",
+};
+
+// updateHubBanner shows which HUBs are taking FUEL, beside the phase and the clock.
+//
+// Hidden outside a shift rather than shown with both pills dark: between matches neither
+// HUB is taking anything, and two dark pills say that in a way that looks like a fault.
+const updateHubBanner = function (data) {
+  const banner = document.getElementById("hubBanner");
+  if (!banner) return;
+
+  banner.hidden = !data.InShift;
+  if (!data.InShift) return;
+
+  document.getElementById("hubBanner-red").dataset.active = String(Boolean(data.RedHubActive));
+  document.getElementById("hubBanner-blue").dataset.active = String(Boolean(data.BlueHubActive));
+  document.getElementById("hubBannerShift").textContent =
+    hubShiftLabels[data.HubShift] || data.HubShift || "";
 };
 
 // Unlocks the audio elements against the browser's autoplay policy.
@@ -582,7 +614,7 @@ $(function () {
 
 if (typeof module !== "undefined") {
   module.exports = {
-    handleArenaStatus, handleMatchLoad, handleMatchTime, handleHubScore,
+    handleArenaStatus, handleMatchLoad, handleMatchTime, handleHubScore, updateHubBanner,
     registerTeams, clearMatch,
   };
 }
