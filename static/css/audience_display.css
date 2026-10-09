@@ -55,17 +55,26 @@ body {
 
 /* ── Between matches ───────────────────────────────────────────────────── */
 
-.ad-logo {
-  max-width: 48vw;
-  max-height: 52vh;
+/* The splash is a finished 16:9 screen rather than a logo, so it takes the whole display.
+   `contain` lets it letterbox against its own background on a television that is not 16:9
+   -- the alternative crops the outer team off the edge, which is the one thing it must
+   never do. */
+/* The splash screen drops the flex centring the match screen wants, so the image can
+   reach every edge of the display. */
+.ad-screen-splash {
+  display: block;
 }
-.ad-event-name {
-  margin-top: 4vh;
-  font-size: 4vw;
-  font-weight: bold;
-  letter-spacing: 0.4vw;
-  text-transform: uppercase;
-  color: #9ca3af;
+.ad-screen-splash[hidden] {
+  display: none;
+}
+.ad-splash {
+  /* Block, not the default inline: an inline image sits on a text baseline and the
+     descender space under it pushes the page a few pixels taller than the screen, which
+     on a television is a scrollbar over something nobody can scroll. */
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 /* ── While a match is running ──────────────────────────────────────────── */

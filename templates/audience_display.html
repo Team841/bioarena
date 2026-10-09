@@ -24,11 +24,13 @@ while one is running, the logo between.
          match -- so the screen has to say that it has stopped being told. -->
     <div class="ad-offline" id="offlineBanner" hidden>NO CONNECTION TO THE FIELD</div>
 
-    <!-- Between matches. The event name rather than a bare logo, so a field running two
-         controllers can be told apart from across the room. -->
-    <div class="ad-screen" id="logoScreen">
-      <img class="ad-logo" src="/static/img/game-logo.png" alt="">
-      <div class="ad-event-name">{{.EventSettings.Name}}</div>
+    {{/* Between matches. The site splash is a finished screen -- the game, the teams
+         sharing the field, and the venue line -- so it is given the whole display rather
+         than being treated as a logo with captions stacked under it. The event name that
+         used to sit here is in the splash's own footer; two of them read as a mistake.
+         docs/sites/assets/oakland/ records where each mark came from and composes it. */}}
+    <div class="ad-screen ad-screen-splash" id="logoScreen">
+      <img class="ad-splash" src="/static/img/oakland-splash.png" alt="">
     </div>
 
     <!-- While a match is running. -->

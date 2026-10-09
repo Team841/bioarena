@@ -182,3 +182,47 @@ metric on its wired adapter or unplug it before expecting the internet to work.
 This field is its own island. Nothing here is reachable from Richmond and nothing at
 Richmond is reachable from here, because both use the same addresses — see
 [Addressing](#addressing).
+
+## Audience display splash
+
+The television beside the field shows [`static/img/oakland-splash.png`](../../static/img/oakland-splash.png)
+between matches: this year's game over the three teams sharing the field, with the venue
+and sponsor line underneath. Site-specific -- another field wants its own teams on it, so
+it is named for this one rather than overwriting the generic logo.
+
+Recomposed by [`assets/oakland/compose_splash.py`](assets/oakland/compose_splash.py),
+which reads the marks in [`assets/oakland/logos/`](assets/oakland/logos) and writes
+straight into `static/img/`:
+
+```bash
+python docs/sites/assets/oakland/compose_splash.py
+```
+
+### Where each mark came from
+
+| Mark | Source | Checked against | Resolution |
+|---|---|---|---|
+| REBUILT 2026 | `static/img/game-logo.png`, taken from upstream cheesy-arena | the artwork itself | 2343x922, ample |
+| 8033 Highlander Robotics | the team's own GitHub organisation avatar (`HighlanderRobotics`) | The Blue Alliance team 8033 | 460x460, native |
+| 841 The BioMechs | the team's own GitHub organisation avatar (`Team841`) | The Blue Alliance team 841 | 195x195, enlarged ~1.4x |
+| 6059 System Overload Robotics | the team's FRC avatar from The Blue Alliance | The Blue Alliance team 6059 | **40x40, reconstructed** |
+
+Each team number was checked against The Blue Alliance for the name behind it before the
+mark was used, rather than trusting a search result.
+
+**6059's is the weak one and should be replaced when a real file turns up.** Their GitHub
+organisation has no uploaded avatar -- GitHub serves a generated identicon, which is not
+their logo -- and `frc6059.org` does not resolve, so a 40x40 FRC avatar is the best that
+exists publicly. Reaching tile size is a near sevenfold enlargement, which plain scaling
+renders as obvious stair-stepping beside the other two. The mark is three flat colours, so
+`restore_flat_art` smooths it and snaps every pixel back to exactly those three, which puts
+the hard edges back. It holds up at splash size and is still not a native file. Drop a real
+one in as `assets/oakland/logos/tba6059.png`, delete that team's `flat_art` flag, and
+re-run.
+
+### Game logo
+
+`static/img/game-logo.png` was REEFSCAPE, several games stale and left over from before
+this fork dropped the audience display. It is now upstream's REBUILT artwork. It is pure
+black on transparency, drawn for light backgrounds, so the splash reverses it to white for
+the dark field palette -- the standard treatment for a dark ground, not a recolour.
