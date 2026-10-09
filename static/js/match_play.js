@@ -381,6 +381,20 @@ const handleArenaStatus = function (data) {
   }
 };
 
+// setFieldConnected shows or hides the banner saying the panel has stopped being told
+// anything.
+//
+// Everything below it is left as it was. It was true when the field last said so, and an
+// operator working out what happened wants the last reading rather than a blanked panel;
+// what they must not do is mistake it for a current one, or press Abort and believe it
+// landed.
+const setFieldConnected = function (connected) {
+  const banner = document.getElementById("offlineBanner");
+  if (banner) {
+    banner.hidden = Boolean(connected);
+  }
+};
+
 // --- FUEL tallies ---
 
 // The latency past which the figure is called out. The feed is specified to get a ball on
@@ -591,6 +605,8 @@ const handlePlaySound = function (sound) {
 
 $(function () {
   websocket = new CheesyWebsocket("/match_play/websocket", {
+    onConnected: function () { setFieldConnected(true); },
+    onDisconnected: function () { setFieldConnected(false); },
     arenaStatus: function (event) { handleArenaStatus(event.data); },
     matchLoad:   function (event) { handleMatchLoad(event.data); },
     matchTime:   function (event) { handleMatchTime(event.data); },
@@ -615,6 +631,7 @@ $(function () {
 if (typeof module !== "undefined") {
   module.exports = {
     handleArenaStatus, handleMatchLoad, handleMatchTime, handleHubScore, updateHubBanner,
+    setFieldConnected,
     registerTeams, clearMatch,
   };
 }

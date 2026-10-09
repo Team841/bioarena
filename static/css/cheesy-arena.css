@@ -469,6 +469,26 @@ input[data-changed="true"], select[data-changed="true"] {
 }
 
 /* Control buttons row */
+/* ── Lost the field ────────────────────────────────────────────────────── */
+/* Amber rather than red: nothing is wrong with the field, this end simply cannot see it,
+   and red here would compete with the e-stop styling that means something else. Sits
+   above the panel rather than covering it -- the frozen readings were true a moment ago
+   and are still worth reading, they just are not current. */
+.mp-offline {
+  padding: 8px 16px;
+  border-radius: 6px;
+  background: #fbbf24;
+  color: #1a1a1a;
+  font-weight: bold;
+  letter-spacing: 1px;
+  text-align: center;
+  text-transform: uppercase;
+  font-size: clamp(11px, 1.6vw, 15px);
+}
+.mp-offline[hidden] {
+  display: none;
+}
+
 /* ── FUEL tallies ──────────────────────────────────────────────────────── */
 /* Three columns so the two alliances sit at the outer edges, matching the station cards
    above them, with the feed's own health between. Collapses to one column on a phone. */

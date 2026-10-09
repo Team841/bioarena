@@ -40,6 +40,14 @@ Simplified match play UI for 10th Street practice field controller.
 <div class="row g-2">
   <!-- Main panel -->
   <div class="col-12">
+    {{/* Shown while the websocket is down. Everything below it is frozen at whatever the
+         field last said, which on a clock and a row of badges looks exactly like a live
+         field sitting still -- and the controls are dead too, so a press of Abort goes
+         nowhere with nothing to say it did. */}}
+    <div class="mp-offline mb-2" id="offlineBanner" hidden>
+      NO CONNECTION TO THE FIELD &mdash; readings are frozen and the controls below will not work
+    </div>
+
     <!-- Timer band -->
     <div class="mp-timer-band mb-2" id="timerBand">
       <span id="periodText">PRE-MATCH</span>

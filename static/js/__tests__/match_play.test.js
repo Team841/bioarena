@@ -36,7 +36,9 @@ global.CheesyWebsocket = class {
 };
 global.websocket = new global.CheesyWebsocket();
 
-const { handleArenaStatus, handleMatchLoad, handleHubScore, updateHubBanner } = require("../match_play.js");
+const {
+  handleArenaStatus, handleMatchLoad, handleHubScore, updateHubBanner, setFieldConnected,
+} = require("../match_play.js");
 
 // ---- helpers ----------------------------------------------------------------
 
@@ -81,6 +83,7 @@ function buildDom() {
     <button id="btnResetField"></button>
     <span id="redPanelStatus"></span>
     <span id="bluePanelStatus"></span>
+    <div id="offlineBanner" hidden></div>
     <div id="hubBanner" hidden>
       <span id="hubBanner-red" data-alliance="red" data-active="false">RED</span>
       <span id="hubBannerShift"></span>
@@ -630,5 +633,35 @@ describe("updateHubBanner", () => {
   test("passes through a shift name it does not know", () => {
     updateHubBanner({ InShift: true, HubShift: "OVERTIME", RedHubActive: true, BlueHubActive: true });
     expect(document.getElementById("hubBannerShift").textContent).toBe("OVERTIME");
+  });
+});
+
+
+// ---- Losing the field --------------------------------------------------------
+
+// A dropped connection leaves every reading frozen at the field's last word, which on a
+// clock and a row of badges looks exactly like a live field sitting still -- and the
+// controls are dead too, so a press of Abort goes nowhere silently.
+describe("setFieldConnected", () => {
+  test("says so when the connection drops", () => {
+    setFieldConnected(false);
+    expect(document.getElementById("offlineBanner").hidden).toBe(false);
+  });
+
+  test("clears the warning once it is back", () => {
+    setFieldConnected(false);
+    setFieldConnected(true);
+    expect(document.getElementById("offlineBanner").hidden).toBe(true);
+  });
+
+  // The last reading is what an operator works out what happened from, so it stays.
+  test("leaves the panel's last reading in place", () => {
+    handleHubScore({
+      Counter: { Status: "ONLINE" },
+      Red: { Counted: 9, Credited: 9, Auto: 0, ByShift: [], NoTeam: false },
+      Blue: { Counted: 0, Credited: 0, Auto: 0, ByShift: [], NoTeam: false },
+    });
+    setFieldConnected(false);
+    expect(document.getElementById("fuelCredited-red").textContent).toBe("9");
   });
 });
