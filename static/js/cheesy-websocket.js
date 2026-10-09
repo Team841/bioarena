@@ -49,13 +49,24 @@ var CheesyWebsocket = function (path, events) {
     };
   }
 
+  // Optional callbacks for pages that have to show whether the field is still there.
+  // Without them a dropped connection is invisible: the page keeps its last state and a
+  // frozen match clock reads exactly like a live one on a stopped match. Defaulted to
+  // no-ops so every other page behaves as before.
+  var onConnected = events.onConnected || function () {};
+  var onDisconnected = events.onDisconnected || function () {};
+  delete events.onConnected;
+  delete events.onDisconnected;
+
   this.connect = function () {
     this.websocket = $.websocket(url, {
       open: function () {
         console.log("Websocket connected to the server at " + url + ".")
+        onConnected();
       },
       close: function () {
         console.log("Websocket lost connection to the server. Reconnecting in 3 seconds...");
+        onDisconnected();
         setTimeout(that.connect, 3000);
       },
       events: events

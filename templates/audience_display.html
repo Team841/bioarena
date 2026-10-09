@@ -1,0 +1,73 @@
+{{/*
+Copyright 2014 Team 254. All Rights Reserved.
+Portions Copyright Team 841. All Rights Reserved.
+Author: pat@patfairbank.com (Patrick Fairbank)
+
+The audience display: a television beside the practice field.
+
+Standalone rather than built on base.html -- no navigation, no margins, nothing but the
+screen. Two screens, swapped by the match state rather than by an operator: the match
+while one is running, the logo between.
+*/}}
+{{define "audience_display.html"}}
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+  <head>
+    <title>Audience Display - {{.EventSettings.Name}} - Bioarena</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="shortcut icon" href="/static/img/favicon.ico">
+    <link href="/static/css/audience_display.css" rel="stylesheet">
+  </head>
+  <body>
+    <!-- Shown whenever the websocket is down. Everything behind it is the last thing the
+         field said, which on a clock is indistinguishable from a live one on a stopped
+         match -- so the screen has to say that it has stopped being told. -->
+    <div class="ad-offline" id="offlineBanner" hidden>NO CONNECTION TO THE FIELD</div>
+
+    <!-- Between matches. The event name rather than a bare logo, so a field running two
+         controllers can be told apart from across the room. -->
+    <div class="ad-screen" id="logoScreen">
+      <img class="ad-logo" src="/static/img/game-logo.png" alt="">
+      <div class="ad-event-name">{{.EventSettings.Name}}</div>
+    </div>
+
+    <!-- While a match is running. -->
+    <div class="ad-screen" id="matchScreen" hidden>
+      <header class="ad-header">
+        <div class="ad-match-name" id="matchName"></div>
+        <div class="ad-phase" id="phaseText">PRE-MATCH</div>
+      </header>
+
+      <div class="ad-clock" id="clockText">—</div>
+      <div class="ad-shift" id="shiftText"></div>
+
+      <div class="ad-alliances">
+        {{/* One block per alliance. The FUEL figure is the credited count -- the score --
+             and the line under it is what was shot into the HUB while it was dark, which
+             is the number a driver practising the shift cycle is actually chasing. */}}
+        <section class="ad-alliance" data-alliance="red">
+          <div class="ad-alliance-name">RED</div>
+          <div class="ad-teams" id="teams-red"></div>
+          <div class="ad-fuel" id="fuel-red">0</div>
+          <div class="ad-dark" id="dark-red"></div>
+          <div class="ad-hub" id="hub-red" data-active="false">HUB DARK</div>
+        </section>
+        <section class="ad-alliance" data-alliance="blue">
+          <div class="ad-alliance-name">BLUE</div>
+          <div class="ad-teams" id="teams-blue"></div>
+          <div class="ad-fuel" id="fuel-blue">0</div>
+          <div class="ad-dark" id="dark-blue"></div>
+          <div class="ad-hub" id="hub-blue" data-active="false">HUB DARK</div>
+        </section>
+      </div>
+    </div>
+
+    <script src="/static/js/lib/jquery.min.js"></script>
+    <script src="/static/js/lib/jquery.json-2.4.min.js"></script>
+    <script src="/static/js/lib/jquery.websocket-0.0.1.js"></script>
+    <script src="/static/js/cheesy-websocket.js"></script>
+    <script src="/static/js/match_timing.js"></script>
+    <script src="/static/js/audience_display.js"></script>
+  </body>
+</html>
+{{end}}

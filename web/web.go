@@ -141,6 +141,10 @@ func (web *Web) newHandler() http.Handler {
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/match_play", http.StatusFound)
 	})
+	// Unauthenticated, like /static/ and /logs/: a television on the field has no
+	// keyboard to clear a login prompt with.
+	mux.HandleFunc("GET /audience_display", web.audienceDisplayHandler)
+	mux.HandleFunc("GET /audience_display/websocket", web.audienceDisplayWebsocketHandler)
 	mux.HandleFunc("GET /login", web.loginHandler)
 	mux.HandleFunc("POST /login", web.loginPostHandler)
 	mux.HandleFunc("GET /match_play", web.matchPlayHandler)

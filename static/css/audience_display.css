@@ -1,634 +1,237 @@
 /*
-  Copyright 2014 Team 254. All Rights Reserved.
-  Author: pat@patfairbank.com (Patrick Fairbank)
-*/
+ * Copyright 2014 Team 254. All Rights Reserved.
+ * Portions Copyright Team 841. All Rights Reserved.
+ * Author: pat@patfairbank.com (Patrick Fairbank)
+ *
+ * The audience display.
+ *
+ * Replaces a stale copy of upstream's, which was last touched several games ago and had
+ * been dead since this fork dropped the audience display template. Upstream's styles a
+ * chroma-key strip across the bottom of a webcast; this fills a television standing beside
+ * the field, so none of it carried over.
+ *
+ * Sized in vw/vh throughout. The screen this runs on is whatever was spare -- a monitor on
+ * a cart, a classroom projector, someone's television -- and the one thing that must hold
+ * is that the clock and the two FUEL figures are readable from the far side of the field.
+ */
 
-html {
-  cursor: none;
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  overflow: hidden;
-}
-#overlayCentering {
-  position: absolute;
-  bottom: -210px;
-  width: 100%;
-  height: 170px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-#matchOverlayContainer {
-  display: flex;
-}
-#matchOverlay {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid #222;
-  color: #222;
-  font-size: 22px;
-}
-#matchOverlayTop {
-  height: 100px;
-  display: flex;
-}
-.playoff-alliance {
-  position: relative;
-  top: 31px;
-  width: 40px;
-  height: 40px;
-  padding: 0 5px;
-  z-index: -1;
-  display: flex;
-  align-items: center;
-  background-color: #fc0;
-  color: #222;
-  border: 1px solid #222;
-  font-size: 15px;
-  font-weight: 200;
-}
-#leftPlayoffAlliance {
-  left: 23px;
-  justify-content: start;
-  border-top-left-radius: 50%;
-  border-bottom-left-radius: 50%;
-  border-right: none;
-}
-#rightPlayoffAlliance {
-  right: 23px;
-  justify-content: end;
-  border-top-right-radius: 50%;
-  border-bottom-right-radius: 50%;
-  border-left: none;
-}
-.teams {
-  width: 70px;
-  height: 100%;
-  display: none;
-  flex-direction: column;
-  justify-content: space-evenly;
-  align-items: center;
-  background-color: #fff;
-  font-family: "FuturaLT";
-  font-size: 20px;
-  line-height: 25px;
+:root {
+  --ad-red: #e5484d;
+  --ad-blue: #3b82f6;
+  --ad-dim: #6b7280;
+  --ad-bg: #0b0b0d;
+  --ad-panel: #16161a;
 }
 
-#leftTeams {
-  border-right: 1px solid #222;
-}
-#rightTeams {
-  border-left: 1px solid #222;
-}
-.reversible-left[data-reversed=false], .reversible-right[data-reversed=true] {
-  background-color: #ff4444;
-}
-.reversible-left[data-reversed=true], .reversible-right[data-reversed=false] {
-  background-color: #2080ff;
-}
-.score {
-  width: 0;
-  height: 100%;
-  display: flex;
-  justify-content: flex-start;
-}
-.score-right {
-  justify-content: flex-end;
-}
-.avatars {
-  min-width: 50px;
-  height: 100%;
-  display: none;
-  flex-direction: column;
-  justify-content: space-evenly;
-  align-items: center;
-}
-.avatar {
-  height: 25px;
-}
-.score-number {
-  width: 130px;
-  height: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-family: "FuturaLTBold";
-  font-size: 55px;
-  color: #fff;
-  opacity: 0;
-}
-.score-right .score-fields {
-  align-items: flex-end;
-}
-.score-fields {
-  height: 100%;
-  width: 0;
-  display: none;
-  flex-direction: column;
-  justify-content: space-evenly;
-  opacity: 0;
-}
-.score-field {
-  display: flex;
-  flex-direction: row;
-}
-.coral-icon {
-  width: 35px;
-  margin: 0 12px;
-}
-.algae-icon {
-  width: 31px;
-  margin: 0 14px;
-}
-.score-field > div {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 70px;
-  font-family: "FuturaLTBold";
-  font-size: 27px;
-  line-height: 27px;
-  color: #fff;
-}
-#matchCircle {
-  position: absolute;
-  top: -25px;
-  border-radius: 50%;
-  width: 150px;
-  height: 150px;
-  background-color: #fff;
-  border: 1px solid #222;
-}
-#logo {
-  position: relative;
-  top: 38px;
-  height: 70px;
-}
-#matchTime {
-  position: relative;
-  top: 17px;
-  height: 60px;
-  color: #222;
-  font-family: "FuturaLTBold";
-  font-size: 32px;
-  opacity: 0;
-}
-#eventMatchInfo {
-  height: 0;
-  display: none;
-  justify-content: space-between;
-  z-index: -1;
-  align-items: flex-end;
-  padding: 0 5px;
-  background-color: #444;
-  font-family: "FuturaLT";
-  font-size: 15px;
-  line-height: 30px;
-  color: #fff;
-}
-#playoffSeriesStatus {
-  width: 40px;
-  height: 18px;
-  display: none;
-  justify-content: center;
-  align-items: center;
-  background-color: #fc0;
-  color: #222;
-  border: 1px solid #222;
-  border-top: none;
-  border-bottom-left-radius: 3px;
-  border-bottom-right-radius: 3px;
-  font-size: 15px;
-  font-weight: 200;
-}
-#timeoutDetails {
-  position: absolute;
-  bottom: 95px;
-  width: 140px;
-  height: 50px;
-  z-index: -1;
-  padding: 0 20px;
-  display: flex;
-  flex-direction: row;
-  justify-content: space-between;
-  align-items: center;
-  background-color: #fff;
-  color: #222;
-  border: 1px solid #222;
-}
-#timeoutBreakDescription {
-  font-weight: bold;
-  font-size: 20px;
-  opacity: 0;
-}
-#timeoutNextMatch {
-  text-align: center;
-  font-weight: bold;
-  font-size: 14px;
-  opacity: 0;
-}
-#blindsContainer {
-  position: fixed;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  right: 0;
-}
-.blinds {
-  position: fixed;
-  top: 0;
-  background-size: 200%;
-  height: 100%;
-  width: 50%;
-  overflow: hidden;
-}
-.blinds.left {
-  background-position: left;
-  left: -50%;
-}
-.blinds.right {
-  background-position: right;
-  right: -50%;
-}
-.blinds.full {
-  width: 100%;
-  background-position: center;
-  background-size: 100%;
-}
-.blinds.background {
-  background-image: url("/static/img/endofmatch-bg.png");
-}
-.blindsCenter {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  margin: auto auto;
-  border-radius: 50%;
-  width: 310px;
-  height: 310px;
-  background-color: #fff;
-  border: 1px solid #333;
-  box-shadow: 0 0 5px #666;
-  text-align: center;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-  z-index: 2;
-}
-.blindsCenter.full {
-  left: 0;
-  right: 0;
-  transform: rotateY(-180deg);
-}
-.blinds.left .blindsCenter.blank {
-  right: -155px;
-}
-.blinds.full .blindsCenter.blank {
-  right: 0;
-  left: 0;
-}
-.blinds.right .blindsCenter.blank {
-  left: -155px;
-}
-#blindsLogo {
-  position: relative;
-  top: 55px;
-  height: 220px;
-}
-#finalScoreCentering {
-  position: fixed;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-#finalScore {
-  width: 1000px;
-  display: flex;
-  flex-direction: column;
-  border: 2px solid #333;
-  opacity: 0;
-}
-.final-score-row {
-  display: flex;
-  flex-direction: row;
-}
-.final-score {
-  width: 50%;
-  height: 200px;
-  line-height: 200px;
-  border-bottom: 2px solid #333;
-  color: #fff;
-  font-family: "FuturaLTBold";
-  font-size: 100px;
-  text-align: center;
-  text-shadow: 0 0 3px #333;
-}
-#leftFinalScore {
-  padding-right: 150px;
-}
-#rightFinalScore {
-  padding-left: 150px;
-}
-.final-breakdown {
-  height: 380px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  background-color: #fff;
-  color: #222;
-  font-family: "FuturaLT";
-  font-size: 24px;
-}
-#leftFinalBreakdown {
-  width: 60px;
-  padding-right: 10px;
-  align-items: flex-end;
-}
-#rightFinalBreakdown {
-  width: 60px;
-  padding-left: 10px;
-  align-items: flex-start;
-}
-#centerFinalBreakdown {
-  width: 280px;
-  align-items: center;
-  text-align: center;
-  border-left: 2px solid #333;
-  border-right: 2px solid #333;
-}
-.final-breakdown-teams {
-  flex-grow: 1;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-.final-teams {
-  width: 250px;
-  padding: 20px;
-  border-radius: 20px;
-}
-.final-alliance {
-  margin-top: -10px;
-  margin-bottom: 10px;
-  display: flex;
-  flex-direction: row;
-  justify-content: center;
-  color: #fff;
-  font-size: 24px;
-}
-.final-team-row {
-  display: flex;
-  flex-direction: row;
-  justify-content: center;
-  align-items: center;
-}
-.final-team-avatar {
-  width: 35px;
-  height: 35px;
-  margin-right: 5px;
-}
-.final-team-number {
-  width: 85px;
-  color: #fff;
-  font-family: "FuturaLT";
-  font-size: 32px;
-  line-height: 43px;
-  text-align: center;
-}
-.final-team-card {
-  width: 20px;
-  margin-left: 5px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-.final-team-card div {
-  display: none;
-}
-.final-team-card div[data-card=yellow], .final-team-card div[data-card=red] {
-  display: inline-block;
-  width: 15px;
-  height: 20px;
-  border-radius: 4px;
-  border: 1px solid #333;
-}
-.final-team-card div[data-card=yellow] {
-  background-color: #da1;
-}
-.final-team-card div[data-card=red] {
-  background-color: #e00;
-}
-.final-team-rank {
-  width: 50px;
-  display: flex;
-  flex-direction: row;
-  justify-content: flex-end;
-}
-.final-team-rank img {
-  width: 15px;
-  margin-right: 3px;
-}
-.final-team-rank div {
-  color: #fff;
-  font-size: 20px;
-}
-.final-destination {
-  margin-top: 10px;
-  width: 200px;
-  height: 45px;
-  border-radius: 5px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  text-align: center;
-  background-color: #999;
-  font-size: 15px;
-  line-height: 18px;
-}
-.final-destination[data-won=true] {
-  background-color: #fc3;
-}
-#finalEventMatchInfo {
-  height: 60px;
-  display: flex;
-  flex-direction: row;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 25px;
-  font-family: "FuturaLT";
-  font-size: 28px;
-  background-color: #444;
-  color: #fff;
-}
-[data-checked=true] {
-  color: #0c0;
-}
-[data-checked=false] {
-  color: #e00;
-}
-.final-footer {
-  float: left;
-  width: 33.3%;
-  white-space: nowrap;
-}
-#finalMatchName {
-  text-align: right;
-}
-#bracket {
-  position: fixed;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  margin: auto auto;
-  z-index: 1;
-  opacity: 0;
-  text-align: center;
-}
-#bracketSvg {
-  width: 1920px;
-}
-#sponsor {
-  position: fixed;
-  width: 1000px;
-  height: 600px;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  margin: auto auto;
-  border: 2px solid #333;
-  z-index: 1;
-  opacity: 0;
-  background-color: #fff;
-  text-align: center;
-}
-#sponsor .carousel-inner, #sponsor .carousel-item {
-  height: 100%;
-}
-.sponsor-image-container {
-  width: 1000px;
-  height: 500px;
-  display: table-cell;
-  vertical-align: middle;
-}
-#sponsor h1, #sponsor h2 {
-  font-family: "FuturaLTBold";
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
   margin: 0;
-}
-#sponsor h1 {
-  font-size: 60px;
-  background-color: #444;
-  color: #fff;
-  padding: 0.25em;
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  right: 0;
-  height: 96px;
-}
-#sponsor h2 {
-  font-size: 6em;
-  padding-top: 145px;
-  line-height: 110px;
-}
-#sponsor img {
-  max-width: 800px;
-  max-height: 400px;
-}
-#allianceRankingsCentering {
-  position: absolute;
   height: 100%;
-  left: 3em;
-  top: 3em;
-}
-#allianceRankings {
-  max-width: 11em;
-  max-height: 92%;
-  display: flex;
-  flex-flow: column wrap;
+  background: var(--ad-bg);
+  color: #f5f5f5;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   overflow: hidden;
-  background-color: #fff;
-  border: 2px solid #222;
-  font-size: 2em;
-  font-family: "FuturaLT";
+  /* A television has no pointer, and a stray cursor parked over the screen is the kind of
+     thing nobody notices until it is in a photo. */
+  cursor: none;
+  user-select: none;
 }
-.unpicked {
-  width: 5.5em;
+
+.ad-screen {
+  position: absolute;
+  inset: 0;
   display: flex;
-  justify-content: start;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
-.unpicked-rank {
-  width: 1.8em;
-  text-align: right;
-  color: #999;
+.ad-screen[hidden] {
+  display: none;
 }
-.unpicked-team {
-  margin-left: 0.3em;
-  color: #222;
+
+/* ── Between matches ───────────────────────────────────────────────────── */
+
+.ad-logo {
+  max-width: 48vw;
+  max-height: 52vh;
 }
-#allianceSelectionCentering {
+.ad-event-name {
+  margin-top: 4vh;
+  font-size: 4vw;
+  font-weight: bold;
+  letter-spacing: 0.4vw;
+  text-transform: uppercase;
+  color: #9ca3af;
+}
+
+/* ── While a match is running ──────────────────────────────────────────── */
+
+#matchScreen {
+  justify-content: flex-start;
+  padding: 2vh 2vw;
+  /* Nothing may spill off a television, which has no scrollbar and no way to scroll. */
+  overflow: hidden;
+}
+
+.ad-header {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.ad-match-name {
+  font-size: 2.4vw;
+  color: #9ca3af;
+  letter-spacing: 0.2vw;
+}
+.ad-phase {
+  font-size: 3.2vw;
+  font-weight: bold;
+  letter-spacing: 0.4vw;
+  text-transform: uppercase;
+}
+
+/* The clock is the single thing most people in the room are looking at, so it gets the
+   most space of anything on the screen. Tabular figures stop the layout jittering as the
+   digits change. */
+.ad-clock {
+  /* Capped against height as well as width. Sized on vw alone, the clock and the FUEL
+     figures together overflow a 16:9 screen and push the HUB indicators off the bottom --
+     and 1280x720 is the likeliest television this ever runs on. */
+  font-size: min(22vw, 30vh);
+  font-weight: bold;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  margin-top: 1vh;
+}
+.ad-shift {
+  font-size: min(2.6vw, 4vh);
+  letter-spacing: 0.6vw;
+  text-transform: uppercase;
+  color: #9ca3af;
+  min-height: min(3.4vw, 5vh);
+}
+
+/* Period colour on the clock, matching the match panel's timer band so an operator
+   glancing between the two is reading the same language. */
+#matchScreen[data-period="auto"] .ad-clock,
+#matchScreen[data-period="auto"] .ad-phase {
+  color: #4ade80;
+}
+#matchScreen[data-period="teleop"] .ad-clock,
+#matchScreen[data-period="teleop"] .ad-phase {
+  color: #60a5fa;
+}
+#matchScreen[data-period="pause"] .ad-clock,
+#matchScreen[data-period="pause"] .ad-phase {
+  color: #fbbf24;
+}
+
+.ad-alliances {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2vw;
+  align-items: stretch;
+  margin-top: 2vh;
+}
+.ad-alliance {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1.2vw;
+  background: var(--ad-panel);
+  border: 0.4vw solid transparent;
+  padding: 1vh 1vw;
+}
+.ad-alliance[data-alliance="red"] {
+  border-color: var(--ad-red);
+}
+.ad-alliance[data-alliance="blue"] {
+  border-color: var(--ad-blue);
+}
+.ad-alliance-name {
+  font-size: 2.2vw;
+  font-weight: bold;
+  letter-spacing: 0.5vw;
+}
+.ad-alliance[data-alliance="red"] .ad-alliance-name {
+  color: var(--ad-red);
+}
+.ad-alliance[data-alliance="blue"] .ad-alliance-name {
+  color: var(--ad-blue);
+}
+.ad-teams {
+  font-size: min(2.6vw, 4vh);
+  color: #d1d5db;
+  letter-spacing: 0.2vw;
+  min-height: min(3.4vw, 5vh);
+}
+.ad-fuel {
+  font-size: min(13vw, 20vh);
+  font-weight: bold;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+/* Only rendered when it is non-zero, but it reserves its line either way so the FUEL
+   figures above it do not jump the first time a ball misses. */
+.ad-dark {
+  font-size: 1.6vw;
+  color: var(--ad-dim);
+  min-height: 2.2vw;
+}
+
+/* Lit when this HUB is taking FUEL. The physical HUB light is what the drivers are
+   watching; this is the same information for everyone who is not holding a controller. */
+.ad-hub {
+  margin-top: 1vh;
+  flex-shrink: 0;
+  font-size: min(1.8vw, 2.8vh);
+  font-weight: bold;
+  letter-spacing: 0.3vw;
+  padding: 0.6vh 1.6vw;
+  border-radius: 999px;
+  border: 0.2vw solid #374151;
+  color: var(--ad-dim);
+  background: #0f0f12;
+}
+.ad-hub[data-active="true"] {
+  color: #fff;
+  border-color: transparent;
+}
+.ad-alliance[data-alliance="red"] .ad-hub[data-active="true"] {
+  background: var(--ad-red);
+}
+.ad-alliance[data-alliance="blue"] .ad-hub[data-active="true"] {
+  background: var(--ad-blue);
+}
+
+/* ── Lost the field ────────────────────────────────────────────────────── */
+/* Across the top rather than over the whole screen: what is behind it was true a moment
+   ago and is still worth reading, it just is not live any more. Amber, because nothing is
+   wrong with the field -- this end simply cannot see it. */
+.ad-offline {
   position: absolute;
-  height: 100%;
-  top: 3em;
-  right: 3em;
-}
-#allianceSelection {
-  display: table-cell;
-  vertical-align: middle;
-}
-#allianceSelectionTable {
-  background-color: #fff;
-  border: 2px solid #222;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  padding: 1vh 0;
   text-align: center;
-  font-family: "FuturaLT";
-  font-size: 2.6em;
+  font-size: min(2.4vw, 3.6vh);
+  font-weight: bold;
+  letter-spacing: 0.4vw;
+  color: #0b0b0d;
+  background: #fbbf24;
 }
-#allianceSelectionTable tr:nth-child(even) {
-  background-color: #ccc;
-}
-.alliance-cell {
-  padding: 0px 20px;
-  font-family: "FuturaLT";
-  color: #999;
-}
-.selection-cell {
-  width: 3.1em;
-  color: #222;
-}
-#lowerThird {
+.ad-offline[hidden] {
   display: none;
-  position: absolute;
-  left: -1000px;
-  bottom: 100px;
-  background-color: #fff;
-  border: 1px solid #222;
-  color: #222;
-  font-size: 30px;
-  width: 800px;
-  height: 87px;
-}
-#lowerThirdLogo {
-  margin: 12px 20px;
-  height: 60px;
-  float: left;
-}
-#lowerThirdTop {
-  position: relative;
-  top: 10px;
-  display: none;
-  font-family: "FuturaLTBold";
-}
-#lowerThirdBottom {
-  display: none;
-  font-family: "FuturaLT";
-  font-size: 23px;
-  position: relative;
-  top: 5px;
-}
-#lowerThirdSingle {
-  display: none;
-  font-family: "FuturaLTBold";
-  line-height: 87px;
 }
