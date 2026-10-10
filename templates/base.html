@@ -42,6 +42,9 @@ Base template used by most pages to include common resources and optionally rend
                      station. What someone debugging a robot watches while somebody else
                      drives the match panel. */}}
                 <li><a class="dropdown-item" href="/field_monitor" target="_blank">FTA</a></li>
+                {{/* The same, red and blue swapped, for a screen facing the field from the
+                     other side. */}}
+                <li><a class="dropdown-item" href="/field_monitor?reversed=true" target="_blank">FTA (reversed)</a></li>
               </ul>
             </li>
           </ul>

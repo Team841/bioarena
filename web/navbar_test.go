@@ -42,4 +42,5 @@ func TestNavbarDisplaysMenu(t *testing.T) {
 	menu = menu[:strings.Index(menu, "</ul>")]
 	assert.Regexp(t, `href="/audience_display"[^>]*>Audience</a>`, menu)
 	assert.Regexp(t, `href="/field_monitor"[^>]*>FTA</a>`, menu)
+	assert.Regexp(t, `href="/field_monitor\?reversed=true"[^>]*>FTA \(reversed\)</a>`, menu)
 }
