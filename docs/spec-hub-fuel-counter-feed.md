@@ -629,6 +629,10 @@ Each phase is independently mergeable and leaves the field working.
   bioarena checkout.
 - Hand this document and the simulator to the collaborator. They can build against the
   simulator's behaviour while Phase 2 lands.
+- `docs/hub_counter_feed.py`: the unattended counterpart, for leaving a field fed with no
+  camera. `--mode score` scores a random HUB at a random interval, `--mode idle` sends
+  heartbeats only; it runs until stopped and rides out bioarena restarting or being
+  unreachable. Stdlib only, tested on Windows against the real receiver.
 
 ### Phase 2 — Receiver, override and display — **done**
 
