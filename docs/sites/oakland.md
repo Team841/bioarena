@@ -51,12 +51,21 @@ next person does not try to renumber Oakland to keep the two reachable at once.
 below: this is the field-wide stop, and it stays on the controller even once the panels are
 in. The panels handle per-station stops.
 
-| Contact | BCM pin | Setting |
-|---|---|---|
-| NO | 24 | **Field E-Stop NO GPIO Pin** under Setup → Settings |
-| NC | 25 | **Field E-Stop NC GPIO Pin** under Setup → Settings |
+| Contact | BCM pin | Physical pin | Setting |
+|---|---|---|---|
+| NO | 24 | 18 | **Field E-Stop NO GPIO Pin** under Setup → Settings |
+| GND | — | 20 | — |
+| NC | 25 | 22 | **Field E-Stop NC GPIO Pin** under Setup → Settings |
 
-Both are entered as BCM numbers. Getting them the wrong way round does not report a fault —
+All three conductors land side by side on the header's edge row.
+
+![Oakland FMS Pi GPIO header: field e-stop on pins 18, 20 and 22; hub relay defaults on 14, 15 and 16](assets/oakland/fms-pi-header.svg)
+
+The relay pins in that diagram are the defaults, for if this field's hub lights go to relays;
+nothing is wired to them yet. If an active-low relay board ever moves them to the alternative
+pins, the one on pin 24 sits directly beside the e-stop's pin 22 — label both.
+
+Both e-stop pins are entered as BCM numbers. Getting them the wrong way round does not report a fault —
 a released button then decodes as `nc=1, no=0`, which is a *stop*, so the field sits stopped
 with no error message. Released, the healthy reading is NC low and NO high.
 
@@ -70,8 +79,9 @@ while the service is stopped. To check by hand the way bioarena will see them:
 gpioget -B pull-up gpiochip0 24 25
 ```
 
-Released and healthy, that prints `0 1` — NC closed to ground, NO held up by the pull-up.
-Pressed, `1 0`. Anything else is the wiring-fault pair. Richmond uses 5 and 6 instead, which
+Values come out in the order the pins are given, NO (24) then NC (25). Released and healthy,
+that prints `1 0` — NO held up by the pull-up, NC closed to ground. Pressed, `0 1`. Anything
+else is the wiring-fault pair. Richmond uses 5 and 6 instead, which
 default to pull-up and so read the same either way; Oakland's do not.
 
 The service account needs the `gpio` group or it cannot open `/dev/gpiochip0` at all.

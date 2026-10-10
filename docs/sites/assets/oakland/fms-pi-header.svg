@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="370" viewBox="0 0 680 370" role="img" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+<title>Oakland FMS Pi: GPIO header pins for the field e-stop and hub relays</title>
+<desc>The Raspberry Pi 40-pin header seen from above with pin 1 on the left. The field e-stop uses pin 18 (BCM 24, NO), pin 20 (ground) and pin 22 (BCM 25, NC). The hub relay defaults are pin 15 (BCM 22, red) and pin 16 (BCM 23, blue), with ground on pin 14 and 5 volts for the relay board on pin 4. For an active-low relay board the alternatives are pins 26 and 24, ground on 25 and 3.3 volts on pin 1.</desc>
+<rect x="0" y="0" width="680" height="370" rx="8" fill="#FFFFFF"/>
+<text x="40" y="36" font-size="15" font-weight="600" fill="#2C2C2A">Oakland FMS Pi: GPIO header</text>
+<g font-size="12" fill="#5F5E5A">
+<text x="40" y="66">Pin 1 end</text>
+<text x="612" y="66" text-anchor="end">USB and Ethernet end</text>
+<text x="326" y="88" text-anchor="middle">Top row (even pins) runs along the board edge</text>
+</g>
+<rect x="40" y="124" width="572" height="60" rx="4" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.75"/>
+<g fill="none" stroke="#888780" stroke-width="0.75">
+<circle cx="60" cy="140" r="9"/><circle cx="116" cy="140" r="9"/><circle cx="144" cy="140" r="9"/><circle cx="172" cy="140" r="9"/><circle cx="200" cy="140" r="9"/><circle cx="424" cy="140" r="9"/><circle cx="452" cy="140" r="9"/><circle cx="480" cy="140" r="9"/><circle cx="508" cy="140" r="9"/><circle cx="536" cy="140" r="9"/><circle cx="564" cy="140" r="9"/><circle cx="592" cy="140" r="9"/>
+<circle cx="88" cy="168" r="9"/><circle cx="116" cy="168" r="9"/><circle cx="144" cy="168" r="9"/><circle cx="172" cy="168" r="9"/><circle cx="200" cy="168" r="9"/><circle cx="228" cy="168" r="9"/><circle cx="284" cy="168" r="9"/><circle cx="312" cy="168" r="9"/><circle cx="340" cy="168" r="9"/><circle cx="368" cy="168" r="9"/><circle cx="424" cy="168" r="9"/><circle cx="452" cy="168" r="9"/><circle cx="480" cy="168" r="9"/><circle cx="508" cy="168" r="9"/><circle cx="536" cy="168" r="9"/><circle cx="564" cy="168" r="9"/><circle cx="592" cy="168" r="9"/>
+</g>
+<circle cx="88" cy="140" r="9" fill="#FAC775" stroke="#854F0B" stroke-width="0.75"/>
+<circle cx="228" cy="140" r="9" fill="#B4B2A9" stroke="#444441" stroke-width="1.5"/>
+<circle cx="256" cy="140" r="9" fill="#85B7EB" stroke="#185FA5" stroke-width="0.75"/>
+<circle cx="256" cy="168" r="9" fill="#F09595" stroke="#A32D2D" stroke-width="0.75"/>
+<circle cx="284" cy="140" r="9" fill="#AFA9EC" stroke="#534AB7" stroke-width="0.75"/>
+<circle cx="312" cy="140" r="9" fill="#B4B2A9" stroke="#444441" stroke-width="1.5"/>
+<circle cx="340" cy="140" r="9" fill="#AFA9EC" stroke="#534AB7" stroke-width="0.75"/>
+<g fill="none" stroke="#444441" stroke-width="1.5" stroke-dasharray="3 2">
+<circle cx="368" cy="140" r="9"/><circle cx="396" cy="140" r="9"/><circle cx="396" cy="168" r="9"/><circle cx="60" cy="168" r="9"/>
+</g>
+<g font-size="12" fill="#5F5E5A" text-anchor="middle">
+<text x="60" y="112">2</text><text x="88" y="112">4</text><text x="116" y="112">6</text><text x="144" y="112">8</text><text x="172" y="112">10</text><text x="200" y="112">12</text><text x="228" y="112">14</text><text x="256" y="112">16</text><text x="284" y="112">18</text><text x="312" y="112">20</text><text x="340" y="112">22</text><text x="368" y="112">24</text><text x="396" y="112">26</text><text x="424" y="112">28</text><text x="452" y="112">30</text><text x="480" y="112">32</text><text x="508" y="112">34</text><text x="536" y="112">36</text><text x="564" y="112">38</text><text x="592" y="112">40</text>
+<text x="60" y="202">1</text><text x="88" y="202">3</text><text x="116" y="202">5</text><text x="144" y="202">7</text><text x="172" y="202">9</text><text x="200" y="202">11</text><text x="228" y="202">13</text><text x="256" y="202">15</text><text x="284" y="202">17</text><text x="312" y="202">19</text><text x="340" y="202">21</text><text x="368" y="202">23</text><text x="396" y="202">25</text><text x="424" y="202">27</text><text x="452" y="202">29</text><text x="480" y="202">31</text><text x="508" y="202">33</text><text x="536" y="202">35</text><text x="564" y="202">37</text><text x="592" y="202">39</text>
+</g>
+<g font-size="12" fill="#2C2C2A" dominant-baseline="central">
+<circle cx="48" cy="240" r="7" fill="#AFA9EC" stroke="#534AB7" stroke-width="0.75"/><text x="62" y="240">Field e-stop NO · BCM 24 · pin 18</text>
+<circle cx="358" cy="240" r="7" fill="#AFA9EC" stroke="#534AB7" stroke-width="0.75"/><text x="372" y="240">Field e-stop NC · BCM 25 · pin 22</text>
+<circle cx="48" cy="266" r="7" fill="#F09595" stroke="#A32D2D" stroke-width="0.75"/><text x="62" y="266">Red relay IN · BCM 22 · pin 15</text>
+<circle cx="358" cy="266" r="7" fill="#85B7EB" stroke="#185FA5" stroke-width="0.75"/><text x="372" y="266">Blue relay IN · BCM 23 · pin 16</text>
+<circle cx="48" cy="292" r="7" fill="#B4B2A9" stroke="#444441" stroke-width="1.5"/><text x="62" y="292">GND · pin 20 e-stop, pin 14 relays</text>
+<circle cx="358" cy="292" r="7" fill="#FAC775" stroke="#854F0B" stroke-width="0.75"/><text x="372" y="292">5 V · pin 4 (relay board VCC)</text>
+<circle cx="48" cy="318" r="7" fill="none" stroke="#444441" stroke-width="1.5" stroke-dasharray="3 2"/><text x="62" y="318">Active-low relay board instead: IN on 26 and 24, GND 25, VCC 3.3 V from pin 1</text>
+</g>
+<text x="40" y="350" font-size="12" fill="#5F5E5A">Relay pins are the defaults under Arena → Settings → LEDs; Oakland's hub lights are undecided.</text>
+</svg>
