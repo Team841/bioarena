@@ -1,7 +1,13 @@
 // Copyright 2018 Team 254. All Rights Reserved.
+// Portions Copyright Team 841. All Rights Reserved.
 // Author: pat@patfairbank.com (Patrick Fairbank)
 //
-// Client-side logic for the field monitor display.
+// Client-side logic for the field monitor.
+//
+// Upstream's, with the handlers for data this fork does not have taken out: the realtime
+// scores either side, the cycle-time and early/late footer, and the FTA notes field, which
+// needs a column on the team model that does not exist here. The per-station status
+// reading is upstream's and is the point of the page.
 
 let websocket;
 let currentMatchId;
@@ -28,8 +34,6 @@ const handleArenaStatus = function (data) {
       teamElementPrefix = "#" + blueSide + "Team" + station[1];
     }
     const teamIdElement = $(teamElementPrefix + "Id");
-    const teamNotesElement = $(teamElementPrefix + "Notes");
-    const teamNotesTextElement = $(teamElementPrefix + "Notes div");
     const teamEthernetElement = $(teamElementPrefix + "Ethernet");
     const teamDsElement = $(teamElementPrefix + "Ds");
     const teamRadioElement = $(teamElementPrefix + "Radio");
@@ -42,7 +46,6 @@ const handleArenaStatus = function (data) {
     const teamTripTimeElement = $(teamElementPrefix + "TripTime");
     const teamMissedPacketsElement = $(teamElementPrefix + "MissedPackets");
 
-    teamNotesTextElement.attr("data-station", station);
 
     if (stationStatus.Team) {
       // Set the team number and status.
@@ -64,13 +67,9 @@ const handleArenaStatus = function (data) {
         }
       }
       teamIdElement.attr("data-status", status);
-      teamNotesTextElement.text(stationStatus.Team.FtaNotes);
-      teamNotesElement.attr("data-status", status);
     } else {
       // No team is present in this position for this match; blank out the status.
       teamIdElement.text("");
-      teamNotesTextElement.text("");
-      teamNotesElement.attr("data-status", "");
     }
 
     // Format the Ethernet status box.
@@ -179,47 +178,23 @@ const handleMatchTime = function (data) {
   });
 };
 
-// Handles a websocket message to update the match score.
-const handleRealtimeScore = function (data, reversed) {
-
-  if (reversed === "true") {
-    $("#rightScore").text(data.Red.ScoreSummary.Score);
-    $("#leftScore").text(data.Blue.ScoreSummary.Score);
-  } else {
-    $("#rightScore").text(data.Blue.ScoreSummary.Score);
-    $("#leftScore").text(data.Red.ScoreSummary.Score);
-
+// setFieldConnected shows or hides the banner saying the page has stopped being told
+// anything.
+//
+// A page of green status boxes frozen at the field's last word looks exactly like a
+// healthy field, which on a diagnostic is the worst thing it could look like. What is
+// behind the banner stays put: it was true a moment ago, and is what someone working out
+// what just happened wants to read.
+const setFieldConnected = function (connected) {
+  const banner = document.getElementById("offlineBanner");
+  if (banner) {
+    banner.hidden = Boolean(connected);
   }
 };
 
 // Handles a websocket message to update current match
 const handleMatchLoad = function (data) {
   $("#matchName").text(data.Match.LongName);
-};
-
-// Handles a websocket message to update the event status message.
-const handleEventStatus = function (data) {
-  if (data.CycleTime === "") {
-    $("#cycleTimeMessage").text("Last cycle time: Unknown");
-  } else {
-    $("#cycleTimeMessage").text("Last cycle time: " + data.CycleTime);
-  }
-  $("#earlyLateMessage").text(data.EarlyLateMessage);
-};
-
-// Makes the team notes section editable and handles saving edits to the server.
-const editFtaNotes = function (element) {
-  const teamNotesTextElement = $(element);
-  const textArea = $("<textarea />");
-  textArea.val(teamNotesTextElement.text());
-  teamNotesTextElement.replaceWith(textArea);
-  textArea.focus();
-  textArea.blur(function () {
-    textArea.replaceWith(teamNotesTextElement);
-    if (textArea.val() !== teamNotesTextElement.text()) {
-      websocket.send("updateTeamNotes", {station: teamNotesTextElement.attr("data-station"), notes: textArea.val()});
-    }
-  });
 };
 
 $(function () {
@@ -234,27 +209,21 @@ $(function () {
     blueSide = "right";
   }
 
-  //Read if display to be used in a Driver Station, ignore FTA flag if so.
-  const driverStation = urlParams.get("ds");
-  if (driverStation === "true") {
-    $(".fta-dependent").attr("data-fta", "false");
-    $(".ds-dependent").attr("data-ds", driverStation);
-  } else {
-    $(".fta-dependent").attr("data-fta", urlParams.get("fta"));
-    $(".ds-dependent").attr("data-ds", driverStation);
-  }
-
+  // Upstream's `ds` and `fta` modes went with the data behind them; only the side swap
+  // is left, and it needs nothing from the server.
   $(".reversible-left").attr("data-reversed", reversed);
   $(".reversible-right").attr("data-reversed", reversed);
 
-
   // Set up the websocket back to the server.
-  websocket = new CheesyWebsocket("/displays/field_monitor/websocket", {
+  websocket = new CheesyWebsocket("/field_monitor/websocket", {
+    onConnected: function () {
+      setFieldConnected(true);
+    },
+    onDisconnected: function () {
+      setFieldConnected(false);
+    },
     arenaStatus: function (event) {
       handleArenaStatus(event.data);
-    },
-    eventStatus: function (event) {
-      handleEventStatus(event.data);
     },
     matchLoad: function (event) {
       handleMatchLoad(event.data);
@@ -265,8 +234,10 @@ $(function () {
     matchTime: function (event) {
       handleMatchTime(event.data);
     },
-    realtimeScore: function (event) {
-      handleRealtimeScore(event.data, reversed);
-    },
   });
 });
+
+// Export for Jest. No-op in the browser.
+if (typeof module !== "undefined") {
+  module.exports = { handleArenaStatus, handleMatchLoad, handleMatchTime, setFieldConnected };
+}

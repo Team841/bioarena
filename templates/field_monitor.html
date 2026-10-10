@@ -1,0 +1,108 @@
+{{/*
+Copyright 2018 Team 254. All Rights Reserved.
+Portions Copyright Team 841. All Rights Reserved.
+Author: pat@patfairbank.com (Patrick Fairbank)
+
+The field monitor: robot readiness and connection status, one box per station.
+
+Adapted from upstream's field_monitor_display.html. The per-station boxes are theirs
+unchanged -- they are the diagnostic an FTA actually reads, and bioarena carries every
+value they show. What is dropped is what this fork has no data for: the realtime scores
+either side, the cycle-time and early/late footer, and the FTA notes field, which needs a
+column on the team model that does not exist here.
+
+Upstream's `ds` and `fta` query modes are gone with them. `?reversed=true` stays, because
+a monitor hung on the far side of the field wants red and blue the other way round, and
+that needs nothing from the server.
+*/}}
+{{define "field_monitor.html"}}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Field Monitor - {{.EventSettings.Name}} - Bioarena</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="viewport" content="width=device-width, maximum-scale=1.0, user-scalable=no"/>
+    <link rel="shortcut icon" href="/static/img/favicon.ico">
+    <link rel="stylesheet" href="/static/css/lib/bootstrap.min.css"/>
+    <link rel="stylesheet" href="/static/css/lib/bootstrap-icons.min.css"/>
+    <link rel="stylesheet" href="/static/css/cheesy-arena.css"/>
+    <link rel="stylesheet" href="/static/css/field_monitor_display.css"/>
+  </head>
+
+  <body>
+    {{/* Every box below freezes at the field's last word when the connection drops, which
+         on a page of green status boxes is indistinguishable from a healthy field. */}}
+    <div class="fm-offline" id="offlineBanner" hidden>
+      NO CONNECTION TO THE FIELD &mdash; every status below is frozen
+    </div>
+
+    <div id="matchStatusRow">
+      <div id="matchName" class="text-start" style="width: 20%; padding-left: 1%;"></div>
+      <div id="fieldConnection" style="width: 25%; padding-left: 1%;">
+        <span class="badge badge-status" id="accessPointStatus"><i class="bi bi-wifi"></i> Access Point</span>
+        <span class="badge badge-status" id="switchStatus"><i class="bi bi-hdd-network"></i> Switch</span>
+      </div>
+      <div id="matchTime" class="text-center" style="width: 10%;"></div>
+      <div id="matchState" class="text-end" style="width: 45%; padding-right: 1%;"></div>
+    </div>
+
+    {{/* Three rows, mirrored left to right, so the page is laid out the way the stations
+         are: position 1 on one side faces position 3 on the other. */}}
+    {{template "fmRow" dict "leftPosition" "1" "rightPosition" "3"}}
+    {{template "fmRow" dict "leftPosition" "2" "rightPosition" "2"}}
+    {{template "fmRow" dict "leftPosition" "3" "rightPosition" "1"}}
+  </body>
+
+  <script src="/static/js/lib/jquery.min.js"></script>
+  <script src="/static/js/lib/jquery.json-2.4.min.js"></script>
+  <script src="/static/js/lib/jquery.websocket-0.0.1.js"></script>
+  <script src="/static/js/cheesy-websocket.js"></script>
+  <script src="/static/js/match_timing.js"></script>
+  <script src="/static/js/field_monitor_display.js"></script>
+</html>
+{{end}}
+
+{{define "fmRow"}}
+<div class="position-row center">
+  <div class="left-position center reversible-left">{{.leftPosition}}</div>
+  {{template "fmTeam" dict "side" "left" "position" .leftPosition}}
+  {{template "fmTeam" dict "side" "right" "position" .rightPosition}}
+  <div class="right-position center reversible-right">{{.rightPosition}}</div>
+</div>
+{{end}}
+
+{{define "fmTeam"}}
+<div id="{{.side}}Team{{.position}}" class="team team-{{.side}}">
+  <div id="{{.side}}Team{{.position}}Id" class="team-id center"></div>
+  <div class="team-box-row">
+    <div id="{{.side}}Team{{.position}}Ethernet" class="team-box center"
+      title="Driver station Ethernet connected&#10;Shows the driver-station-to-robot trip time in ms once linked">ETH
+    </div>
+    <div id="{{.side}}Team{{.position}}Ds" class="team-box center"
+      title="Driver station software running&#10;Shows the missed packet count">DS
+    </div>
+    <div id="{{.side}}Team{{.position}}Radio" class="team-box center" title="Robot radio"><i></i></div>
+    <div id="{{.side}}Team{{.position}}Robot" class="team-box center"
+      title="Robot connected&#10;Shows seconds since it last was"></div>
+    <div id="{{.side}}Team{{.position}}Battery" class="team-box center" title="Battery voltage"></div>
+    <div id="{{.side}}Team{{.position}}Stats" class="team-box center team-stats"
+      title="Bandwidth (Mbits/s), trip time (ms), and missed packet count">
+      <div class="team-stats-row">
+        <div class="team-bandwidth">BWU <span id="{{.side}}Team{{.position}}Bandwidth"></span></div>
+      </div>
+      <div class="team-stats-row">
+        <div class="team-trip-time">TT <span id="{{.side}}Team{{.position}}TripTime"></span></div>&nbsp;&nbsp;
+      </div>
+      <div class="team-stats-row">
+        <div class="team-missed-packets">MP <span id="{{.side}}Team{{.position}}MissedPackets"></span></div>
+      </div>
+    </div>
+    {{/* Bypassed, stopped, or -- the fork-local case -- reporting an e-stop wiring fault,
+         which outranks the stop it causes because only one of the two is fixed by
+         releasing the button. */}}
+    <div id="{{.side}}Team{{.position}}Bypass" class="team-box center"
+      title="Emergency-stopped, bypassed, or a stop wiring fault"></div>
+  </div>
+</div>
+{{end}}

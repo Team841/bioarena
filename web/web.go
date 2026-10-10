@@ -145,6 +145,8 @@ func (web *Web) newHandler() http.Handler {
 	// keyboard to clear a login prompt with.
 	mux.HandleFunc("GET /audience_display", web.audienceDisplayHandler)
 	mux.HandleFunc("GET /audience_display/websocket", web.audienceDisplayWebsocketHandler)
+	mux.HandleFunc("GET /field_monitor", web.fieldMonitorHandler)
+	mux.HandleFunc("GET /field_monitor/websocket", web.fieldMonitorWebsocketHandler)
 	mux.HandleFunc("GET /login", web.loginHandler)
 	mux.HandleFunc("POST /login", web.loginPostHandler)
 	mux.HandleFunc("GET /match_play", web.matchPlayHandler)

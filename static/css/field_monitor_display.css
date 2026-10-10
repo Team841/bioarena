@@ -188,3 +188,19 @@ textarea {
   color: #2080ff;
 }
 
+/* Lost the field. Amber for the same reason as the match panel's: nothing is wrong with
+   the field, this end simply cannot see it, and red here would compete with the status
+   boxes below, where red means a robot problem. */
+.fm-offline {
+  padding: 0.6vw 0;
+  text-align: center;
+  font-weight: bold;
+  letter-spacing: 0.1vw;
+  text-transform: uppercase;
+  font-size: 1.4vw;
+  color: #1a1a1a;
+  background: #fbbf24;
+}
+.fm-offline[hidden] {
+  display: none;
+}
