@@ -235,6 +235,27 @@ func TestSetupSettingsRejectsBadRelayPins(t *testing.T) {
 	assert.Equal(t, 303, recorder.Code)
 }
 
+// The panel field e-stop ticks are off until set, and stick once they are: a panel built
+// without the button must never have it counted by default.
+func TestSetupSettingsPanelFieldEStop(t *testing.T) {
+	web := setupTestWeb(t)
+
+	recorder := web.getHttpResponse("/setup/settings")
+	assert.Contains(t, recorder.Body.String(), `name="blueEStopPanelFieldEStop"`)
+	assert.False(t, web.arena.EventSettings.RedEStopPanelFieldEStop)
+	assert.False(t, web.arena.EventSettings.BlueEStopPanelFieldEStop)
+
+	recorder = web.postHttpResponse("/setup/settings", "name=Test&blueEStopPanelFieldEStop=on")
+	assert.Equal(t, 303, recorder.Code)
+	saved, err := web.arena.Database.GetEventSettings()
+	assert.Nil(t, err)
+	assert.False(t, saved.RedEStopPanelFieldEStop)
+	assert.True(t, saved.BlueEStopPanelFieldEStop)
+
+	recorder = web.getHttpResponse("/setup/settings")
+	assert.Regexp(t, `name="blueEStopPanelFieldEStop"\s+checked`, recorder.Body.String())
+}
+
 func (web *Web) postFileHttpResponse(path string, paramName string, file *bytes.Buffer) *httptest.ResponseRecorder {
 	body := new(bytes.Buffer)
 	writer := multipart.NewWriter(body)

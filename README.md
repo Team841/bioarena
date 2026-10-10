@@ -842,14 +842,16 @@ normally-closed contact by default:
 | station2_astop     | R2 or B2 (a-stop)     | 23         |
 | station3_estop     | R3 or B3 (e-stop)     | 13         |
 | station3_astop     | R3 or B3 (a-stop)     | 25         |
-| field_estop        | all stations (e-stop) | 6          |
+| field_estop        | all stations (e-stop) | 6, optional: honoured only when ticked in Settings |
 
 Wiring: two conductors per button, common GND and the button's NC contact, with the Pi's
 internal pull-up on the GPIO line. Released reads LOW, pressed reads HIGH. A single contact
 cannot tell a pressed button from a cut wire, and NC is the contact that errs safe: broken
 wiring reads as a press and stops the station, where on NO it would read as released and
-lose the button. A panel with no field e-stop button fitted needs `field_estop: 0` in its
-configuration, or that unwired pin reads as pressed and stops every station. Any e-stop can
+lose the button. The panel field e-stop is optional: the panel always reads pin 31, and the
+field controller ignores it unless that panel is ticked as having one under Arena → Settings
+→ Field → E-Stop Panels, off by default. On NC an empty pin reads as pressed, and this input
+stops every station, so tick it only with the button fitted. Any e-stop can
 be upgraded to dual-channel, which reports broken wiring as a fault, by wiring its NO
 contact as well — see
 [docs/hardware-wiring.md](docs/hardware-wiring.md#6-wiring-an-e-stop-panel-pi).

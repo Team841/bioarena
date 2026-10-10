@@ -241,7 +241,7 @@ Each panel Pi uses 7 GPIO lines — one per button — plus shared grounds. The 
 
 ![E-stop panel Pi GPIO header: the seven buttons on pins 7, 13, 16, 22, 31, 32 and 33, grounds, and the four pins reserved for an NO upgrade](assets/estop-panel-pi-header.svg)
 
-Station 1 is R1 on the red panel and B1 on the blue one; the field e-stop on either panel stops all six stations. A button that is not fitted reads as pressed, because its pin floats up to the pull-up, so a panel with no field e-stop needs `field_estop: 0` in its configuration or every station stays stopped. A button that *is* fitted and has come loose does the same, which is the point.
+Station 1 is R1 on the red panel and B1 on the blue one; the field e-stop on either panel stops all six stations. A configured button that is not fitted reads as pressed, because its pin floats up to the pull-up — the same as one fitted and come loose, which is the point. The panel field e-stop is the exception: it is optional and stops all six stations, so the field controller ignores it unless that panel is ticked as having one, under **Arena → Settings → Field → E-Stop Panels**. The panel reads pin 31 either way; fitting the button is just the tick.
 
 The last column is reserved, not wired: leave those pins free and an e-stop can go dual-channel later by wiring its NO contact there and adding a `no:` pin to its configuration, with nothing else moving. BCM 16 and 26 are left free as well.
 
@@ -507,6 +507,7 @@ For the main Pi field e-stop, and any panel e-stop wired dual-channel:
 | Symptom | Likely cause | Fix |
 |---------|-------------|-----|
 | A station stays stopped with the button released | Single-NC wiring open somewhere: broken conductor, loose terminal, the wrong GPIO pin, or a button configured but not fitted | Check continuity from the NC terminal to its GPIO pin and from the other terminal to Pi GND; confirm the pin against [section 6](#6-wiring-an-e-stop-panel-pi). An input with no button needs `0` in the configuration |
+| Every station stopped at once | A panel ticked as having a field e-stop with no button fitted, or a configured panel that is not answering | Untick **Has a Field E-Stop** for a panel without the button; clear the address of a panel that is not installed, both under Arena → Settings → Field |
 | Released reads stopped and pressed reads clear | The configuration and the contact block disagree: NO block wired on an NC configuration, or the other way round | Move the conductor to the NC block, or fix the configuration to match. A panel deployed before the NC default still has a single-NO configuration |
 | Pressing an e-stop does nothing; it stays `state:0` | On an NC configuration, the pin is held LOW by something other than the button: the conductor shorted to ground, or landed on a GND terminal | Trace the conductor; it should only reach ground through the closed contact |
 | The wrong station stops | Two stations' conductors swapped at the terminal strip | Swap them back; label both ends |
@@ -528,7 +529,7 @@ Reading raw pin values on a panel Pi, with the service stopped so it is not hold
 gpioget -B pull-up gpiochip0 4 27 12 23 13 25 6
 ```
 
-With every button released, that prints `0 0 0 0 0 0 0`, in the order of the table in [section 6](#6-wiring-an-e-stop-panel-pi); a pressed button, or a broken wire, reads `1` in its position. The `-B pull-up` matters: pins BCM 9–27 power up with an internal pull-*down*, so a line read without it reads 0 regardless of what is connected. For a dual-channel e-stop, read its NC pin too — `gpioget -B pull-up gpiochip0 17 4` prints `0 1` released.
+With every button released, that prints `0` for every fitted button, in the order of the table in [section 6](#6-wiring-an-e-stop-panel-pi); a pressed button, or a broken wire, reads `1` in its position. Pin 6 reads `1` with no field e-stop fitted, which is expected: the field controller ignores it unless the panel is ticked as having one. The `-B pull-up` matters: pins BCM 9–27 power up with an internal pull-*down*, so a line read without it reads 0 regardless of what is connected. For a dual-channel e-stop, read its NC pin too — `gpioget -B pull-up gpiochip0 17 4` prints `0 1` released.
 
 ---
 

@@ -1,6 +1,9 @@
 package field
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 
@@ -116,6 +119,42 @@ func pollPanels(arena *Arena) {
 				arena.handlePanelInput(station, input)
 			}
 		}
+	}
+}
+
+// A panel's field e-stop stops all six stations, and on a normally-closed input an empty
+// pin reads as pressed. So it counts only once that panel is ticked as having the button:
+// until then a panel built without one must not hold the field.
+func TestPanelFieldEStopHonouredOnlyWhenTicked(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(hardware.PanelSnapshot{
+			Alliance: "blue",
+			AgeMs:    5,
+			Inputs: []hardware.InputState{
+				{Station: "B1", State: hardware.StopOK},
+				{Station: "all", State: hardware.StopActive},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	arena := setupTestArena(t)
+	arena.EventSettings.BlueEStopPanelAddress = srv.URL
+	assert.Nil(t, arena.Database.UpdateEventSettings(arena.EventSettings))
+	assert.Nil(t, arena.LoadSettings())
+
+	pollPanels(arena)
+	for _, station := range allStationNames {
+		assert.False(t, arena.AllianceStations[station].EStop.Load(), "unticked: %s must not stop", station)
+	}
+
+	arena.EventSettings.BlueEStopPanelFieldEStop = true
+	assert.Nil(t, arena.Database.UpdateEventSettings(arena.EventSettings))
+	assert.Nil(t, arena.LoadSettings())
+
+	pollPanels(arena)
+	for _, station := range allStationNames {
+		assert.True(t, arena.AllianceStations[station].EStop.Load(), "ticked: %s must stop", station)
 	}
 }
 

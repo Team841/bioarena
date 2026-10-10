@@ -62,6 +62,8 @@ func (web *Web) settingsPostHandler(w http.ResponseWriter, r *http.Request) {
 	eventSettings.FieldEStopNcPin, _ = strconv.Atoi(r.PostFormValue("fieldEStopNcPin"))
 	eventSettings.RedEStopPanelAddress = r.PostFormValue("redEStopPanelAddress")
 	eventSettings.BlueEStopPanelAddress = r.PostFormValue("blueEStopPanelAddress")
+	eventSettings.RedEStopPanelFieldEStop = r.PostFormValue("redEStopPanelFieldEStop") == "on"
+	eventSettings.BlueEStopPanelFieldEStop = r.PostFormValue("blueEStopPanelFieldEStop") == "on"
 
 	eventSettings.HubLedsAddress = strings.TrimSpace(r.PostFormValue("hubLedsAddress"))
 	eventSettings.HubLedsArtNet = r.PostFormValue("hubLedsArtNet") == "on"

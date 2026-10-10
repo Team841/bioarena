@@ -128,8 +128,39 @@ func TestNetworkEStopPanelNoConfiguredInputsFaults(t *testing.T) {
 	assertAllFaulted(t, panel.Poll(), FaultUnreachable, "B1", "B2", "B3")
 }
 
+// The field e-stop is honoured only on a panel ticked as having the button. Off, it is
+// dropped whatever the panel reports -- on an NC input with no button fitted, that is a
+// permanent press -- and the station inputs come through untouched.
+func TestNetworkEStopPanelFieldEStopOnlyWhenEnabled(t *testing.T) {
+	inputs := []InputState{
+		{Station: "B1", State: StopOK},
+		{Station: "all", State: StopActive},
+	}
+	srv := snapshotServer(t, PanelSnapshot{Alliance: "blue", AgeMs: 5, Inputs: inputs})
+	defer srv.Close()
+
+	off := NewNetworkEStopPanel(srv.URL, "blue")
+	assert.Equal(t, []InputState{{Station: "B1", State: StopOK}}, off.Poll(), "off by default")
+	assert.Equal(t, PanelStatusActive, off.Status(), "a panel whose field e-stop is ignored is still up")
+
+	on := NewNetworkEStopPanel(srv.URL, "blue").WithFieldEStop(true)
+	assert.Equal(t, inputs, on.Poll())
+}
+
+// A panel reporting nothing but an ignored field e-stop answered, so it is not faulted as
+// one reporting nothing at all.
+func TestNetworkEStopPanelOnlyIgnoredFieldEStopIsQuiet(t *testing.T) {
+	srv := snapshotServer(t, PanelSnapshot{Alliance: "red", AgeMs: 5,
+		Inputs: []InputState{{Station: "all", State: StopActive}}})
+	defer srv.Close()
+
+	panel := NewNetworkEStopPanel(srv.URL, "red")
+	assert.Empty(t, panel.Poll())
+	assert.Equal(t, PanelStatusActive, panel.Status())
+}
+
 func TestNetworkEStopPanelBareHostNormalised(t *testing.T) {
-	want := []InputState{{Station: "all", State: StopOK}}
+	want := []InputState{{Station: "R1", State: StopOK}}
 	srv := snapshotServer(t, PanelSnapshot{Alliance: "red", AgeMs: 1, Inputs: want})
 	defer srv.Close()
 

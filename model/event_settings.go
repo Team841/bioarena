@@ -44,6 +44,11 @@ type EventSettings struct {
 	SwitchDnsServer       string
 	RedEStopPanelAddress  string
 	BlueEStopPanelAddress string
+	// RedEStopPanelFieldEStop and BlueEStopPanelFieldEStop are whether that panel has a
+	// field e-stop button fitted. Off, its field e-stop input is ignored: the panel reads the
+	// pin regardless, and on a normally-closed input an empty pin reads as pressed.
+	RedEStopPanelFieldEStop  bool
+	BlueEStopPanelFieldEStop bool
 	// FieldEStopPin is the BCM pin carrying the field e-stop's NO contact, and
 	// FieldEStopNcPin the NC contact. Both set, the two channels are compared and
 	// a disagreement is reported as a wiring fault; FieldEStopNcPin left at 0

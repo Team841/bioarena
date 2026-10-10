@@ -256,10 +256,12 @@ func (arena *Arena) LoadSettings() error {
 
 	arena.EStopPanels = nil
 	if addr := settings.RedEStopPanelAddress; addr != "" {
-		arena.EStopPanels = append(arena.EStopPanels, hardware.NewNetworkEStopPanel(addr, "red"))
+		arena.EStopPanels = append(arena.EStopPanels,
+			hardware.NewNetworkEStopPanel(addr, "red").WithFieldEStop(settings.RedEStopPanelFieldEStop))
 	}
 	if addr := settings.BlueEStopPanelAddress; addr != "" {
-		arena.EStopPanels = append(arena.EStopPanels, hardware.NewNetworkEStopPanel(addr, "blue"))
+		arena.EStopPanels = append(arena.EStopPanels,
+			hardware.NewNetworkEStopPanel(addr, "blue").WithFieldEStop(settings.BlueEStopPanelFieldEStop))
 	}
 
 	arena.applyHubLedSettings(settings)

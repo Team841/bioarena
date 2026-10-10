@@ -29,6 +29,12 @@ type NetworkEStopPanel struct {
 	stations [3]string
 	client   *http.Client
 
+	// fieldEStop is whether this panel's field e-stop -- the input that stops all six
+	// stations -- is honoured. Off unless the panel is ticked as having the button fitted,
+	// because the panel reads its pin regardless, and on a normally-closed input an empty
+	// pin reads as pressed: a panel built without the button would hold the whole field.
+	fieldEStop bool
+
 	// status is the outcome of the most recent Poll, for the badge on the operating page.
 	// Poll already fails closed by synthesising faults, so the field is safe either way;
 	// this exists so an operator can see at a glance that a panel is up, rather than
@@ -94,6 +100,13 @@ func NewNetworkEStopPanel(host, alliance string) *NetworkEStopPanel {
 	return panel
 }
 
+// WithFieldEStop sets whether this panel's field e-stop is honoured, and returns the panel.
+// Without it the input is dropped on every poll, whatever the panel reports for it.
+func (n *NetworkEStopPanel) WithFieldEStop(enabled bool) *NetworkEStopPanel {
+	n.fieldEStop = enabled
+	return n
+}
+
 // Poll calls GET /poll on the panel Pi and returns the state of every input it
 // reports. On any failure it synthesises a fault for each of its stations.
 func (n *NetworkEStopPanel) Poll() []InputState {
@@ -124,7 +137,18 @@ func (n *NetworkEStopPanel) Poll() []InputState {
 		return n.faulted(FaultUnreachable)
 	}
 	n.status.Store(PanelStatusActive)
-	return snapshot.Inputs
+	if n.fieldEStop {
+		return snapshot.Inputs
+	}
+	// Dropped after the empty check above, not before: a panel with no inputs at all
+	// still faults, but one whose only stop is a field e-stop nobody fitted is just quiet.
+	inputs := make([]InputState, 0, len(snapshot.Inputs))
+	for _, input := range snapshot.Inputs {
+		if input.Station != "all" {
+			inputs = append(inputs, input)
+		}
+	}
+	return inputs
 }
 
 // faulted builds a fault report for each e-stop this panel is responsible for.

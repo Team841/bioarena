@@ -197,13 +197,39 @@ UI for configuring event settings.
               <div class="row mb-3">
                 <label class="col-lg-6 control-label">Red E-Stop Panel Address</label>
                 <div class="col-lg-6">
-                  <input type="text" class="form-control" name="redEStopPanelAddress" value="{{.RedEStopPanelAddress}}" placeholder="10.0.100.50">
+                  <input type="text" class="form-control" name="redEStopPanelAddress" value="{{.RedEStopPanelAddress}}" placeholder="http://10.0.100.11:8765">
+                </div>
+              </div>
+              <div class="row mb-3">
+                <label class="col-lg-6 control-label" for="redEStopPanelFieldEStop">Red Panel Has a Field E-Stop</label>
+                <div class="col-lg-1 checkbox">
+                  <input type="checkbox" id="redEStopPanelFieldEStop" name="redEStopPanelFieldEStop"
+                    {{if .RedEStopPanelFieldEStop}} checked{{end}}>
+                </div>
+                <div class="col-lg-5">
+                  <small class="text-body-secondary">
+                    Tick only with the button fitted on pin 31. It stops all six stations, and an empty pin reads
+                    as pressed.
+                  </small>
                 </div>
               </div>
               <div class="row mb-3">
                 <label class="col-lg-6 control-label">Blue E-Stop Panel Address</label>
                 <div class="col-lg-6">
-                  <input type="text" class="form-control" name="blueEStopPanelAddress" value="{{.BlueEStopPanelAddress}}" placeholder="10.0.100.51">
+                  <input type="text" class="form-control" name="blueEStopPanelAddress" value="{{.BlueEStopPanelAddress}}" placeholder="http://10.0.100.12:8765">
+                </div>
+              </div>
+              <div class="row mb-3">
+                <label class="col-lg-6 control-label" for="blueEStopPanelFieldEStop">Blue Panel Has a Field E-Stop</label>
+                <div class="col-lg-1 checkbox">
+                  <input type="checkbox" id="blueEStopPanelFieldEStop" name="blueEStopPanelFieldEStop"
+                    {{if .BlueEStopPanelFieldEStop}} checked{{end}}>
+                </div>
+                <div class="col-lg-5">
+                  <small class="text-body-secondary">
+                    Tick only with the button fitted on pin 31. It stops all six stations, and an empty pin reads
+                    as pressed.
+                  </small>
                 </div>
               </div>
             </fieldset>

@@ -26,4 +26,7 @@ pins:
   station2_astop: {nc: 23}  # phys 16
   station3_estop: {nc: 13}  # phys 33
   station3_astop: {nc: 25}  # phys 22
+  # Optional button. Read whether or not one is fitted -- on NC an empty pin reads as
+  # pressed -- and honoured by the field controller only when this panel is ticked as
+  # having one under Arena > Settings > Field > E-Stop Panels. Nothing to change here.
   field_estop: {nc: 6}      # phys 31

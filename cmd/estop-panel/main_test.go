@@ -84,6 +84,9 @@ func TestShippedDefaultConfig(t *testing.T) {
 	assert.Equal(t, 23, c.Pins.Station2AStop.NC)
 	assert.Equal(t, 13, c.Pins.Station3EStop.NC)
 	assert.Equal(t, 25, c.Pins.Station3AStop.NC)
+
+	// Read always, fitted or not. Whether it counts is the field controller's setting, so
+	// fitting the button is a tick in a browser rather than an edit on the panel.
 	assert.Equal(t, 6, c.Pins.FieldEStop.NC)
 }
 
