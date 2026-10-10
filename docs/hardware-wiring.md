@@ -237,6 +237,8 @@ Each panel Pi uses 7 GPIO lines — one per button — plus shared grounds. The 
 | Field E-Stop (panel) | `field_estop` | 6 (31) | 5 (29) |
 | Common GND | — | phys 6, 9, 14, 20, 25, 30, 34, 39 | — |
 
+![E-stop panel Pi GPIO header: the seven buttons on pins 7, 13, 16, 22, 31, 32 and 33, grounds, and the four pins reserved for NC](assets/estop-panel-pi-header.svg)
+
 Station 1 is R1 on the red panel and B1 on the blue one; the field e-stop on either panel stops all six stations. A button left unwired reads as released, so an absent field e-stop costs nothing — but it also means a button that *is* fitted and has come loose looks the same.
 
 The NC column is reserved, not wired: leave those pins free and an e-stop can go dual-channel later by adding one conductor and an `nc:` pin to its configuration, with nothing else moving. BCM 16 and 26 are left free as well.

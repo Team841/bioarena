@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="398" viewBox="0 0 680 398" role="img" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+<title>E-stop panel Pi: GPIO header pins, default single NO wiring</title>
+<desc>The Raspberry Pi 40-pin header seen from above with pin 1 on the left. Station 1 e-stop on pin 7 (BCM 4), station 1 a-stop on pin 13 (BCM 27), station 2 e-stop on pin 32 (BCM 12), station 2 a-stop on pin 16 (BCM 23), station 3 e-stop on pin 33 (BCM 13), station 3 a-stop on pin 22 (BCM 25), field e-stop on pin 31 (BCM 6). Ground on pins 6, 9, 14, 20, 25, 30, 34 and 39. Pins 11, 15, 18 and 29 are reserved for NC contacts if the e-stops are upgraded to dual-channel.</desc>
+<rect x="0" y="0" width="680" height="398" rx="8" fill="#FFFFFF"/>
+<text x="40" y="36" font-size="15" font-weight="600" fill="#2C2C2A">E-stop panel Pi: GPIO header</text>
+<g font-size="12" fill="#5F5E5A">
+<text x="40" y="66">Pin 1 end</text>
+<text x="612" y="66" text-anchor="end">USB and Ethernet end</text>
+<text x="326" y="88" text-anchor="middle">Top row (even pins) runs along the board edge</text>
+</g>
+<rect x="40" y="124" width="572" height="60" rx="4" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.75"/>
+<g fill="none" stroke="#888780" stroke-width="0.75">
+<circle cx="60" cy="140" r="9"/><circle cx="88" cy="140" r="9"/><circle cx="144" cy="140" r="9"/><circle cx="172" cy="140" r="9"/><circle cx="200" cy="140" r="9"/><circle cx="368" cy="140" r="9"/><circle cx="396" cy="140" r="9"/><circle cx="424" cy="140" r="9"/><circle cx="536" cy="140" r="9"/><circle cx="564" cy="140" r="9"/><circle cx="592" cy="140" r="9"/>
+<circle cx="60" cy="168" r="9"/><circle cx="88" cy="168" r="9"/><circle cx="116" cy="168" r="9"/><circle cx="284" cy="168" r="9"/><circle cx="312" cy="168" r="9"/><circle cx="340" cy="168" r="9"/><circle cx="368" cy="168" r="9"/><circle cx="424" cy="168" r="9"/><circle cx="536" cy="168" r="9"/><circle cx="564" cy="168" r="9"/>
+</g>
+<g fill="#B4B2A9" stroke="#444441" stroke-width="1.5">
+<circle cx="116" cy="140" r="9"/><circle cx="228" cy="140" r="9"/><circle cx="312" cy="140" r="9"/><circle cx="452" cy="140" r="9"/><circle cx="508" cy="140" r="9"/>
+<circle cx="172" cy="168" r="9"/><circle cx="396" cy="168" r="9"/><circle cx="592" cy="168" r="9"/>
+</g>
+<g fill="none" stroke="#444441" stroke-width="1.5" stroke-dasharray="3 2">
+<circle cx="200" cy="168" r="9"/><circle cx="256" cy="168" r="9"/><circle cx="284" cy="140" r="9"/><circle cx="452" cy="168" r="9"/>
+</g>
+<g font-size="12" font-weight="600" text-anchor="middle" dominant-baseline="central">
+<circle cx="144" cy="168" r="11" fill="#F0997B" stroke="#993C1D" stroke-width="0.75"/><text x="144" y="168" fill="#4A1B0C">E1</text>
+<circle cx="228" cy="168" r="11" fill="#5DCAA5" stroke="#0F6E56" stroke-width="0.75"/><text x="228" y="168" fill="#04342C">A1</text>
+<circle cx="480" cy="140" r="11" fill="#F0997B" stroke="#993C1D" stroke-width="0.75"/><text x="480" y="140" fill="#4A1B0C">E2</text>
+<circle cx="256" cy="140" r="11" fill="#5DCAA5" stroke="#0F6E56" stroke-width="0.75"/><text x="256" y="140" fill="#04342C">A2</text>
+<circle cx="508" cy="168" r="11" fill="#F0997B" stroke="#993C1D" stroke-width="0.75"/><text x="508" y="168" fill="#4A1B0C">E3</text>
+<circle cx="340" cy="140" r="11" fill="#5DCAA5" stroke="#0F6E56" stroke-width="0.75"/><text x="340" y="140" fill="#04342C">A3</text>
+<circle cx="480" cy="168" r="11" fill="#F0997B" stroke="#993C1D" stroke-width="0.75"/><text x="480" y="168" fill="#4A1B0C">F</text>
+</g>
+<g font-size="12" fill="#5F5E5A" text-anchor="middle">
+<text x="60" y="112">2</text><text x="88" y="112">4</text><text x="116" y="112">6</text><text x="144" y="112">8</text><text x="172" y="112">10</text><text x="200" y="112">12</text><text x="228" y="112">14</text><text x="256" y="112">16</text><text x="284" y="112">18</text><text x="312" y="112">20</text><text x="340" y="112">22</text><text x="368" y="112">24</text><text x="396" y="112">26</text><text x="424" y="112">28</text><text x="452" y="112">30</text><text x="480" y="112">32</text><text x="508" y="112">34</text><text x="536" y="112">36</text><text x="564" y="112">38</text><text x="592" y="112">40</text>
+<text x="60" y="206">1</text><text x="88" y="206">3</text><text x="116" y="206">5</text><text x="144" y="206">7</text><text x="172" y="206">9</text><text x="200" y="206">11</text><text x="228" y="206">13</text><text x="256" y="206">15</text><text x="284" y="206">17</text><text x="312" y="206">19</text><text x="340" y="206">21</text><text x="368" y="206">23</text><text x="396" y="206">25</text><text x="424" y="206">27</text><text x="452" y="206">29</text><text x="480" y="206">31</text><text x="508" y="206">33</text><text x="536" y="206">35</text><text x="564" y="206">37</text><text x="592" y="206">39</text>
+</g>
+<g font-size="12" dominant-baseline="central">
+<circle cx="50" cy="244" r="10" fill="#F0997B" stroke="#993C1D" stroke-width="0.75"/><text x="50" y="244" text-anchor="middle" font-weight="600" fill="#4A1B0C">E1</text><text x="68" y="244" fill="#2C2C2A">Station 1 e-stop · BCM 4 · pin 7</text>
+<circle cx="360" cy="244" r="10" fill="#5DCAA5" stroke="#0F6E56" stroke-width="0.75"/><text x="360" y="244" text-anchor="middle" font-weight="600" fill="#04342C">A1</text><text x="378" y="244" fill="#2C2C2A">Station 1 a-stop · BCM 27 · pin 13</text>
+<circle cx="50" cy="270" r="10" fill="#F0997B" stroke="#993C1D" stroke-width="0.75"/><text x="50" y="270" text-anchor="middle" font-weight="600" fill="#4A1B0C">E2</text><text x="68" y="270" fill="#2C2C2A">Station 2 e-stop · BCM 12 · pin 32</text>
+<circle cx="360" cy="270" r="10" fill="#5DCAA5" stroke="#0F6E56" stroke-width="0.75"/><text x="360" y="270" text-anchor="middle" font-weight="600" fill="#04342C">A2</text><text x="378" y="270" fill="#2C2C2A">Station 2 a-stop · BCM 23 · pin 16</text>
+<circle cx="50" cy="296" r="10" fill="#F0997B" stroke="#993C1D" stroke-width="0.75"/><text x="50" y="296" text-anchor="middle" font-weight="600" fill="#4A1B0C">E3</text><text x="68" y="296" fill="#2C2C2A">Station 3 e-stop · BCM 13 · pin 33</text>
+<circle cx="360" cy="296" r="10" fill="#5DCAA5" stroke="#0F6E56" stroke-width="0.75"/><text x="360" y="296" text-anchor="middle" font-weight="600" fill="#04342C">A3</text><text x="378" y="296" fill="#2C2C2A">Station 3 a-stop · BCM 25 · pin 22</text>
+<circle cx="50" cy="322" r="10" fill="#F0997B" stroke="#993C1D" stroke-width="0.75"/><text x="50" y="322" text-anchor="middle" font-weight="600" fill="#4A1B0C">F</text><text x="68" y="322" fill="#2C2C2A">Field e-stop, all six · BCM 6 · pin 31</text>
+<circle cx="360" cy="322" r="9" fill="#B4B2A9" stroke="#444441" stroke-width="1.5"/><text x="378" y="322" fill="#2C2C2A">GND · any grey pin</text>
+<circle cx="50" cy="348" r="9" fill="none" stroke="#444441" stroke-width="1.5" stroke-dasharray="3 2"/><text x="68" y="348" fill="#2C2C2A">Reserved for NC if upgraded to dual-channel: pins 11, 15, 18, 29. Leave free.</text>
+</g>
+<text x="40" y="380" font-size="12" fill="#5F5E5A">Default pinout from cmd/estop-panel/estop-panel.yaml, the same on both panels. Station 1 is R1 or B1.</text>
+</svg>

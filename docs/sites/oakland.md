@@ -41,8 +41,8 @@ next person does not try to renumber Oakland to keep the two reachable at once.
 | Field controller Pi | `10.0.100.5` |
 | Switch (management) | `10.0.100.3` — set as **Switch Address** under Arena → Settings, with its Telnet password |
 | Field access point | `10.0.100.2` — set as **AP Address** under Arena → Settings. Backup `192.168.69.1`, where it turns up after a reset; the Pi and switch carry addresses in that subnet so the fallback stays reachable |
-| Red e-stop panel | `10.0.100.11` — planned, not yet installed |
-| Blue e-stop panel | `10.0.100.12` — planned, not yet installed |
+| Red e-stop panel | `10.0.100.11` — being wired |
+| Blue e-stop panel | `10.0.100.12` — being wired |
 | Art-Net node | `10.0.100.100` — **TBD**, Hub LEDs not decided |
 
 ## Hardware
@@ -88,13 +88,21 @@ The service account needs the `gpio` group or it cannot open `/dev/gpiochip0` at
 `deploy-fms.sh` handles that, but group membership is taken at process start, so adding it
 by hand needs a restart rather than a settings save.
 
-**E-stop panels — planned, not yet installed.** One Pi per alliance, red at `10.0.100.11`
+**E-stop panels — being wired.** One Pi per alliance, red at `10.0.100.11`
 and blue at `10.0.100.12`, each powered over PoE from the switch via a PoE HAT. Deploy with
 `./deploy-panel.sh <bench-address> red`, where the argument is where the panel answers from
 your build machine and the alliance is what writes its static field address into the service
-file. Wiring and pin assignments are in
-[docs/hardware-wiring.md](../hardware-wiring.md); once installed, record this field's
-actual pin map here, since it need not match that document's example.
+file.
+
+Both panels are wired on the default pinout, every button a single normally-open contact,
+so the deploy's default configuration matches them and nothing is set by hand:
+
+![E-stop panel Pi GPIO header: the seven buttons on pins 7, 13, 16, 22, 31, 32 and 33, grounds, and the four pins reserved for NC](../assets/estop-panel-pi-header.svg)
+
+Station 1 is R1 on the red panel and B1 on the blue one. Each button is two wires, its pin
+and the shared ground bus, on the button's NO contact block. Full wiring notes are in
+[docs/hardware-wiring.md §6](../hardware-wiring.md#6-wiring-an-e-stop-panel-pi). If a panel
+is ever wired differently, record its actual pin map here.
 
 **Hub lights — undecided.** Two options under Arena → Settings → LEDs. A DMX gateway goes
 on Gi0/9 at `10.0.100.100`, inside the switch's excluded `.1`–`.125` range so a static there
