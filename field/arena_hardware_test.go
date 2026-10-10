@@ -6,10 +6,12 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/team841/bioarena/game"
 	"github.com/team841/bioarena/hardware"
+	"github.com/team841/bioarena/model"
 )
 
 // --- teleopShift ---
@@ -156,6 +158,74 @@ func TestPanelFieldEStopHonouredOnlyWhenTicked(t *testing.T) {
 	for _, station := range allStationNames {
 		assert.True(t, arena.AllianceStations[station].EStop.Load(), "ticked: %s must stop", station)
 	}
+}
+
+// --- latching a-stops ---
+
+// A latching a-stop pressed in AUTO stays pressed into teleop. The robot must come back at
+// teleop all the same: the a-stop is an AUTO-only stop, and the driver station keeps a
+// robot disabled for as long as it is sent the bit, so the bit stops at the end of AUTO.
+func TestLatchedAStopOnlyStopsAuto(t *testing.T) {
+	arena := setupTestArena(t)
+	panel := &recordingPanel{}
+	arena.EStopPanels = []hardware.EStopPanel{panel}
+
+	assert.Nil(t, arena.Database.CreateTeam(&model.Team{Id: 254}))
+	assert.Nil(t, arena.assignTeam(254, "R1"))
+	r1 := arena.AllianceStations["R1"]
+	r1.DsConn = &DriverStationConnection{TeamId: 254, RobotLinked: true}
+	for _, station := range allStationNames {
+		arena.AllianceStations[station].aStopReset = true
+		if station != "R1" {
+			arena.AllianceStations[station].Bypass.Store(true)
+		}
+	}
+
+	assert.Nil(t, arena.StartMatch())
+	arena.Update()
+	arena.MatchStartTime = time.Now().Add(-time.Duration(game.MatchTiming.WarmupDurationSec) * time.Second)
+	arena.Update()
+	assert.Equal(t, AutoPeriod, arena.MatchState)
+
+	// Pressed, and latched: the panel reports it pressed on every poll from here on.
+	panel.inputs = []hardware.InputState{{Station: "R1", IsAStop: true, State: hardware.StopActive}}
+	arena.Update() // the panel is polled after the tick's packet goes out; the next one carries it
+	arena.lastDsPacketTime = time.Unix(0, 0)
+	arena.Update()
+	assert.True(t, r1.DsConn.AStop)
+	assert.False(t, r1.DsConn.Enabled, "a-stopped in AUTO")
+
+	arena.MatchStartTime = time.Now().Add(-game.GetDurationToTeleopStart())
+	arena.Update()
+	arena.Update()
+	assert.Equal(t, TeleopPeriod, arena.MatchState)
+	arena.lastDsPacketTime = time.Unix(0, 0)
+	arena.Update()
+
+	assert.True(t, r1.AStop.Load(), "the button is still in")
+	assert.False(t, r1.DsConn.AStop, "but the driver station is no longer told so")
+	assert.True(t, r1.DsConn.Enabled, "and the robot is back for teleop")
+}
+
+// A latching a-stop left in from the last match blocks the next one, naming the station,
+// rather than letting it start with that robot sitting out the whole of AUTO.
+func TestLatchedAStopBlocksMatchStart(t *testing.T) {
+	arena := setupTestArena(t)
+	panel := &recordingPanel{
+		inputs: []hardware.InputState{{Station: "B2", IsAStop: true, State: hardware.StopActive}},
+	}
+	arena.EStopPanels = []hardware.EStopPanel{panel}
+	for _, station := range allStationNames {
+		arena.AllianceStations[station].Bypass.Store(true)
+		arena.AllianceStations[station].aStopReset = true
+	}
+
+	arena.Update()
+	assert.ErrorContains(t, arena.StartMatch(), "autonomous stop at B2 is still pressed")
+
+	panel.inputs = []hardware.InputState{{Station: "B2", IsAStop: true, State: hardware.StopOK}}
+	arena.Update()
+	assert.Nil(t, arena.StartMatch())
 }
 
 func TestEStopPanelPollSingleStation(t *testing.T) {

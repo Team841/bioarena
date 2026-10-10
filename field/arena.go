@@ -1193,6 +1193,13 @@ func (arena *Arena) checkAllianceStationsReady(stations ...string) error {
 		if allianceStation.EStop.Load() {
 			return fmt.Errorf("cannot start match while an emergency stop is active")
 		}
+		// A latching a-stop left in from the last match. Started anyway, that robot would sit
+		// out the whole of AUTO. Upstream's aStopReset below cannot catch it: that flag is
+		// only cleared by assigning a team on a field with a PLC, which this one does not
+		// have, so here it never trips.
+		if allianceStation.AStop.Load() {
+			return fmt.Errorf("cannot start match while the autonomous stop at %s is still pressed", station)
+		}
 		if !allianceStation.aStopReset {
 			return fmt.Errorf("cannot start match if an autonomous stop has not been reset since the previous match")
 		}
@@ -1214,7 +1221,11 @@ func (arena *Arena) sendDsPacket(auto bool, enabled bool) {
 			dsConn.Enabled = enabled && !allianceStation.EStop.Load() && !(auto && allianceStation.AStop.Load()) &&
 				!allianceStation.Bypass.Load()
 			dsConn.EStop = allianceStation.EStop.Load()
-			dsConn.AStop = allianceStation.AStop.Load()
+			// AUTO only, like the enable decision above. Upstream sends the bit whenever the
+			// station's a-stop reads pressed, which a momentary button never is by teleop; a
+			// latching one held in is, and the driver station keeps the robot disabled for as
+			// long as it sees the bit -- through the whole of teleop.
+			dsConn.AStop = auto && allianceStation.AStop.Load()
 			err := dsConn.update(arena)
 			if err != nil {
 				log.Printf("Unable to send driver station packet for team %d.", allianceStation.Team.Id)
