@@ -207,6 +207,73 @@ func TestLatchedAStopOnlyStopsAuto(t *testing.T) {
 	assert.True(t, r1.DsConn.Enabled, "and the robot is back for teleop")
 }
 
+// --- station e-stop versus field e-stop, mid-match ---
+
+// startMatchWithPanel starts a match with R1 and R2 connected and the rest bypassed, the given
+// panel polled, and the match in AUTO.
+func startMatchWithPanel(t *testing.T, panel *recordingPanel) *Arena {
+	t.Helper()
+	arena := setupTestArena(t)
+	arena.EStopPanels = []hardware.EStopPanel{panel}
+	for i, station := range []string{"R1", "R2"} {
+		teamId := 254 + i
+		assert.Nil(t, arena.Database.CreateTeam(&model.Team{Id: teamId}))
+		assert.Nil(t, arena.assignTeam(teamId, station))
+		arena.AllianceStations[station].DsConn = &DriverStationConnection{TeamId: teamId, RobotLinked: true}
+	}
+	for _, station := range allStationNames {
+		arena.AllianceStations[station].aStopReset = true
+		if station != "R1" && station != "R2" {
+			arena.AllianceStations[station].Bypass.Store(true)
+		}
+	}
+	assert.Nil(t, arena.StartMatch())
+	arena.Update()
+	arena.MatchStartTime = time.Now().Add(-time.Duration(game.MatchTiming.WarmupDurationSec) * time.Second)
+	arena.Update()
+	assert.Equal(t, AutoPeriod, arena.MatchState)
+	return arena
+}
+
+// One team's e-stop stops that robot, not the match: everyone else plays on, as upstream.
+// The stop stays latched after the button is reset, until the match is over.
+func TestStationEStopStopsOnlyThatRobot(t *testing.T) {
+	panel := &recordingPanel{}
+	arena := startMatchWithPanel(t, panel)
+
+	panel.inputs = []hardware.InputState{{Station: "R1", State: hardware.StopActive}}
+	arena.Update()
+	arena.lastDsPacketTime = time.Unix(0, 0)
+	arena.Update()
+	assert.Equal(t, AutoPeriod, arena.MatchState, "the match carries on")
+	assert.False(t, arena.matchAborted)
+	assert.True(t, arena.AllianceStations["R1"].EStop.Load())
+	assert.False(t, arena.AllianceStations["R1"].DsConn.Enabled, "R1 is stopped")
+	assert.True(t, arena.AllianceStations["R2"].DsConn.Enabled, "R2 is not")
+
+	// Button reset mid-match: still stopped, and still the same match.
+	panel.inputs = []hardware.InputState{{Station: "R1", State: hardware.StopOK}}
+	arena.lastDsPacketTime = time.Unix(0, 0)
+	arena.Update()
+	assert.Equal(t, AutoPeriod, arena.MatchState)
+	assert.True(t, arena.AllianceStations["R1"].EStop.Load(), "latched until the match ends")
+	assert.False(t, arena.AllianceStations["R1"].DsConn.Enabled)
+}
+
+// A panel's field e-stop is field-wide, and ends the match like the controller's own.
+func TestPanelFieldEStopEndsTheMatch(t *testing.T) {
+	panel := &recordingPanel{}
+	arena := startMatchWithPanel(t, panel)
+
+	panel.inputs = []hardware.InputState{{Station: "all", State: hardware.StopActive}}
+	arena.Update()
+	assert.Equal(t, PostMatch, arena.MatchState)
+	assert.True(t, arena.matchAborted)
+	for _, station := range allStationNames {
+		assert.True(t, arena.AllianceStations[station].EStop.Load(), station)
+	}
+}
+
 func TestEStopPanelPollSingleStation(t *testing.T) {
 	arena := setupTestArena(t)
 	arena.EStopPanels = []hardware.EStopPanel{&recordingPanel{

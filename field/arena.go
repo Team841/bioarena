@@ -834,6 +834,11 @@ func (arena *Arena) Update() {
 			for _, station := range stations {
 				arena.handlePanelInput(station, input)
 			}
+			// A panel's field e-stop ends the match, like the controller's own field e-stop
+			// above. A station's e-stop does not: it stops that robot only.
+			if input.Station == "all" && !input.IsAStop && input.Stopped() {
+				arena.abortMatchForStop()
+			}
 		}
 	}
 
@@ -1344,15 +1349,14 @@ func (arena *Arena) handlePanelInput(station string, input hardware.InputState) 
 		log.Printf("WARNING: Station %s e-stop wiring fault: %s", station, input.Fault)
 	}
 
-	wasStopped := allianceStation.EStop.Load()
+	// The station alone, as upstream does: that robot is disabled and stays so until the
+	// match ends, and the match carries on for everyone else. Aborting here ended the whole
+	// match on one team's button. A panel's field e-stop is what ends it -- see Update.
 	arena.handleTeamEStop(station, input.Stopped())
-	if input.Stopped() && !wasStopped {
-		arena.abortMatchForStop()
-	}
 }
 
-// abortMatchForStop aborts an in-progress match. It is a no-op outside a match,
-// which is what makes it safe to call on every rising edge of a stop.
+// abortMatchForStop aborts an in-progress match for a field-wide stop. It is a no-op
+// outside a match, which is what makes it safe to call on every poll a stop is held.
 func (arena *Arena) abortMatchForStop() {
 	switch arena.MatchState {
 	case StartMatch, WarmupPeriod, AutoPeriod, PausePeriod, TeleopPeriod:

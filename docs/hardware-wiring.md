@@ -496,6 +496,7 @@ For the main Pi field e-stop, and any panel e-stop wired dual-channel:
 - [ ] Open the bioarena web UI at `http://10.0.100.5:8080`.
 - [ ] Go to **Setup → Settings** and verify panel addresses and both field e-stop pins are saved.
 - [ ] Press an e-stop; the arena UI should show the station stopped immediately.
+- [ ] Press a station e-stop mid-match; that robot should stop and the match should carry on for everyone else. Reset the button: the robot stays stopped until the match ends.
 - [ ] Press the field e-stop mid-match; the match should abort and the overlay should appear.
 - [ ] Release the field e-stop and clear it from the UI; verify normal operation resumes.
 - [ ] With the field e-stop wiring faulted, confirm the **Clear** button refuses to clear it.
