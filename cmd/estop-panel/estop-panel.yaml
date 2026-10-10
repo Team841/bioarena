@@ -1,0 +1,25 @@
+# E-stop panel configuration -- the default every new panel is deployed with.
+#
+# deploy-panel.sh writes the alliance from its own argument and installs this only on a
+# panel that has no configuration yet, so changes made on a panel survive a redeploy. To
+# change one, edit /opt/estop-panel/estop-panel.yaml on the panel and restart estop-panel.
+#
+# Every input is a single normally-open contact: one conductor to the GPIO pin, one to the
+# shared ground. The NO pins are the same ones the dual-channel wiring uses, so adding the NC
+# contacts later is a matter of adding wires and an nc: pin -- {nc: 17, no: 4} -- with none
+# of the existing conductors moving. See docs/hardware-wiring.md section 6.
+#
+# A single NO contact cannot tell a released button from a cut wire: both read open. Press
+# every button before a session and watch its station stop on Match Play.
+alliance: "red"
+http_port: 8765
+gpio_chip: "gpiochip0"
+pins:
+  # BCM numbers, not physical pin numbers.
+  station1_estop: 4   # phys 7
+  station1_astop: 27  # phys 13
+  station2_estop: 12  # phys 32
+  station2_astop: 23  # phys 16
+  station3_estop: 13  # phys 33
+  station3_astop: 25  # phys 22
+  field_estop: 6      # phys 31

@@ -2,10 +2,12 @@
 // buttons. It samples GPIO pins on a local timer and serves the decoded state
 // of every configured input over HTTP so the main bioarena can poll it.
 //
-// E-stops are dual-channel: an NC and an NO contact on separate conductors,
-// sharing a common ground. Disagreement between the two channels is a wiring
-// fault, which the panel reports as its own state rather than silently
-// treating as "not pressed". A-stops stay single-channel.
+// Every input is a single normally-open contact by default, the a-stops always.
+// An e-stop can instead be wired dual-channel -- an NC and an NO contact on
+// separate conductors, sharing a common ground -- by giving it an nc pin. Then
+// disagreement between the two channels is a wiring fault, which the panel
+// reports as its own state rather than silently treating as "not pressed".
+// A single contact cannot do that: a cut wire reads as a released button.
 //
 // Sampling runs on a local ticker rather than inside the HTTP handler because
 // the discrepancy window that distinguishes a fault from a button in travel
@@ -36,9 +38,9 @@ const sampleInterval = 10 * time.Millisecond
 
 // PinPair is the GPIO pin pair for one input, as BCM numbers.
 //
-// NO alone is a single-channel input with no fault detection — correct for
-// A-stops, and what every pre-dual-channel config decodes to. NC = 0 means
-// single-channel; both zero means the input is not wired and is skipped.
+// NO alone is a single-channel input with no fault detection: every a-stop, and
+// every e-stop in the shipped default config. NC = 0 means single-channel; both
+// zero means the input is not wired and is skipped.
 type PinPair struct {
 	NC int `yaml:"nc" json:"nc"`
 	NO int `yaml:"no" json:"no"`

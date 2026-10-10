@@ -44,6 +44,43 @@ func setupTest(t *testing.T, inputs []hardware.InputState, c PanelConfig) *fakeR
 
 // --- stationNames ---
 
+// The configuration deploy-panel.sh installs on a new panel. Every input is a single NO
+// contact on its own pin, on the NO pins the dual-channel wiring uses, so the file is checked
+// here rather than discovered wrong on a panel with the field waiting.
+func TestShippedDefaultConfig(t *testing.T) {
+	data, err := os.ReadFile("estop-panel.yaml")
+	require.NoError(t, err)
+	var c PanelConfig
+	require.NoError(t, yaml.Unmarshal(data, &c))
+
+	// Red, like the service file; deploy-panel.sh rewrites it per panel.
+	assert.Equal(t, "red", c.Alliance)
+	assert.Equal(t, 8765, c.HTTPPort)
+	assert.Equal(t, "gpiochip0", c.GpioChip)
+
+	inputs := map[string]PinPair{
+		"station1_estop": c.Pins.Station1EStop, "station1_astop": c.Pins.Station1AStop,
+		"station2_estop": c.Pins.Station2EStop, "station2_astop": c.Pins.Station2AStop,
+		"station3_estop": c.Pins.Station3EStop, "station3_astop": c.Pins.Station3AStop,
+		"field_estop": c.Pins.FieldEStop,
+	}
+	seen := map[int]string{}
+	for name, pair := range inputs {
+		assert.True(t, pair.wired(), "%s is not wired", name)
+		assert.False(t, pair.dual(), "%s should be a single NO contact", name)
+		if other, taken := seen[pair.NO]; taken {
+			t.Errorf("%s and %s share BCM %d", name, other, pair.NO)
+		}
+		seen[pair.NO] = name
+	}
+
+	// The NO pins the dual-channel wiring uses, so adding the NC contacts moves nothing.
+	assert.Equal(t, 4, c.Pins.Station1EStop.NO)
+	assert.Equal(t, 12, c.Pins.Station2EStop.NO)
+	assert.Equal(t, 13, c.Pins.Station3EStop.NO)
+	assert.Equal(t, 6, c.Pins.FieldEStop.NO)
+}
+
 func TestStationNamesRed(t *testing.T) {
 	assert.Equal(t, [3]string{"R1", "R2", "R3"}, stationNames("red"))
 }

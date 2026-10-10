@@ -24,7 +24,9 @@
 #
 # Does everything, every time: builds, creates the service account if this Pi has never
 # been deployed to, puts it in the gpio group, writes the alliance's address into the
-# service file, installs, starts, and checks it came up.
+# service file, installs, starts, and checks it came up. A panel with no configuration yet
+# gets cmd/estop-panel/estop-panel.yaml with this alliance written in -- every input a
+# single normally-open contact. One that already has a configuration keeps it.
 #
 # Safe to run repeatedly. Safe to run on a Pi that has never seen the panel service.
 
@@ -60,7 +62,8 @@ esac
 REMOTE="$LOGIN@$TARGET"
 STAGING=".bioarena-deploy"
 SERVICE_FILE="$(mktemp)"
-trap 'rm -f "$SERVICE_FILE"' EXIT
+CONFIG_FILE="$(mktemp)"
+trap 'rm -f "$SERVICE_FILE" "$CONFIG_FILE"' EXIT
 step=0
 
 # Where the panel's kiosk display points. Not a setting: driver station software is
@@ -90,6 +93,18 @@ GOOS=linux GOARCH=arm64 go build -o estop-panel-pi ./cmd/estop-panel
 sed "s#ip addr add 10\.0\.100\.[0-9]\+/24#ip addr add $PANEL_ADDRESS/24#" \
 	cmd/estop-panel/estop-panel.service >"$SERVICE_FILE"
 grep -q "$PANEL_ADDRESS/24" "$SERVICE_FILE" || fail "could not set the address in estop-panel.service"
+
+# The alliance in the panel's config is what names the stations its buttons stop, and the
+# field controller does not cross-check it: a blue panel carrying a red config stops R1 when
+# B1's button is pressed. So it is taken from the argument, never from a file shared between
+# the two panels. The default ships for red, like the service file.
+sed "s#^alliance: .*#alliance: \"$ALLIANCE\"#" cmd/estop-panel/estop-panel.yaml >"$CONFIG_FILE"
+grep -q "^alliance: \"$ALLIANCE\"" "$CONFIG_FILE" || fail "could not set the alliance in estop-panel.yaml"
+# A local estop-panel.yaml overrides the default, as it always has -- but only if it is for
+# this panel. Both panels deploy from the same directory, so one file is right for at most one.
+if [ -f estop-panel.yaml ] && ! grep -Eq "^alliance: *\"?$ALLIANCE\"? *(#.*)?$" estop-panel.yaml; then
+	fail "./estop-panel.yaml is not for the $ALLIANCE panel (check its alliance: line), so it would stop the wrong stations. Fix it, or move it aside to deploy the default."
+fi
 echo "      estop-panel-pi built, service file set to $PANEL_ADDRESS"
 
 announce "Copying to $TARGET"
@@ -98,10 +113,11 @@ announce "Copying to $TARGET"
 ssh -o ConnectTimeout=10 "$REMOTE" "rm -rf ~/$STAGING && mkdir -p ~/$STAGING"
 scp -q estop-panel-pi "$REMOTE:~/$STAGING/estop-panel"
 scp -q "$SERVICE_FILE" "$REMOTE:~/$STAGING/estop-panel.service"
+scp -q "$CONFIG_FILE" "$REMOTE:~/$STAGING/estop-panel.default.yaml"
 if [ -f estop-panel.yaml ]; then
 	scp -q estop-panel.yaml "$REMOTE:~/$STAGING/"
 fi
-echo "      binary and service file"
+echo "      binary, service file and configuration"
 
 announce "Installing (the Pi may ask for your password)"
 # -t so sudo has a terminal to prompt on: without it sudo refuses with "a terminal is
@@ -120,8 +136,13 @@ ssh -t "$REMOTE" "
 	sudo systemctl stop estop-panel 2>/dev/null || true
 
 	sudo install -o bioarena -g bioarena -m 755 ~/$STAGING/estop-panel /opt/estop-panel/estop-panel
+	# A local override replaces whatever the panel has. Otherwise the default goes in only
+	# where there is no configuration yet: the panel will not start without one, and one
+	# that has been edited on the panel is kept.
 	if [ -f ~/$STAGING/estop-panel.yaml ]; then
 		sudo install -o bioarena -g bioarena -m 644 ~/$STAGING/estop-panel.yaml /opt/estop-panel/estop-panel.yaml
+	elif [ ! -f /opt/estop-panel/estop-panel.yaml ]; then
+		sudo install -o bioarena -g bioarena -m 644 ~/$STAGING/estop-panel.default.yaml /opt/estop-panel/estop-panel.yaml
 	fi
 	sudo cp ~/$STAGING/estop-panel.service /etc/systemd/system/estop-panel.service
 	sudo systemctl daemon-reload

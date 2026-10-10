@@ -17,10 +17,11 @@ const (
 
 // StopState is the condition of one stop input.
 //
-// E-stop buttons are dual-channel: one NC contact and one NO contact returning
-// on separate conductors. Healthy operation is always complementary, so any
+// A dual-channel e-stop has one NC contact and one NO contact returning on
+// separate conductors. Healthy operation is always complementary, so any
 // non-complementary reading means the wiring — not the button — is telling us
-// something. A-stops are single-channel and can only report OK or Active.
+// something. A single-channel input -- every a-stop, and a panel e-stop wired
+// with its NO contact alone -- can only report OK or Active.
 type StopState uint8
 
 const (

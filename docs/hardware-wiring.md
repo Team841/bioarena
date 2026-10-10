@@ -2,7 +2,9 @@
 
 This guide walks a first-time builder through wiring all field hardware: the main Pi, one panel Pi per alliance, and the button panels.
 
-E-stop buttons are wired **dual-channel**: each button's NC and NO contacts return on separate conductors, so the field can tell the difference between a released button, a pressed button, and broken wiring. A-stops are single-channel.
+Panel e-stops are wired as a **single normally-open (NO) contact** by default: two conductors per button, GND and NO, exactly like the a-stops. The main Pi's field e-stop is wired **dual-channel** — NC and NO on separate conductors — so the field can tell a released button from broken wiring, and any panel e-stop can be upgraded to the same later by adding its NC conductor, without moving anything already wired.
+
+> **What a single NO contact gives up.** A cut conductor, a loose terminal or an unplugged cable reads exactly like a released button, so that e-stop silently does nothing. Press every button before each session and watch its station stop on Match Play — see [section 12](#12-test-procedure).
 
 ---
 
@@ -47,8 +49,8 @@ graph TB
         end
     end
 
-    RPANEL["Red Button Panel\n3× E-Stop (NC+NO)\n3× A-Stop (NO)"]
-    BPANEL["Blue Button Panel\n3× E-Stop (NC+NO)\n3× A-Stop (NO)"]
+    RPANEL["Red Button Panel\n3× E-Stop (NO)\n3× A-Stop (NO)\n1× Field E-Stop (NO)"]
+    BPANEL["Blue Button Panel\n3× E-Stop (NO)\n3× A-Stop (NO)\n1× Field E-Stop (NO)"]
     FBTN["Field E-Stop\nNC + NO"]
 
     SW --- MAINPI
@@ -58,14 +60,14 @@ graph TB
     BIOARENA -->|"HTTP GET /poll\nevery ~10 ms"| REDSRV
     BIOARENA -->|"HTTP GET /poll\nevery ~10 ms"| BLUESRV
 
-    RPANEL -->|"11 GPIO lines + GND"| REDSRV
-    BPANEL -->|"11 GPIO lines + GND"| BLUESRV
+    RPANEL -->|"7 GPIO lines + GND"| REDSRV
+    BPANEL -->|"7 GPIO lines + GND"| BLUESRV
     FBTN -->|"2 GPIO lines + GND"| FGPIO
 ```
 
 Two properties of this design are worth understanding before you cut any wire:
 
-- **A wiring fault stops the field.** If the two channels of an e-stop disagree in a way that healthy wiring cannot produce, the arena treats that station as stopped and refuses to start a match until it clears.
+- **On a dual-channel e-stop, a wiring fault stops the field.** If the two channels disagree in a way that healthy wiring cannot produce, the arena treats that station as stopped and refuses to start a match until it clears. A single-NO e-stop has no second channel to disagree with, so its wiring faults go unseen.
 - **An unreachable panel Pi is a fault, not silence.** A panel that loses power or drops off the switch reports as faulted on all three of its stations. Do not configure a panel address you are not going to keep running.
 
 ---
@@ -78,22 +80,23 @@ Quantities marked with **×2** mean one per alliance.
 | Qty | Item | Specification | Notes |
 |-----|------|---------------|-------|
 | 3 | Raspberry Pi 4B (or 3B+) | Any model with Ethernet | 1 main + 2 panel Pis |
-| **×2** | 3× latching mushroom e-stop button | 22 mm, **NC + NO contact blocks**, separate lamp terminals | The NC+NO pair is what makes fault detection possible — a button with only one contact block cannot be wired dual-channel |
+| **×2** | 3× latching mushroom e-stop button | 22 mm, **NO contact block**, separate lamp terminals | Only the NO block is wired. Buy buttons with an NC block too if you may ever upgrade to dual-channel |
+| **×2** | 1× latching mushroom e-stop button | 22 mm, NO contact block | Field-wide e-stop on each panel (`field_estop`) — optional |
 | **×2** | 3× NO momentary pushbutton (A-stop) | 16–22 mm, NO contact | Any colour; these are not latching |
 | 1 | Latching mushroom e-stop button | 22 mm, NC + NO contact blocks | Field-wide e-stop on the main Pi |
 | As needed | 330 Ω–1 kΩ resistors (1/4 W) | ±5% or better | One per GPIO line, in series at the Pi end |
 | As needed | 10 nF–100 nF ceramic capacitors | 50 V | One per GPIO line to GND at the Pi end; debounce and ESD |
 | As needed | 10 kΩ resistors (1/4 W) | ±5% or better | Optional external pull-up per line; recommended for runs over ~2 m |
-| As needed | 22 AWG 3-conductor cable | Rated ≥ 24 V | One run per button: GND, NC, NO. Shielded or twisted improves noise immunity |
+| As needed | 22 AWG 2-conductor cable | Rated ≥ 24 V | One run per button: GND and NO. Use 3-conductor (GND, NC, NO) for a dual-channel button, or to leave room to upgrade one. Shielded or twisted improves noise immunity |
 | **×2** | 12 V 1 A regulated power adapter | 2.1 mm barrel connector | **Lamps only** — see [section 9](#9-power-and-indicator-lamps). Omit if your buttons are unlit |
 | **×2** | 500 mA resettable polyfuse (PTC) | Rated ≥ 15 V | Inline on the +12 V lamp feed |
 | **×2** | DIN rail section, ~20 cm | 35 mm standard | Mounts inside enclosure |
 | **×2** | Small enclosure, ~150×100×60 mm | IP54 or better | Holds Pi and terminal strips |
-| **×2** | 3× terminal block strip | 10-position | GND bus, NC bus, NO bus per panel |
+| **×2** | 2× terminal block strip | 10-position | GND bus and NO bus per panel; a third for an NC bus if any button goes dual-channel |
 | As needed | Ferrule crimp terminals | 22 AWG | Clean screw-terminal connections; highly recommended |
 | As needed | Wire labels / heat-shrink label sleeves | — | Label every conductor at both ends, including which channel it is |
 
-> **What is no longer needed:** earlier revisions of this field used 12 V button loops through opto-isolation boards. Dual-channel wiring runs the sense contacts directly to the Pi at 3.3 V instead. If you are rebuilding an existing panel, the opto boards come out and the 12 V loop shrinks to the lamp circuit only.
+> **What is no longer needed:** earlier revisions of this field used 12 V button loops through opto-isolation boards. The current wiring runs the sense contacts directly to the Pi at 3.3 V instead. If you are rebuilding an existing panel, the opto boards come out and the 12 V loop shrinks to the lamp circuit only.
 
 ---
 
@@ -119,7 +122,16 @@ Static IPs are set by the systemd service files (see [Software Configuration](#1
 
 ## 4. How Dual-Channel Detection Works
 
-Each e-stop button carries two contact blocks that move together but wire separately:
+This applies to the main Pi's field e-stop, and to any panel e-stop whose NC contact is wired. A single NO contact — the panel default — reads only one line:
+
+| NO line | Meaning | Field response |
+|---------|---------|----------------|
+| HIGH | Released — **or a cut conductor, broken ground, or unplugged cable** | OK |
+| LOW | Pressed | **STOP** |
+
+That first row is the whole trade. The rest of this section is what a second contact buys back.
+
+Each dual-channel e-stop button carries two contact blocks that move together but wire separately:
 
 - The **NC (normally closed)** contact is closed when the button is released and opens when it is pressed.
 - The **NO (normally open)** contact does the opposite.
@@ -153,7 +165,30 @@ flowchart LR
 
 ## 5. Single Button Circuit
 
-Three conductors run to each e-stop: common GND, NC, and NO. A-stops use two: GND and NO.
+### Single NO contact — panel e-stops and every a-stop
+
+Two conductors per button: common GND and NO. Use the button's **NO** contact block — usually marked 3–4 or 13–14 — and leave any NC block (1–2, 11–12) unconnected.
+
+```mermaid
+flowchart TD
+    PGND["Pi GND\n(phys 6, 9, 14, 20, 25, 30, 34, 39)"]
+    BTNC["Button NO block — one terminal"]
+    NO["Button NO block — other terminal"]
+    RNO["330 Ω–1 kΩ"]
+    CNO["10–100 nF to GND"]
+    GNO["Pi GPIO"]
+
+    PGND --> BTNC
+    BTNC -. "closes when pressed" .-> NO
+    NO --> RNO --> GNO
+    GNO -.-> CNO
+```
+
+Released, the contact is open and the Pi's pull-up holds the GPIO HIGH. Pressed, it closes to GND and the line reads LOW. A latching mushroom holds it there until it is twisted out.
+
+### Dual-channel — the main Pi's field e-stop, or an upgraded panel e-stop
+
+Three conductors run to each e-stop: common GND, NC, and NO.
 
 ```mermaid
 flowchart TD
@@ -187,35 +222,35 @@ For cable runs over about 2 m, add a 10 kΩ external pull-up from each sense lin
 
 ## 6. Wiring an E-Stop Panel Pi
 
-Each panel Pi uses 11 GPIO lines: two per e-stop, one per a-stop, plus shared grounds. The pins below avoid I2C (2, 3), UART (14, 15), the HAT EEPROM (0, 1), the I2S block (18–21), and SPI0 (7–11), so those buses stay available.
+Each panel Pi uses 7 GPIO lines — one per button — plus shared grounds. The pins below avoid I2C (2, 3), UART (14, 15), the HAT EEPROM (0, 1), the I2S block (18–21), and SPI0 (7–11), so those buses stay available. They are what the panel's default configuration expects, so nothing needs to be set in software.
 
 ### GPIO pin reference
 
-| Function | NC — BCM (phys) | NO — BCM (phys) | Channels |
-|----------|-----------------|-----------------|----------|
-| Station 1 E-Stop | 17 (11) | 4 (7) | dual |
-| Station 2 E-Stop | 22 (15) | 12 (32) | dual |
-| Station 3 E-Stop | 24 (18) | 13 (33) | dual |
-| Field E-Stop (panel) | 5 (29) | 6 (31) | dual |
-| Station 1 A-Stop | — | 27 (13) | single |
-| Station 2 A-Stop | — | 23 (16) | single |
-| Station 3 A-Stop | — | 25 (22) | single |
+| Button | Config key | GPIO — BCM (phys) | NC pin, if upgraded later |
+|--------|------------|-------------------|---------------------------|
+| Station 1 E-Stop | `station1_estop` | 4 (7) | 17 (11) |
+| Station 1 A-Stop | `station1_astop` | 27 (13) | — |
+| Station 2 E-Stop | `station2_estop` | 12 (32) | 22 (15) |
+| Station 2 A-Stop | `station2_astop` | 23 (16) | — |
+| Station 3 E-Stop | `station3_estop` | 13 (33) | 24 (18) |
+| Station 3 A-Stop | `station3_astop` | 25 (22) | — |
+| Field E-Stop (panel) | `field_estop` | 6 (31) | 5 (29) |
 | Common GND | — | phys 6, 9, 14, 20, 25, 30, 34, 39 | — |
 
-BCM 16 and 26 are left free. Use the BCM numbers in `estop-panel.yaml`, not physical pin numbers.
+Station 1 is R1 on the red panel and B1 on the blue one; the field e-stop on either panel stops all six stations. A button left unwired reads as released, so an absent field e-stop costs nothing — but it also means a button that *is* fitted and has come loose looks the same.
 
-> If you want the a-stops dual-channel too, that is 14 lines and the clean pool above only holds 13 — you would need to borrow GPIO 7 or 8 (SPI0 chip selects) or give up the I2S block.
+The NC column is reserved, not wired: leave those pins free and an e-stop can go dual-channel later by adding one conductor and an `nc:` pin to its configuration, with nothing else moving. BCM 16 and 26 are left free as well.
 
 ### Step-by-step wiring
 
-1. Run the **GND bus** from any Pi GND pin to the terminal strip, then to the COM terminal of every button. All buttons share this ground.
-2. For each e-stop, run the **NC contact** to its NC terminal strip position, then through a series resistor to the assigned NC GPIO pin.
-3. For each e-stop, run the **NO contact** to its NO terminal strip position, then through a series resistor to the assigned NO GPIO pin.
-4. For each a-stop, run the **NO contact** through a series resistor to its GPIO pin. There is no second channel.
-5. Fit the optional capacitor from each GPIO pin to GND, as close to the Pi header as you can manage.
-6. Do **not** add pull-down resistors anywhere. The internal pull-ups are what make the active-low logic work.
+1. Run the **GND bus** from any Pi GND pin to the terminal strip, then to one terminal of every button's NO contact block. All buttons share this ground.
+2. Run the **other terminal** of each button's NO block to its own position on the NO terminal strip, then through a series resistor to its GPIO pin from the table.
+3. Fit the optional capacitor from each GPIO pin to GND, as close to the Pi header as you can manage.
+4. Do **not** add pull-down resistors anywhere. The internal pull-ups are what make the active-low logic work.
 
-> **Label the channels, not just the buttons.** `R1-ESTOP-NC` and `R1-ESTOP-NO` swapped at the terminal strip produces a panel that reads OK when released and OK when pressed — inverted, and much harder to diagnose than a dead line. The test procedure in [section 12](#12-test-procedure) catches this.
+> **Use the NO block, not the NC.** On an NC block the logic inverts: a released button reads as pressed, and the station stays stopped. The press test in [section 12](#12-test-procedure) catches it at once.
+
+> **Label every conductor at both ends** with its station and button — `R1-ESTOP`, `R1-ASTOP`. With one conductor per button, a swap between two stations is the easiest mistake to make and the hardest to see: the wrong station stops.
 
 ---
 
@@ -332,7 +367,7 @@ A typical alliance button panel has three driver stations across a table edge. S
 
 - Mount the Pi and terminal strips inside a small enclosure behind or beneath the panel.
 - Route button wires through a cable clamp at the panel edge for strain relief.
-- Keep the 3-conductor sense runs away from the 12 V lamp wiring where you can.
+- Keep the sense runs away from the 12 V lamp wiring where you can.
 - Use consistent colours per channel across the whole field — e.g. black GND, white NC, blue NO.
 
 ---
@@ -341,37 +376,23 @@ A typical alliance button panel has three driver stations across a table edge. S
 
 ### Panel Pi: `estop-panel.yaml`
 
-Create this file in the working directory (`/opt/estop-panel/` by default):
+Nothing to write by hand. `deploy-panel.sh` installs [`cmd/estop-panel/estop-panel.yaml`](../cmd/estop-panel/estop-panel.yaml) on a panel that has no configuration yet, with the alliance from its argument written in: every input a single NO contact, on the pins in [section 6](#6-wiring-an-e-stop-panel-pi). A panel that already has a configuration keeps it, so a change made on the panel survives a redeploy.
+
+To upgrade an e-stop to dual-channel, wire its NC contact to the reserved pin, then edit `/opt/estop-panel/estop-panel.yaml` on the panel and restart the service:
 
 ```yaml
-alliance: "red"        # "red" or "blue"
-http_port: 8765
-gpio_chip: "gpiochip0" # standard on all Raspberry Pis
 pins:
-  # {nc: N, no: N} is dual-channel with fault detection.
-  # A bare number, or {nc: 0, no: N}, is single-channel with none.
-  # no: 0 means the input is not wired and is skipped.
-  station1_estop: {nc: 17, no: 4}
-  station1_astop: 27
-  station2_estop: {nc: 22, no: 12}
-  station2_astop: 23
-  station3_estop: {nc: 24, no: 13}
-  station3_astop: 25
-  field_estop: {nc: 5, no: 6}
+  station1_estop: {nc: 17, no: 4}   # was: 4
 ```
 
-For the blue panel Pi, change `alliance: "blue"` and update the static IP in `estop-panel.service`.
-
-Configs written before dual-channel — bare pin numbers throughout — still load, and every input becomes single-channel with no fault detection. That is a valid migration state, not an error, but it gives up the entire point of the rewiring.
+A bare number, or `{nc: 0, no: N}`, is a single NO contact; `0` means the input is not wired and is skipped.
 
 ### Static IP (set in the systemd service file)
 
-Open `cmd/estop-panel/estop-panel.service` and edit the `ExecStartPre` line:
+`deploy-panel.sh` writes it from the alliance argument — `10.0.100.11` red, `10.0.100.12` blue — so there is nothing to edit. It lands on the `ExecStartPre` line of `estop-panel.service`:
 
 ```ini
 ExecStartPre=/sbin/ip addr add 10.0.100.11/24 dev eth0   # red panel
-# or
-ExecStartPre=/sbin/ip addr add 10.0.100.12/24 dev eth0   # blue panel
 ```
 
 ### Main Pi: `config.yaml`
@@ -434,15 +455,23 @@ For each e-stop:
    curl http://10.0.100.11:8765/poll
    ```
    The station's e-stop entry should read `"state":0` (OK) with `"fault":0`.
-2. Latch the button. The same entry should read `"state":1` (stopped), still `"fault":0`.
-   A `"state":2` here means the two channels disagree — check for swapped NC/NO conductors.
+2. Latch the button. The same entry should read `"state":1` (stopped), still `"fault":0`,
+   and **the right station** should show stopped on Match Play. For a dual-channel e-stop, a
+   `"state":2` here means the two channels disagree — check for swapped NC/NO conductors.
 3. Reset the button and confirm it returns to `"state":0`.
+
+For a single-NO e-stop this press test is the **only** check of its wiring, so do it for
+every button before every session, not just at installation.
 
 For each a-stop, repeat steps 1–3; a-stops only ever report state 0 or 1.
 
-### Fault injection (the important part)
+### Fault injection
 
-For at least one e-stop per panel, and for the main Pi field e-stop:
+For a single-NO e-stop, see what a fault looks like once, so it is recognised later:
+
+- [ ] **Pull the NO conductor** at the terminal strip. The input keeps reading `"state":0`, and pressing the button does nothing. That is the failure a single contact cannot report; reconnect it.
+
+For the main Pi field e-stop, and any panel e-stop wired dual-channel:
 
 - [ ] **Pull the NC conductor** at the terminal strip. Within ~300 ms the input should report `"state":2` with `"fault":1` (both channels open), and the arena UI should show FAULT for that station.
 - [ ] Reconnect it and confirm the fault clears on its own.
@@ -470,6 +499,9 @@ For at least one e-stop per panel, and for the main Pi field e-stop:
 
 | Symptom | Likely cause | Fix |
 |---------|-------------|-----|
+| Pressing an e-stop does nothing; it stays `state:0` | Single-NO wiring open somewhere: broken conductor, loose terminal, or the wrong GPIO pin | Check continuity from the NO terminal to its GPIO pin and from the other terminal to Pi GND; confirm the pin against [section 6](#6-wiring-an-e-stop-panel-pi) |
+| A station stays stopped with the button released | NC block wired instead of NO | Move the conductor to the NO block |
+| The wrong station stops | Two stations' conductors swapped at the terminal strip | Swap them back; label both ends |
 | Input always reports `state:2`, `fault:1` (both open) | A conductor is broken, unplugged, or landed on the wrong terminal; or the common GND is missing | Check continuity from the button COM terminal to Pi GND, then each contact to its GPIO pin |
 | Input always reports `state:2`, `fault:2` (both closed) | NC and NO conductors shorted together, or a contact block is welded | Separate the conductors; replace the contact block if it does not open |
 | Input reads OK both pressed and released | NC and NO conductors swapped at the terminal strip | Swap them back; the truth table in [section 4](#4-how-dual-channel-detection-works) has the correct polarity |
@@ -485,10 +517,10 @@ For at least one e-stop per panel, and for the main Pi field e-stop:
 Reading raw pin values on a panel Pi, with the service stopped so it is not holding the lines:
 
 ```bash
-gpioget gpiochip0 17 4
+gpioget -B pull-up gpiochip0 4 27 12 23 13 25 6
 ```
 
-Released, that should print `0 1` for a healthy station 1 e-stop. Note that pins BCM 9–27 power up with an internal pull-*down*, so a line read before anything configures it reads 0 regardless of what is connected.
+With every button released, that prints `1 1 1 1 1 1 1`, in the order of the table in [section 6](#6-wiring-an-e-stop-panel-pi); a pressed button reads `0` in its position. The `-B pull-up` matters: pins BCM 9–27 power up with an internal pull-*down*, so a line read without it reads 0 regardless of what is connected. For a dual-channel e-stop, read its NC pin too — `gpioget -B pull-up gpiochip0 17 4` prints `0 1` released.
 
 ---
 
