@@ -30,16 +30,19 @@ Base template used by most pages to include common resources and optionally rend
             <li class="nav-item">
               <a class="nav-link" href="/setup/teams">Teams</a>
             </li>
-            <li class="nav-item">
-              {{/* Robot readiness and connection status, one box per station. Its own
-                   tab because it is what someone debugging a robot watches while
-                   somebody else drives the match panel. */}}
-              <a class="nav-link" href="/field_monitor" target="_blank">Monitor</a>
-            </li>
-            <li class="nav-item">
-              {{/* Opens in its own tab: this is what goes on the television beside
-                   the field, so the operator keeps the match panel where it is. */}}
-              <a class="nav-link" href="/audience_display" target="_blank">Audience</a>
+            {{/* The screens that go somewhere other than the operator's: each opens in its
+                 own tab, so the match panel stays where it is. */}}
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown"
+                aria-expanded="false">Displays</a>
+              <ul class="dropdown-menu">
+                {{/* What goes on the television beside the field. */}}
+                <li><a class="dropdown-item" href="/audience_display" target="_blank">Audience</a></li>
+                {{/* The field monitor: robot readiness and connection status, one box per
+                     station. What someone debugging a robot watches while somebody else
+                     drives the match panel. */}}
+                <li><a class="dropdown-item" href="/field_monitor" target="_blank">FTA</a></li>
+              </ul>
             </li>
           </ul>
           <ul class="navbar-nav ms-auto">

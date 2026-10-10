@@ -26,3 +26,20 @@ func TestNavbarShowsReachableAddress(t *testing.T) {
 	segment := body[start : start+120]
 	assert.NotContains(t, segment, "></span>", "the address element rendered empty")
 }
+
+// The screens that go somewhere other than the operator's sit together under one menu:
+// the audience display, and the field monitor, labelled FTA because that is who reads it.
+func TestNavbarDisplaysMenu(t *testing.T) {
+	web := setupTestWeb(t)
+
+	recorder := web.getHttpResponse("/match_play")
+	assert.Equal(t, 200, recorder.Code)
+	body := recorder.Body.String()
+
+	start := strings.Index(body, ">Displays</a>")
+	assert.Greater(t, start, 0, "the header should carry a Displays menu")
+	menu := body[start:]
+	menu = menu[:strings.Index(menu, "</ul>")]
+	assert.Regexp(t, `href="/audience_display"[^>]*>Audience</a>`, menu)
+	assert.Regexp(t, `href="/field_monitor"[^>]*>FTA</a>`, menu)
+}
