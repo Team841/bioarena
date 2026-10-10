@@ -1193,13 +1193,6 @@ func (arena *Arena) checkAllianceStationsReady(stations ...string) error {
 		if allianceStation.EStop.Load() {
 			return fmt.Errorf("cannot start match while an emergency stop is active")
 		}
-		// A latching a-stop left in from the last match. Started anyway, that robot would sit
-		// out the whole of AUTO. Upstream's aStopReset below cannot catch it: that flag is
-		// only cleared by assigning a team on a field with a PLC, which this one does not
-		// have, so here it never trips.
-		if allianceStation.AStop.Load() {
-			return fmt.Errorf("cannot start match while the autonomous stop at %s is still pressed", station)
-		}
 		if !allianceStation.aStopReset {
 			return fmt.Errorf("cannot start match if an autonomous stop has not been reset since the previous match")
 		}

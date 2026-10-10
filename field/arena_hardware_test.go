@@ -207,27 +207,6 @@ func TestLatchedAStopOnlyStopsAuto(t *testing.T) {
 	assert.True(t, r1.DsConn.Enabled, "and the robot is back for teleop")
 }
 
-// A latching a-stop left in from the last match blocks the next one, naming the station,
-// rather than letting it start with that robot sitting out the whole of AUTO.
-func TestLatchedAStopBlocksMatchStart(t *testing.T) {
-	arena := setupTestArena(t)
-	panel := &recordingPanel{
-		inputs: []hardware.InputState{{Station: "B2", IsAStop: true, State: hardware.StopActive}},
-	}
-	arena.EStopPanels = []hardware.EStopPanel{panel}
-	for _, station := range allStationNames {
-		arena.AllianceStations[station].Bypass.Store(true)
-		arena.AllianceStations[station].aStopReset = true
-	}
-
-	arena.Update()
-	assert.ErrorContains(t, arena.StartMatch(), "autonomous stop at B2 is still pressed")
-
-	panel.inputs = []hardware.InputState{{Station: "B2", IsAStop: true, State: hardware.StopOK}}
-	arena.Update()
-	assert.Nil(t, arena.StartMatch())
-}
-
 func TestEStopPanelPollSingleStation(t *testing.T) {
 	arena := setupTestArena(t)
 	arena.EStopPanels = []hardware.EStopPanel{&recordingPanel{

@@ -643,13 +643,6 @@ func TestMatchStartRobotLinkEnforcement(t *testing.T) {
 	arena.AllianceStations["R1"].AStop.Store(true)
 	err = arena.StartMatch()
 	if assert.NotNil(t, err) {
-		// Bioarena refuses a pressed a-stop outright, for latching buttons; upstream checks
-		// only the reset flag. See docs/upstream-divergences.md.
-		assert.Contains(t, err.Error(), "autonomous stop at R1 is still pressed")
-	}
-	arena.AllianceStations["R1"].AStop.Store(false)
-	err = arena.StartMatch()
-	if assert.NotNil(t, err) {
 		assert.Contains(t, err.Error(), "if an autonomous stop has not been reset since the previous match")
 	}
 	arena.AllianceStations["R1"].aStopReset = true
