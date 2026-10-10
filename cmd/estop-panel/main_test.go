@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,9 +45,9 @@ func setupTest(t *testing.T, inputs []hardware.InputState, c PanelConfig) *fakeR
 
 // --- stationNames ---
 
-// The configuration deploy-panel.sh installs on a new panel. Every input is a single NO
-// contact on its own pin, on the NO pins the dual-channel wiring uses, so the file is checked
-// here rather than discovered wrong on a panel with the field waiting.
+// The configuration deploy-panel.sh installs on a new panel. Every input is a single NC
+// contact on its own pin, so the file is checked here rather than discovered wrong on a
+// panel with the field waiting.
 func TestShippedDefaultConfig(t *testing.T) {
 	data, err := os.ReadFile("estop-panel.yaml")
 	require.NoError(t, err)
@@ -67,18 +68,67 @@ func TestShippedDefaultConfig(t *testing.T) {
 	seen := map[int]string{}
 	for name, pair := range inputs {
 		assert.True(t, pair.wired(), "%s is not wired", name)
-		assert.False(t, pair.dual(), "%s should be a single NO contact", name)
-		if other, taken := seen[pair.NO]; taken {
-			t.Errorf("%s and %s share BCM %d", name, other, pair.NO)
+		assert.NotZero(t, pair.NC, "%s should be a single NC contact", name)
+		assert.Zero(t, pair.NO, "%s should be a single NC contact", name)
+		if other, taken := seen[pair.NC]; taken {
+			t.Errorf("%s and %s share BCM %d", name, other, pair.NC)
 		}
-		seen[pair.NO] = name
+		seen[pair.NC] = name
 	}
 
-	// The NO pins the dual-channel wiring uses, so adding the NC contacts moves nothing.
-	assert.Equal(t, 4, c.Pins.Station1EStop.NO)
-	assert.Equal(t, 12, c.Pins.Station2EStop.NO)
-	assert.Equal(t, 13, c.Pins.Station3EStop.NO)
-	assert.Equal(t, 6, c.Pins.FieldEStop.NO)
+	// The pins the panels are already wired on: moving to NC changed which contact block
+	// each wire lands on, not which GPIO it goes to.
+	assert.Equal(t, 4, c.Pins.Station1EStop.NC)
+	assert.Equal(t, 27, c.Pins.Station1AStop.NC)
+	assert.Equal(t, 12, c.Pins.Station2EStop.NC)
+	assert.Equal(t, 23, c.Pins.Station2AStop.NC)
+	assert.Equal(t, 13, c.Pins.Station3EStop.NC)
+	assert.Equal(t, 25, c.Pins.Station3AStop.NC)
+	assert.Equal(t, 6, c.Pins.FieldEStop.NC)
+}
+
+// --- decodeSample: the three wirings ---
+
+// A single NC contact is closed at rest. Released reads LOW, pressed HIGH -- and so does a
+// cut wire, which is the point: it stops the station rather than losing the button.
+func TestDecodeSampleSingleNC(t *testing.T) {
+	pair := PinPair{NC: 4}
+	filter := &hardware.DiscrepancyFilter{Window: hardware.DefaultDiscrepancyWindow}
+
+	state, fault := decodeSample(pair, 0, 1, filter, time.Now())
+	assert.Equal(t, hardware.StopOK, state, "released")
+	assert.Equal(t, hardware.FaultNone, fault)
+
+	state, _ = decodeSample(pair, 1, 1, filter, time.Now())
+	assert.Equal(t, hardware.StopActive, state, "pressed, or the wire cut")
+}
+
+// A single NO contact is open at rest: the opposite reading. The NC value is ignored.
+func TestDecodeSampleSingleNO(t *testing.T) {
+	pair := PinPair{NO: 4}
+	filter := &hardware.DiscrepancyFilter{Window: hardware.DefaultDiscrepancyWindow}
+
+	state, _ := decodeSample(pair, 0, 1, filter, time.Now())
+	assert.Equal(t, hardware.StopOK, state, "released")
+	state, _ = decodeSample(pair, 0, 0, filter, time.Now())
+	assert.Equal(t, hardware.StopActive, state, "pressed")
+}
+
+// Dual-channel compares the two, and calls a disagreement that outlasts the window a fault.
+func TestDecodeSampleDual(t *testing.T) {
+	pair := PinPair{NC: 4, NO: 17}
+	filter := &hardware.DiscrepancyFilter{Window: hardware.DefaultDiscrepancyWindow}
+	now := time.Now()
+
+	state, _ := decodeSample(pair, 0, 1, filter, now)
+	assert.Equal(t, hardware.StopOK, state, "released")
+	state, _ = decodeSample(pair, 1, 0, filter, now)
+	assert.Equal(t, hardware.StopActive, state, "pressed")
+
+	decodeSample(pair, 1, 1, filter, now)
+	state, fault := decodeSample(pair, 1, 1, filter, now.Add(time.Second))
+	assert.Equal(t, hardware.StopFault, state)
+	assert.Equal(t, hardware.FaultBothOpen, fault)
 }
 
 func TestStationNamesRed(t *testing.T) {
@@ -122,6 +172,15 @@ func TestPinPairYamlBareIntIsSingleChannel(t *testing.T) {
 	assert.Equal(t, PinPair{NC: 0, NO: 27}, p)
 	assert.True(t, p.wired())
 	assert.False(t, p.dual(), "a bare pin has no second channel to compare against")
+}
+
+// An NC pin on its own is a wired input, not an unwired one: it is the shipped default.
+func TestPinPairYamlNCOnlyIsWired(t *testing.T) {
+	var p PinPair
+	require.NoError(t, yaml.Unmarshal([]byte("{nc: 4}"), &p))
+	assert.Equal(t, PinPair{NC: 4, NO: 0}, p)
+	assert.True(t, p.wired())
+	assert.False(t, p.dual())
 }
 
 func TestPinPairYamlZeroIsUnwired(t *testing.T) {

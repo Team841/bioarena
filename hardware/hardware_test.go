@@ -82,6 +82,13 @@ func TestDecodeSingle(t *testing.T) {
 	assert.Equal(t, StopActive, DecodeSingle(0))
 }
 
+// The opposite polarity: an NC contact is closed at rest. A HIGH line -- a press, or a cut
+// wire floating up to the pull-up -- is a stop.
+func TestDecodeSingleNC(t *testing.T) {
+	assert.Equal(t, StopOK, DecodeSingleNC(0))
+	assert.Equal(t, StopActive, DecodeSingleNC(1))
+}
+
 func TestInputStateStoppedCoversFaults(t *testing.T) {
 	assert.False(t, InputState{State: StopOK}.Stopped())
 	assert.True(t, InputState{State: StopActive}.Stopped())

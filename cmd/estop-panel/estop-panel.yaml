@@ -4,22 +4,26 @@
 # panel that has no configuration yet, so changes made on a panel survive a redeploy. To
 # change one, edit /opt/estop-panel/estop-panel.yaml on the panel and restart estop-panel.
 #
-# Every input is a single normally-open contact: one conductor to the GPIO pin, one to the
-# shared ground. The NO pins are the same ones the dual-channel wiring uses, so adding the NC
-# contacts later is a matter of adding wires and an nc: pin -- {nc: 17, no: 4} -- with none
-# of the existing conductors moving. See docs/hardware-wiring.md section 6.
+# Every input is a single normally-closed contact: one conductor from the button's NC block
+# to the GPIO pin, one to the shared ground. Closed at rest, a released button reads LOW;
+# pressed, the contact opens and the pull-up reads HIGH.
 #
-# A single NO contact cannot tell a released button from a cut wire: both read open. Press
-# every button before a session and watch its station stop on Match Play.
+# NC rather than NO because of how each one fails. A cut wire, a loose terminal or a lost
+# ground reads HIGH -- on NC that is a pressed button, so the station stops; on NO it would
+# be a released one, and that button would silently do nothing.
+#
+# Forms each input takes: {nc: 4} one NC contact; {no: 4}, or a bare 4, one NO contact;
+# {nc: 4, no: 17} dual-channel, which also reports wiring faults. To go dual-channel, wire
+# the button's NO contact to the reserved pin in docs/hardware-wiring.md section 6 and add it.
 alliance: "red"
 http_port: 8765
 gpio_chip: "gpiochip0"
 pins:
   # BCM numbers, not physical pin numbers.
-  station1_estop: 4   # phys 7
-  station1_astop: 27  # phys 13
-  station2_estop: 12  # phys 32
-  station2_astop: 23  # phys 16
-  station3_estop: 13  # phys 33
-  station3_astop: 25  # phys 22
-  field_estop: 6      # phys 31
+  station1_estop: {nc: 4}   # phys 7
+  station1_astop: {nc: 27}  # phys 13
+  station2_estop: {nc: 12}  # phys 32
+  station2_astop: {nc: 23}  # phys 16
+  station3_estop: {nc: 13}  # phys 33
+  station3_astop: {nc: 25}  # phys 22
+  field_estop: {nc: 6}      # phys 31

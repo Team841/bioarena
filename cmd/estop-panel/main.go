@@ -2,12 +2,14 @@
 // buttons. It samples GPIO pins on a local timer and serves the decoded state
 // of every configured input over HTTP so the main bioarena can poll it.
 //
-// Every input is a single normally-open contact by default, the a-stops always.
-// An e-stop can instead be wired dual-channel -- an NC and an NO contact on
-// separate conductors, sharing a common ground -- by giving it an nc pin. Then
-// disagreement between the two channels is a wiring fault, which the panel
-// reports as its own state rather than silently treating as "not pressed".
-// A single contact cannot do that: a cut wire reads as a released button.
+// Each input is one contact or two. One contact alone, NC or NO, reads pressed or
+// released and nothing else; the shipped default is a single NC contact on every
+// input, because a cut NC wire reads as a pressed button and stops the station,
+// where a cut NO wire reads as released and silently loses it. An e-stop can be
+// wired dual-channel -- an NC and an NO contact on separate conductors, sharing a
+// common ground -- by giving it both pins. Then disagreement between the two
+// channels is a wiring fault, which the panel reports as its own state rather
+// than silently treating as "not pressed".
 //
 // Sampling runs on a local ticker rather than inside the HTTP handler because
 // the discrepancy window that distinguishes a fault from a button in travel
@@ -38,23 +40,44 @@ const sampleInterval = 10 * time.Millisecond
 
 // PinPair is the GPIO pin pair for one input, as BCM numbers.
 //
-// NO alone is a single-channel input with no fault detection: every a-stop, and
-// every e-stop in the shipped default config. NC = 0 means single-channel; both
-// zero means the input is not wired and is skipped.
+// Either pin alone is a single-channel input with no fault detection: NC alone is
+// the shipped default, NO alone what every config written before NC-only support
+// contains. Both set is dual-channel. Both zero means the input is not wired and
+// is skipped.
 type PinPair struct {
 	NC int `yaml:"nc" json:"nc"`
 	NO int `yaml:"no" json:"no"`
 }
 
 // wired reports whether this input is configured at all.
-func (p PinPair) wired() bool { return p.NO != 0 }
+func (p PinPair) wired() bool { return p.NC != 0 || p.NO != 0 }
 
 // dual reports whether this input has fault detection.
 func (p PinPair) dual() bool { return p.NC != 0 && p.NO != 0 }
 
-// UnmarshalYAML accepts either a mapping ({nc: 17, no: 4}) or a bare int,
-// which is read as NO-only. The bare form is what configs written before
-// dual-channel contain, and it keeps working unchanged.
+// decodeSample turns one reading of a pin pair into a state. The value for a pin the
+// pair does not use is ignored. filter carries the dual-channel discrepancy window
+// between samples and is only consulted for a dual pair.
+//
+// Kept apart from the GPIO code so the choice between the three wirings is testable
+// off a Pi.
+func decodeSample(
+	pair PinPair, ncVal, noVal int, filter *hardware.DiscrepancyFilter, now time.Time,
+) (hardware.StopState, hardware.FaultKind) {
+	switch {
+	case pair.dual():
+		state, fault := hardware.DecodeChannels(ncVal, noVal)
+		return filter.Update(state, fault, now)
+	case pair.NC != 0:
+		return hardware.DecodeSingleNC(ncVal), hardware.FaultNone
+	default:
+		return hardware.DecodeSingle(noVal), hardware.FaultNone
+	}
+}
+
+// UnmarshalYAML accepts either a mapping ({nc: 4}, {no: 4}, {nc: 4, no: 17})
+// or a bare int, which is read as NO-only. The bare form is what configs written
+// before dual-channel contain, and it keeps working unchanged.
 func (p *PinPair) UnmarshalYAML(value *yaml.Node) error {
 	if value.Kind == yaml.ScalarNode {
 		var pin int

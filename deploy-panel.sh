@@ -26,7 +26,7 @@
 # been deployed to, puts it in the gpio group, writes the alliance's address into the
 # service file, installs, starts, and checks it came up. A panel with no configuration yet
 # gets cmd/estop-panel/estop-panel.yaml with this alliance written in -- every input a
-# single normally-open contact. One that already has a configuration keeps it.
+# single normally-closed contact. One that already has a configuration keeps it.
 #
 # Safe to run repeatedly. Safe to run on a Pi that has never seen the panel service.
 

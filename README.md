@@ -832,7 +832,7 @@ agree on which HUB is active and when:
 > For full wiring diagrams, component list, and step-by-step assembly, see **[docs/hardware-wiring.md](docs/hardware-wiring.md)**.
 
 Each alliance can have a dedicated Raspberry Pi wired to 7 inputs, each a single
-normally-open contact by default:
+normally-closed contact by default:
 
 | Pin role           | Station               | GPIO (BCM) |
 |--------------------|-----------------------|------------|
@@ -844,11 +844,14 @@ normally-open contact by default:
 | station3_astop     | R3 or B3 (a-stop)     | 25         |
 | field_estop        | all stations (e-stop) | 6          |
 
-Wiring: two conductors per button, common GND and the button's NO contact, with the Pi's
-internal pull-up on the GPIO line. Released reads HIGH, pressed reads LOW. A single contact
-cannot tell a released button from a cut wire, so press every button before a session and
-watch its station stop. Any e-stop can be upgraded to dual-channel, which reports broken
-wiring as a fault, by wiring its NC contact as well — see
+Wiring: two conductors per button, common GND and the button's NC contact, with the Pi's
+internal pull-up on the GPIO line. Released reads LOW, pressed reads HIGH. A single contact
+cannot tell a pressed button from a cut wire, and NC is the contact that errs safe: broken
+wiring reads as a press and stops the station, where on NO it would read as released and
+lose the button. A panel with no field e-stop button fitted needs `field_estop: 0` in its
+configuration, or that unwired pin reads as pressed and stops every station. Any e-stop can
+be upgraded to dual-channel, which reports broken wiring as a fault, by wiring its NO
+contact as well — see
 [docs/hardware-wiring.md](docs/hardware-wiring.md#6-wiring-an-e-stop-panel-pi).
 
 Use latching mushroom-head buttons for e-stops and momentary pushbuttons for a-stops. The panel samples its pins locally at 100 Hz and reports the state of every configured input on each poll.
@@ -858,7 +861,9 @@ Recommended static IPs: `10.0.100.11` (red panel), `10.0.100.12` (blue panel).
 The panel's configuration ships as
 [`cmd/estop-panel/estop-panel.yaml`](cmd/estop-panel/estop-panel.yaml), and the deploy
 installs it with the alliance written in on a panel that has none yet. A panel that already
-has one keeps it; edit `/opt/estop-panel/estop-panel.yaml` there to change a pin.
+has one keeps it; edit `/opt/estop-panel/estop-panel.yaml` there to change a pin, or delete it
+and redeploy to take the current default. A panel deployed before the NC default still reads
+its buttons as NO.
 
 Build and deploy:
 

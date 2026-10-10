@@ -20,8 +20,8 @@ const (
 // A dual-channel e-stop has one NC contact and one NO contact returning on
 // separate conductors. Healthy operation is always complementary, so any
 // non-complementary reading means the wiring — not the button — is telling us
-// something. A single-channel input -- every a-stop, and a panel e-stop wired
-// with its NO contact alone -- can only report OK or Active.
+// something. A single-channel input -- one contact alone, NC or NO -- can only
+// report OK or Active.
 type StopState uint8
 
 const (
@@ -150,6 +150,19 @@ func DecodeSingle(no int) StopState {
 		return StopActive
 	}
 	return StopOK
+}
+
+// DecodeSingleNC maps a single-channel NC reading. The contact is closed at rest, so a
+// released button reads LOW and a pressed one HIGH.
+//
+// It cannot tell a pressed button from a cut wire either, but it errs the other way to
+// DecodeSingle: a broken conductor or a lost ground floats the line up to the pull-up and
+// reads as pressed, so the station stops rather than silently losing its button.
+func DecodeSingleNC(nc int) StopState {
+	if nc == 0 {
+		return StopOK
+	}
+	return StopActive
 }
 
 // DiscrepancyFilter holds off fault classification until the two channels have

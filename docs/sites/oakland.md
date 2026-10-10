@@ -94,13 +94,13 @@ and blue at `10.0.100.12`, each powered over PoE from the switch via a PoE HAT. 
 your build machine and the alliance is what writes its static field address into the service
 file.
 
-Both panels are wired on the default pinout, every button a single normally-open contact,
-so the deploy's default configuration matches them and nothing is set by hand:
+Both panels are wired on the default pinout, every button a single normally-closed
+contact, so the deploy's default configuration matches them and nothing is set by hand:
 
-![E-stop panel Pi GPIO header: the seven buttons on pins 7, 13, 16, 22, 31, 32 and 33, grounds, and the four pins reserved for NC](../assets/estop-panel-pi-header.svg)
+![E-stop panel Pi GPIO header: the seven buttons on pins 7, 13, 16, 22, 31, 32 and 33, grounds, and the four pins reserved for an NO upgrade](../assets/estop-panel-pi-header.svg)
 
 Station 1 is R1 on the red panel and B1 on the blue one. Each button is two wires, its pin
-and the shared ground bus, on the button's NO contact block. Full wiring notes are in
+and the shared ground bus, on the button's NC contact block. Full wiring notes are in
 [docs/hardware-wiring.md §6](../hardware-wiring.md#6-wiring-an-e-stop-panel-pi). If a panel
 is ever wired differently, record its actual pin map here.
 
