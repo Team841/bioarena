@@ -305,6 +305,7 @@ const handleArenaStatus = function (data) {
   // Hardware status badges.
   document.getElementById("apStatus").dataset.status = data.AccessPointStatus || "";
   document.getElementById("swStatus").dataset.status = data.SwitchStatus || "";
+  setRemoteControlStatus(data.RemoteControlStatus || "", data.RemoteStartAllowed);
 
   // Panel reachability, so "is it on?" is answered by a colour rather than by waiting to see
   // whether three stations fault. The same status vocabulary as the AP and switch.
@@ -401,6 +402,19 @@ const setFieldConnected = function (connected) {
 // screen inside 350ms end to end, of which the sensing is the counter's 250ms; past that
 // the tally is lagging the shot by more than a driver should have to allow for.
 const fuelLatencyWarningMs = 250;
+
+// setRemoteControlStatus says whether Watchtower is connected and what it may do. Hidden with
+// remote control off, like the FUEL strip.
+const setRemoteControlStatus = function (status, startAllowed) {
+  const badge = document.getElementById("remoteControlStatus");
+  if (!badge) return;
+  badge.hidden = status === "" || status === "NOT CONFIGURED";
+  badge.dataset.status = status;
+  badge.textContent = status === "ONLINE" ? (startAllowed ? "WATCHTOWER CAN START" : "WATCHTOWER") : "WATCHTOWER OFFLINE";
+  badge.title = status !== "ONLINE" ? "Remote control is on but Watchtower isn't connected" :
+    startAllowed ? "Watchtower is connected and may start matches" :
+    "Watchtower is connected; matches start only from this field";
+};
 
 // setFuelCounterStatus shows or hides the whole strip and colours the feed's badge.
 // Called from arena status, which is where reachability arrives.

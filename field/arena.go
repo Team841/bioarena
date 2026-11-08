@@ -54,6 +54,8 @@ const (
 )
 
 type Arena struct {
+	remoteControlClients atomic.Int32
+
 	Database         *model.Database
 	EventSettings    *model.EventSettings
 	accessPoint      network.AccessPoint

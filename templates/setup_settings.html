@@ -246,6 +246,45 @@ UI for configuring event settings.
                 </div>
               </div>
             </fieldset>
+            <fieldset class="mb-4">
+              <legend>Watchtower Remote Control</legend>
+              <p class="text-body-secondary">
+                Lets a Watchtower scoring system load lineups, stop robots and follow this field's matches, with the
+                same source-address rule as the FUEL counter. E-stop panels keep working whatever happens to that link.
+              </p>
+              <div class="row mb-3">
+                <label class="col-lg-6 control-label" for="remoteControlAddress">Watchtower address</label>
+                <div class="col-lg-4">
+                  <input type="text" class="form-control" id="remoteControlAddress" name="remoteControlAddress"
+                    value="{{.RemoteControlAddress}}" placeholder="10.0.100.21">
+                </div>
+                <div class="col-lg-2">
+                  <small class="text-body-secondary">Blank turns remote control off.</small>
+                </div>
+              </div>
+              <div class="row mb-3">
+                <label class="col-lg-6 control-label" for="remoteControlKey">Key</label>
+                <div class="col-lg-4">
+                  <input type="text" class="form-control" id="remoteControlKey" name="remoteControlKey"
+                    value="{{.RemoteControlKey}}" autocomplete="off" autocapitalize="off" spellcheck="false">
+                </div>
+                <div class="col-lg-2">
+                  <small class="text-body-secondary">Blank makes one on save. Enter the same key in Watchtower.</small>
+                </div>
+              </div>
+              <div class="row mb-3">
+                <label class="col-lg-6 control-label" for="remoteControlAllowStart">Allow Watchtower to start matches</label>
+                <div class="col-lg-4">
+                  <input type="checkbox" id="remoteControlAllowStart" name="remoteControlAllowStart"
+                    {{if .RemoteControlAllowStart}}checked{{end}}>
+                </div>
+                <div class="col-lg-2">
+                  <small class="text-body-secondary">
+                    Starting enables robots. Off, Watchtower still follows a match started here.
+                  </small>
+                </div>
+              </div>
+            </fieldset>
           </div>
           <div class="tab-pane" id="leds" role="tabpanel">
             <fieldset class="mb-4">

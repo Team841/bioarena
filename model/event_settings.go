@@ -122,6 +122,15 @@ type EventSettings struct {
 	HubCounterAddress string
 	HubCounterPort    int
 
+	// Watchtower remote control. A scoring FMS on the network may load lineups, run matches
+	// and read the field's status; see docs/watchtower-remote-control.md. A blank address
+	// means off. Connections are accepted from that address only, and must present the key.
+	RemoteControlAddress string
+	RemoteControlKey     string
+	// RemoteControlAllowStart is its own setting because Start is the one remote command
+	// that enables robots. Off, Watchtower still follows a match started from this field.
+	RemoteControlAllowStart bool
+
 	// AutoWinnerMode is how the AUTO result is decided: "random", "red", "blue", or
 	// "counted". Stored rather than held only in arena state because a field that runs
 	// Counted runs it every day, and falling back to Random on a power cycle is the kind
