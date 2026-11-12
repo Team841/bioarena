@@ -151,6 +151,7 @@ func (web *Web) newHandler() http.Handler {
 	mux.HandleFunc("POST /login", web.loginPostHandler)
 	mux.HandleFunc("GET /match_play", web.matchPlayHandler)
 	mux.HandleFunc("GET /match_play/websocket", web.matchPlayWebsocketHandler)
+	mux.HandleFunc("GET /remote_control/websocket", web.remoteControlWebsocketHandler)
 	mux.HandleFunc("POST /setup/db/clear/{type}", web.clearDbHandler)
 	mux.HandleFunc("POST /setup/db/restore", web.restoreDbHandler)
 	mux.HandleFunc("GET /setup/db/save", web.saveDbHandler)

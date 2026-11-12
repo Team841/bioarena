@@ -90,6 +90,14 @@ func (web *Web) settingsPostHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	eventSettings.RemoteControlAddress = strings.TrimSpace(r.PostFormValue("remoteControlAddress"))
+	eventSettings.RemoteControlKey = strings.TrimSpace(r.PostFormValue("remoteControlKey"))
+	eventSettings.RemoteControlAllowStart = r.PostFormValue("remoteControlAllowStart") == "on"
+	if err := checkRemoteControl(eventSettings); err != nil {
+		web.renderSettings(w, r, err.Error())
+		return
+	}
+
 	// Only update the admin password if a non-empty value was submitted.
 	// This prevents the settings form from inadvertently clearing the password.
 	if newPass := r.PostFormValue("adminPassword"); newPass != "" {

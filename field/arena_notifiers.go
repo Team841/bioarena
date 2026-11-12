@@ -96,6 +96,11 @@ func (arena *Arena) generateArenaStatusMessage() any {
 			PortLinked: as.PortLinked.Load(),
 		}
 	}
+	startErr := arena.checkCanStartMatch()
+	startProblem := ""
+	if startErr != nil {
+		startProblem = startErr.Error()
+	}
 	return &struct {
 		MatchId          int
 		AllianceStations map[string]allianceStationView
@@ -122,11 +127,17 @@ func (arena *Arena) generateArenaStatusMessage() any {
 		// rides arenaStatus; the tallies themselves go out on hubScore, which fires on
 		// change rather than every 500ms.
 		HubCounterStatus string
+		// RemoteControlStatus is ONLINE, OFFLINE, or NOT CONFIGURED, so the operator can
+		// see whether something else is able to start this field.
+		RemoteControlStatus string
+		RemoteStartAllowed  bool
+		// StartProblem is why CanStartMatch is false, in the words StartMatch would use.
+		StartProblem string
 	}{
 		arena.CurrentMatch.Id,
 		stationViews,
 		arena.MatchState,
-		arena.checkCanStartMatch() == nil,
+		startErr == nil,
 		arena.accessPoint.Status,
 		arena.teamNetwork.GetStatus(),
 		arena.Plc.IsHealthy(),
@@ -139,6 +150,9 @@ func (arena *Arena) generateArenaStatusMessage() any {
 		arena.panelStatus("blue"),
 		arena.stationLinksKnown.Load(),
 		arena.HubCounterStatus(),
+		arena.RemoteControlStatus(),
+		arena.EventSettings.RemoteControlAllowStart,
+		startProblem,
 	}
 }
 

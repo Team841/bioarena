@@ -47,6 +47,16 @@ func (web *Web) teamGetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// newQuickAddTeam is a team known only by its number.
+//
+// Given a WPA key up front, derived from the team number: zero-padded to eight digits,
+// which is WPA2's minimum length. A team created without one has no working WiFi, and
+// the operator has no way to know that until a robot fails to associate. Predictable
+// rather than random so it can be read off the team number at the driver station.
+func newQuickAddTeam(teamId int) *model.Team {
+	return &model.Team{Id: teamId, WpaKey: fmt.Sprintf("%08d", teamId)}
+}
+
 // Creates a new team with just an ID; used by Match Play's team-not-in-database offer.
 // Returns 201 on success, 409 if the team already exists.
 func (web *Web) teamQuickAddHandler(w http.ResponseWriter, r *http.Request) {
@@ -70,13 +80,7 @@ func (web *Web) teamQuickAddHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Given a WPA key up front, derived from the team number: zero-padded to eight digits,
-	// which is WPA2's minimum length. A team created without one has no working WiFi, and
-	// the operator has no way to know that until a robot fails to associate. Predictable
-	// rather than random so it can be read off the team number at the driver station.
-	if err = web.arena.Database.CreateTeam(
-		&model.Team{Id: teamId, WpaKey: fmt.Sprintf("%08d", teamId)},
-	); err != nil {
+	if err = web.arena.Database.CreateTeam(newQuickAddTeam(teamId)); err != nil {
 		handleWebErr(w, err)
 		return
 	}
