@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/team841/bioarena/model"
-	"github.com/team841/bioarena/network"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -243,14 +242,19 @@ func TestCheckGameDataSkippedForNewDs(t *testing.T) {
 func TestListenForDriverStations(t *testing.T) {
 	arena := setupTestArena(t)
 
-	oldAddress := network.ServerIpAddress
-	network.ServerIpAddress = "127.0.0.1"
-	go arena.listenForDriverStations()
-	time.Sleep(time.Millisecond * 10)
-	network.ServerIpAddress = oldAddress // Put it back to avoid affecting other tests.
+	// Serve on an ephemeral loopback port rather than through listenForDriverStations, which binds
+	// the fixed port on the global server address: the test can then run more than once per process
+	// and never writes a global the listener goroutine is reading.
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if !assert.Nil(t, err) {
+		return
+	}
+	t.Cleanup(func() { listener.Close() })
+	go arena.serveDriverStations(listener)
+	address := listener.Addr().String()
 
 	// Connect with an invalid initial packet.
-	tcpConn, err := net.Dial("tcp", "127.0.0.1:1750")
+	tcpConn, err := net.Dial("tcp", address)
 	if assert.Nil(t, err) {
 		dataSend := [5]byte{0, 3, 29, 0, 0}
 		tcpConn.Write(dataSend[:])
@@ -262,7 +266,7 @@ func TestListenForDriverStations(t *testing.T) {
 
 	// Connect as a team not in the current match. It is turned away, as upstream does --
 	// bioarena no longer registers an unexpected team by guessing its station.
-	tcpConn, err = net.Dial("tcp", "127.0.0.1:1750")
+	tcpConn, err = net.Dial("tcp", address)
 	if assert.Nil(t, err) {
 		dataSend := [5]byte{0, 3, 24, 5, 223}
 		tcpConn.Write(dataSend[:])
@@ -276,7 +280,7 @@ func TestListenForDriverStations(t *testing.T) {
 	arena.assignTeam(1503, "B2")
 
 	// Connect as a team in the current match with a fragmented initial packet.
-	tcpConn, err = net.Dial("tcp", "127.0.0.1:1750")
+	tcpConn, err = net.Dial("tcp", address)
 	if assert.Nil(t, err) {
 		dataSend := [5]byte{0, 3, 24, 5, 223}
 		tcpConn.Write(dataSend[:1])
@@ -287,7 +291,7 @@ func TestListenForDriverStations(t *testing.T) {
 		tcpConn.Close()
 	}
 
-	tcpConn, err = net.Dial("tcp", "127.0.0.1:1750")
+	tcpConn, err = net.Dial("tcp", address)
 	if assert.Nil(t, err) {
 		defer tcpConn.Close()
 		dataSend := [5]byte{0, 3, 24, 5, 223}
@@ -298,7 +302,7 @@ func TestListenForDriverStations(t *testing.T) {
 		assert.Equal(t, [5]byte{0, 3, 25, 4, 0}, dataReceived)
 
 		time.Sleep(time.Millisecond * 10)
-		dsConn := arena.AllianceStations["B2"].DsConn
+		dsConn := arena.AllianceStations["B2"].DsConn()
 		if assert.NotNil(t, dsConn) {
 			assert.Equal(t, 1503, dsConn.TeamId)
 			assert.Equal(t, "B2", dsConn.AllianceStation)

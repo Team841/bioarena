@@ -85,7 +85,7 @@ func (arena *Arena) generateArenaStatusMessage() any {
 	stationViews := make(map[string]allianceStationView, len(arena.AllianceStations))
 	for k, as := range arena.AllianceStations {
 		stationViews[k] = allianceStationView{
-			DsConn:     as.DsConn,
+			DsConn:     as.DsConn(),
 			Ethernet:   as.Ethernet,
 			AStop:      as.AStop.Load(),
 			EStop:      as.EStop.Load(),

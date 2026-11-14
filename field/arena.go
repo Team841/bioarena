@@ -116,7 +116,10 @@ type Arena struct {
 }
 
 type AllianceStation struct {
-	DsConn     *DriverStationConnection
+	// dsConn is written by the driver station network goroutines, which do not hold Arena.mu,
+	// and read by the arena loop and web handlers, so it is only accessed atomically through
+	// DsConn and setDsConn.
+	dsConn     atomic.Pointer[DriverStationConnection]
 	Ethernet   bool
 	AStop      atomic.Bool
 	EStop      atomic.Bool
@@ -131,6 +134,18 @@ type AllianceStation struct {
 	// e-stop, or FaultNone. It tracks the live wiring condition rather than
 	// latching: once the wiring is repaired the panel stops reporting it.
 	EStopFault atomic.Uint32
+}
+
+// DsConn returns the station's current driver station connection, or nil if there is none. Callers that
+// use the connection more than once should keep the returned pointer rather than call this again, since
+// it can change between calls.
+func (allianceStation *AllianceStation) DsConn() *DriverStationConnection {
+	return allianceStation.dsConn.Load()
+}
+
+// setDsConn replaces the station's driver station connection.
+func (allianceStation *AllianceStation) setDsConn(dsConn *DriverStationConnection) {
+	allianceStation.dsConn.Store(dsConn)
 }
 
 // allStationNames is every alliance station, for field-wide stops.
@@ -450,16 +465,17 @@ func (arena *Arena) StartMatch() error {
 
 		// Save the missed packet count to subtract it from the running count.
 		for _, allianceStation := range arena.AllianceStations {
-			if allianceStation.DsConn != nil {
-				err = allianceStation.DsConn.signalMatchStart(arena.CurrentMatch, &allianceStation.WifiStatus)
+			dsConn := allianceStation.DsConn()
+			if dsConn != nil {
+				err = dsConn.signalMatchStart(arena.CurrentMatch, &allianceStation.WifiStatus)
 				if err != nil {
 					log.Println(err)
 				}
 			}
 
 			// Save the teams that have successfully connected to the field.
-			if allianceStation.Team != nil && !allianceStation.Team.HasConnected && allianceStation.DsConn != nil &&
-				allianceStation.DsConn.RobotLinked {
+			if allianceStation.Team != nil && !allianceStation.Team.HasConnected && dsConn != nil &&
+				dsConn.RobotLinked {
 				allianceStation.Team.HasConnected = true
 				arena.Database.UpdateTeam(allianceStation.Team)
 			}
@@ -543,9 +559,10 @@ func (arena *Arena) ResetField() error {
 
 	for _, station := range stationOrder {
 		as := arena.AllianceStations[station]
-		if as.DsConn != nil {
-			as.DsConn.close()
-			as.DsConn = nil
+		if dsConn := as.DsConn(); dsConn != nil {
+			dsConn.close()
+			// Only clear the connection that was closed; the driver station listener may have replaced it.
+			as.dsConn.CompareAndSwap(dsConn, nil)
 		}
 		as.Team = nil
 		as.Bypass.Store(false)
@@ -943,14 +960,15 @@ func (arena *Arena) assignTeam(teamId int, station string) error {
 	arena.AllianceStations[station].aStopReset = !arena.Plc.IsEnabled()
 
 	// Do nothing if the station is already assigned to the requested team.
-	dsConn := arena.AllianceStations[station].DsConn
+	dsConn := arena.AllianceStations[station].DsConn()
 	if dsConn != nil && dsConn.TeamId == teamId {
 		return nil
 	}
 	if dsConn != nil {
 		dsConn.close()
 		arena.AllianceStations[station].Team = nil
-		arena.AllianceStations[station].DsConn = nil
+		// Only clear the connection that was closed; the driver station listener may have replaced it.
+		arena.AllianceStations[station].dsConn.CompareAndSwap(dsConn, nil)
 	}
 
 	// Leave the station empty if the team number is zero.
@@ -1202,7 +1220,7 @@ func (arena *Arena) checkAllianceStationsReady(stations ...string) error {
 			return fmt.Errorf("cannot start match if an autonomous stop has not been reset since the previous match")
 		}
 		if !allianceStation.Bypass.Load() {
-			if allianceStation.DsConn == nil || !allianceStation.DsConn.RobotLinked {
+			if dsConn := allianceStation.DsConn(); dsConn == nil || !dsConn.RobotLinked {
 				return fmt.Errorf("cannot start match until all robots are connected or bypassed")
 			}
 		}
@@ -1213,7 +1231,7 @@ func (arena *Arena) checkAllianceStationsReady(stations ...string) error {
 
 func (arena *Arena) sendDsPacket(auto bool, enabled bool) {
 	for _, allianceStation := range arena.AllianceStations {
-		dsConn := allianceStation.DsConn
+		dsConn := allianceStation.DsConn()
 		if dsConn != nil {
 			dsConn.Auto = auto
 			dsConn.Enabled = enabled && !allianceStation.EStop.Load() && !(auto && allianceStation.AStop.Load()) &&

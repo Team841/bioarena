@@ -7,6 +7,7 @@
 package field
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -136,7 +137,7 @@ func (arena *Arena) listenForDsUdpPackets() {
 		var dsConn *DriverStationConnection
 		for _, allianceStation := range arena.AllianceStations {
 			if allianceStation.Team != nil && allianceStation.Team.Id == teamId {
-				dsConn = allianceStation.DsConn
+				dsConn = allianceStation.DsConn()
 				break
 			}
 		}
@@ -368,10 +369,20 @@ func (arena *Arena) listenForDriverStations() {
 	}
 	defer l.Close()
 
-	log.Printf("Listening for driver stations on TCP port %d\n", driverStationTcpListenPort)
+	arena.serveDriverStations(l)
+}
+
+// serveDriverStations accepts driver station connections on the given listener until it is closed. It is
+// separate from listenForDriverStations so tests can serve on an ephemeral port without touching the
+// global server address.
+func (arena *Arena) serveDriverStations(l net.Listener) {
+	log.Printf("Listening for driver stations on TCP address %s\n", l.Addr())
 	for {
 		tcpConn, err := l.Accept()
 		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				return
+			}
 			log.Println("Error accepting driver station connection: ", err.Error())
 			continue
 		}
@@ -457,11 +468,11 @@ func (arena *Arena) listenForDriverStations() {
 			tcpConn.Close()
 			continue
 		}
-		arena.AllianceStations[assignedStation].DsConn = dsConn
-
+		// Finish setting up the connection before publishing it, since other goroutines read it from then on.
 		if wrongAssignedStation != "" {
 			dsConn.WrongStation = wrongAssignedStation
 		}
+		arena.AllianceStations[assignedStation].setDsConn(dsConn)
 
 		// Spin up a goroutine to handle further TCP communication with this driver station.
 		go dsConn.handleTcpConnection(arena)
@@ -537,9 +548,8 @@ func (dsConn *DriverStationConnection) handleTcpConnection(arena *Arena) {
 		if err != nil {
 			log.Printf("Error reading from connection for Team %d: %v", dsConn.TeamId, err)
 			dsConn.close()
-			if arena.AllianceStations[dsConn.AllianceStation].DsConn == dsConn {
-				arena.AllianceStations[dsConn.AllianceStation].DsConn = nil
-			}
+			// Clear the station only if it still holds this connection, not a newer one that replaced it.
+			arena.AllianceStations[dsConn.AllianceStation].dsConn.CompareAndSwap(dsConn, nil)
 			break
 		}
 

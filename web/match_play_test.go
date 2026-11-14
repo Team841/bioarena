@@ -413,7 +413,7 @@ func TestMatchPlayWebsocketStartMatchWithRegisteredTeamAndBypass(t *testing.T) {
 	// unready.  Verify at the arena level directly (Bypass=false, DsConn=nil).
 	assert.False(t, web.arena.AllianceStations["R1"].Bypass.Load(),
 		"R1 bypass should still be false at this point")
-	assert.Nil(t, web.arena.AllianceStations["R1"].DsConn,
+	assert.Nil(t, web.arena.AllianceStations["R1"].DsConn(),
 		"R1 should have no DS connection")
 
 	// Bypass R1 as well (simulating the user pressing the bypass checkbox for

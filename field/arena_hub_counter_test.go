@@ -24,8 +24,8 @@ func startedArena(t *testing.T) (*Arena, *FakePlc) {
 
 	assert.Nil(t, arena.Database.CreateTeam(&model.Team{Id: 254}))
 	assert.Nil(t, arena.assignTeam(254, "R1"))
-	arena.AllianceStations["R1"].DsConn = &DriverStationConnection{TeamId: 254}
-	arena.AllianceStations["R1"].DsConn.RobotLinked = true
+	arena.AllianceStations["R1"].setDsConn(&DriverStationConnection{TeamId: 254})
+	arena.AllianceStations["R1"].DsConn().RobotLinked = true
 	for _, station := range []string{"R2", "R3", "B1", "B2", "B3"} {
 		arena.AllianceStations[station].Bypass.Store(true)
 	}
